@@ -1,0 +1,77 @@
+.vendor-agreements-page {
+  min-height: 100%;
+  padding: 38px 44px 70px;
+  background: #f5f8fc;
+  color: #143d69;
+}
+.va-head { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:26px; }
+.va-eyebrow { color:#6d8eaf; font-size:11px; font-weight:800; letter-spacing:1.7px; margin-bottom:7px; }
+.va-head h1 { margin:0; color:#0e477f; font-size:32px; }
+.va-head p { margin:8px 0 0; color:#7891aa; font-size:13px; }
+.va-primary,.va-secondary { border-radius:9px; padding:11px 17px; font-weight:700; cursor:pointer; }
+.va-primary { border:0; background:#1765a7; color:#fff; box-shadow:0 7px 17px rgba(23,101,167,.15); }
+.va-secondary { border:1px solid #cddceb; background:#fff; color:#174d7e; }
+.va-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:17px; }
+.va-summary>div { background:#fff; border:1px solid #dce7f1; border-radius:12px; padding:17px 19px; }
+.va-summary span { display:block; color:#7891aa; font-size:11px; margin-bottom:7px; }
+.va-summary strong { color:#0d4376; font-size:23px; }
+.va-toolbar { display:flex; gap:10px; margin-bottom:16px; }
+.va-toolbar input { flex:1; }
+.va-toolbar input,.va-toolbar select,.va-grid input,.va-grid select,.va-grid textarea {
+  box-sizing:border-box; width:100%; border:1px solid #cfddea; border-radius:8px; background:#fff; color:#234e77; outline:0; font:inherit;
+}
+.va-toolbar input,.va-toolbar select,.va-grid input,.va-grid select { height:42px; padding:0 12px; }
+.va-toolbar input:focus,.va-toolbar select:focus,.va-grid input:focus,.va-grid select:focus,.va-grid textarea:focus { border-color:#1599df; box-shadow:0 0 0 3px rgba(21,153,223,.09); }
+.va-card { background:#fff; border:1px solid #dce7f1; border-radius:12px; overflow:hidden; }
+.va-card-head { padding:18px 20px; border-bottom:1px solid #e2ebf3; }
+.va-card-head h2 { margin:0 0 4px; color:#123f6d; font-size:17px; }
+.va-card-head span { color:#7a91a8; font-size:11px; }
+.va-table-wrap { overflow-x:auto; }
+.va-table-wrap table { width:100%; min-width:1450px; border-collapse:collapse; }
+.va-table-wrap th { background:#eef4f8; color:#54738f; font-size:10px; text-align:left; padding:12px; text-transform:uppercase; letter-spacing:.35px; }
+.va-table-wrap td { padding:13px 12px; border-top:1px solid #e7eef5; color:#315775; font-size:12px; white-space:nowrap; }
+.va-table-wrap td b { color:#123f6d; }
+.va-status { display:inline-flex; padding:5px 9px; border-radius:20px; font-size:10px; font-weight:700; }
+.va-status.active { color:#138451; background:#e5f7ef; }
+.va-status.future { color:#1765a7; background:#e8f3fc; }
+.va-status.expired { color:#a14d4d; background:#fdecec; }
+.va-status.on\ hold { color:#8b6a24; background:#fff6df; }
+.va-actions { display:flex; gap:5px; }
+.va-actions button { border:1px solid #ceddea; border-radius:6px; padding:6px 8px; background:#fff; color:#1b5689; cursor:pointer; font-size:10px; }
+.va-actions .danger { color:#c64a4a; border-color:#f0cccc; }
+.va-empty { text-align:center; padding:60px 20px; }
+.va-empty>div { font-size:38px; }
+.va-empty h3 { margin:10px 0 5px; color:#184d7c; }
+.va-empty p { max-width:600px; margin:0 auto 18px; color:#7b91a8; font-size:12px; }
+.va-backdrop { position:fixed; inset:0; background:rgba(10,35,58,.48); display:flex; align-items:center; justify-content:center; z-index:1000; padding:22px; }
+.va-modal { width:min(1050px,100%); max-height:94vh; overflow-y:auto; background:#fff; border-radius:15px; padding:25px; box-shadow:0 25px 80px rgba(0,0,0,.25); }
+.va-modal-head { display:flex; justify-content:space-between; border-bottom:1px solid #e1eaf2; padding-bottom:17px; margin-bottom:18px; }
+.va-modal-head h2 { margin:0; color:#0f477c; font-size:22px; }
+.va-close { width:35px; height:35px; border:1px solid #d5e1eb; border-radius:8px; background:#fff; color:#55738e; font-size:23px; cursor:pointer; }
+.va-section { margin-bottom:18px; padding:17px; border:1px solid #e1eaf2; border-radius:10px; background:#fbfdff; }
+.va-section-title { margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid #e5edf4; color:#174f7e; font-size:13px; font-weight:800; }
+.va-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.va-grid label { display:flex; flex-direction:column; gap:6px; color:#476a87; font-size:11px; font-weight:700; }
+.va-grid textarea { min-height:72px; padding:9px 11px; resize:vertical; }
+.va-wide { grid-column:span 2; }
+.va-note { margin-top:12px; padding:11px 13px; border-radius:7px; background:#eef7fd; color:#4b708e; font-size:10px; line-height:1.55; }
+.va-modal-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:19px; }
+@media(max-width:950px){ .vendor-agreements-page{padding:27px 20px 50px}.va-summary{grid-template-columns:repeat(2,1fr)}.va-grid{grid-template-columns:1fr 1fr}.va-wide{grid-column:span 2} }
+@media(max-width:650px){ .va-head{flex-direction:column;align-items:flex-start}.va-summary,.va-grid{grid-template-columns:1fr}.va-wide{grid-column:span 1}.va-toolbar{flex-direction:column} }
+
+.va-summary { grid-template-columns: repeat(5, 1fr); }
+.va-po-card { margin-top: 18px; }
+.va-po-head { display:flex; justify-content:space-between; align-items:center; }
+.va-po-summary { display:inline-flex; align-items:baseline; gap:4px; margin-right:7px; }
+.va-po-summary b { color:#0f477c; font-size:13px; }
+.va-po-summary span { color:#7a91a8; font-size:9px; }
+.va-po-add { border:0; background:#edf6fd; color:#1765a7; border-radius:6px; padding:6px 8px; cursor:pointer; font-size:10px; font-weight:700; }
+.va-po-empty { padding:34px; text-align:center; color:#7891aa; font-size:12px; }
+.va-days { display:block; margin-top:4px; color:#6f8ca6; font-size:9px; font-weight:600; }
+.expired-text { color:#b05252; }
+.va-status.on-hold { color:#8b6a24; background:#fff6df; }
+.va-status.cancelled { color:#a14d4d; background:#fdecec; }
+.va-status.draft { color:#64788c; background:#eef2f5; }
+.va-po-modal { max-width:1050px; }
+@media(max-width:1050px){ .va-summary { grid-template-columns:repeat(3,1fr); } }
+@media(max-width:650px){ .va-summary { grid-template-columns:1fr; } }
