@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import "./vendorAgreements.css";
+import "./VendorAgreements.css";
 
 const AGREEMENT_KEY = "bauerHrmsVendorAgreements";
 const PO_KEY = "bauerHrmsVendorPOs";
