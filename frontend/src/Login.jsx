@@ -4,12 +4,8 @@ import {
   activateEmployeeAccount,
   authenticateAdmin,
   authenticateEmployee,
-  requestAdminLoginOtp,
   requestAdminPasswordResetOtp,
-  requestLoginOtp,
-  verifyAdminLoginOtp,
   verifyAdminPasswordResetOtp,
-  verifyLoginOtp,
 } from "./auth";
 
 const ADMIN_EMAIL = "admin@bauer.com";
@@ -171,24 +167,8 @@ export default function Login({ onLogin }) {
           setError("Invalid email or password.");
           return;
         }
-
-        if (adminResult.mobileMissing) {
-          setError(
-            adminResult.message ||
-              "Admin mobile number is not registered. Please add the Admin mobile number in Settings first."
-          );
-          return;
-        }
-
-        const otpResult = await requestAdminLoginOtp();
-
-        setOtpMobile(otpResult.mobile);
-        setDevOtp(otpResult.devOtp || "");
-        setOtpEmployee(adminResult.admin);
-        setOtp("");
-        setOtpMode(true);
-        setResendSeconds(30);
-        return;
+        onLogin(rememberMe, adminResult.admin);
+return;
       }
 
       const result = await authenticateEmployee(username, password);
@@ -204,29 +184,9 @@ export default function Login({ onLogin }) {
         );
         return;
       }
-
-      if (result.mobileMissing) {
-        setError(
-          result.message ||
-            "No registered mobile number is available. Please contact HR."
-        );
-        return;
-      }
-
-      if (!result.otpRequired) {
-        setError("OTP verification is required before login.");
-        return;
-      }
-
-      const otpResult = await requestLoginOtp(username);
-
-      setOtpMobile(otpResult.mobile);
-      setDevOtp(otpResult.devOtp || "");
-      setOtpEmployee(result.employee);
-      setOtp("");
-      setOtpMode(true);
-      setResendSeconds(30);
-    } catch (err) {
+      onLogin(rememberMe, result.employee);
+      return;
+} catch (err) {
       setError(err?.message || "Unable to login.");
     } finally {
       setLoading(false);
@@ -263,18 +223,7 @@ export default function Login({ onLogin }) {
         setError("Password reset successfully. Please login with your new password.");
         return;
       }
-
-      let employee;
-      if (username.trim().toLowerCase() === ADMIN_EMAIL) {
-        employee = await verifyAdminLoginOtp(otp);
-      } else {
-        employee = await verifyLoginOtp(username, otp);
-      }
-
-      onLogin(rememberMe, {
-        ...employee,
-        ...(otpEmployee || {}),
-      });
+      throw new Error("Login OTP is disabled. Please return to the login screen and sign in with email and password.");
     } catch (err) {
       setError(err?.message || "Unable to verify OTP.");
     } finally {
@@ -292,14 +241,8 @@ export default function Login({ onLogin }) {
         const result = await requestAdminPasswordResetOtp();
         setOtpMobile(result.mobile);
         setDevOtp(result.devOtp || "");
-      } else if (username.trim().toLowerCase() === ADMIN_EMAIL) {
-        const result = await requestAdminLoginOtp();
-        setOtpMobile(result.mobile);
-        setDevOtp(result.devOtp || "");
       } else {
-        const result = await requestLoginOtp(username);
-        setOtpMobile(result.mobile);
-        setDevOtp(result.devOtp || "");
+        throw new Error("Login OTP is disabled.");
       }
       setOtp("");
       setResendSeconds(30);
@@ -692,8 +635,7 @@ export default function Login({ onLogin }) {
 
             <p className="login-help">
               Employee? Use your official email and the password you created
-              from the HR activation email. A verification OTP is required
-              after your password is validated.
+              from the HR activation email.
             </p>
           </form>
         )}

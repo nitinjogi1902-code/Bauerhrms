@@ -342,23 +342,10 @@ export const authenticateEmployee = async (
     return null;
   }
 
-  const mobile = String(
-    entry.mobile || ""
-  ).trim();
-
-  if (!mobile) {
-    return {
-      otpRequired: false,
-
-      mobileMissing: true,
-
-      message:
-        "No registered mobile number is available. Please contact HR.",
-    };
-  }
-
+  // Login OTP is temporarily disabled.
+  // Successful email + password validation logs the employee in directly.
   return {
-    otpRequired: true,
+    otpRequired: false,
 
     employee: {
       id: entry.employeeInternalId,
@@ -375,8 +362,6 @@ export const authenticateEmployee = async (
       role:
         "Employee",
     },
-
-    mobile,
   };
 };
 
@@ -384,6 +369,7 @@ export const authenticateEmployee = async (
 // ======================================================
 // REQUEST LOGIN OTP
 // ======================================================
+
 
 export const requestLoginOtp = async (
   email
@@ -716,19 +702,10 @@ export const authenticateAdmin = async (email, password) => {
     if (suppliedHash !== storedHash) return null;
   }
 
-  const mobile = getAdminMobile();
-  if (!mobile) {
-    return {
-      mobileMissing: true,
-      message:
-        "Admin mobile number is not registered. Please add the Admin mobile number in Settings first.",
-    };
-  }
-
+  // Login OTP is temporarily disabled.
   return {
-    otpRequired: true,
+    otpRequired: false,
     admin: getAdminUser(),
-    mobile,
   };
 };
 
