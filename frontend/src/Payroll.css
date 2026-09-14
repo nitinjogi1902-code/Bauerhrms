@@ -4331,3 +4331,1634 @@
     grid-column: auto;
   }
 }
+
+/* =====================================================================
+   BAUER HRMS — PAYROLL MODULE
+   MODERN LAVENDER THEME — FINAL UNIFIED OVERRIDE
+   ---------------------------------------------------------------------
+   IMPORTANT:
+   • Existing Payroll JSX/logic is preserved.
+   • This is a visual-only layer.
+   • It is intentionally appended LAST so old blue Payroll rules do not
+     win over the new theme.
+   • Covers Dashboard, Monthly Payroll, Processing, Vendor Payroll,
+     Salary Structure, Statutory, Deductions, OT & Arrear, Reports,
+     Salary Register, Bulk Salary Upload, Food Deduction modal and all
+     related cards, tables, forms, badges, states and responsive views.
+   ===================================================================== */
+
+:root {
+  --pay-primary: #715cf6;
+  --pay-primary-2: #8b7cf6;
+  --pay-primary-dark: #5d4be2;
+  --pay-primary-soft: #f3f1ff;
+  --pay-primary-soft-2: #ebe8ff;
+
+  --pay-ink: #2f3852;
+  --pay-ink-2: #46516a;
+  --pay-muted: #838ba0;
+  --pay-muted-2: #9ba2b3;
+
+  --pay-border: #e2e0ee;
+  --pay-border-soft: #eceaf4;
+  --pay-bg: #f7f7fc;
+  --pay-card: #ffffff;
+
+  --pay-green: #168454;
+  --pay-green-bg: #eaf9f1;
+  --pay-green-border: #bfe6d2;
+
+  --pay-red: #c44f5b;
+  --pay-red-bg: #fff1f3;
+  --pay-red-border: #efc5cb;
+
+  --pay-amber: #a66d1d;
+  --pay-amber-bg: #fff7e8;
+  --pay-amber-border: #edd7a9;
+
+  --pay-blue: #3d70a6;
+  --pay-blue-bg: #eef5fd;
+  --pay-blue-border: #cadced;
+
+  --pay-cyan: #27879a;
+  --pay-cyan-bg: #eaf8fb;
+
+  --pay-orange: #c56c27;
+  --pay-orange-bg: #fff1e7;
+
+  --pay-gray: #667386;
+  --pay-gray-bg: #f3f5f7;
+}
+
+/* =====================================================================
+   01 — PAGE FOUNDATION
+   ===================================================================== */
+
+.payroll-page {
+  width: 100% !important;
+  min-width: 0 !important;
+  color: var(--pay-ink) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(113,92,246,.075), transparent 28%),
+    radial-gradient(circle at 100% 0%, rgba(139,124,246,.065), transparent 25%),
+    var(--pay-bg) !important;
+}
+
+.payroll-page *,
+.payroll-page *::before,
+.payroll-page *::after {
+  box-sizing: border-box;
+}
+
+.payroll-page button,
+.payroll-page input,
+.payroll-page select,
+.payroll-page textarea {
+  font-family: inherit;
+}
+
+.payroll-page-head {
+  margin-bottom: 18px !important;
+}
+
+.payroll-breadcrumb {
+  color: #989db0 !important;
+}
+
+.payroll-breadcrumb span {
+  color: #c0c3ce !important;
+}
+
+.payroll-title-row h1 {
+  color: var(--pay-ink) !important;
+  font-size: 29px !important;
+  letter-spacing: -.55px !important;
+}
+
+.payroll-title-row h1 span {
+  color: var(--pay-primary) !important;
+}
+
+.payroll-title-row p {
+  color: var(--pay-muted) !important;
+}
+
+.payroll-head-actions label {
+  color: #746da0 !important;
+}
+
+.payroll-head-actions select {
+  height: 40px !important;
+  min-width: 150px !important;
+  border: 1px solid #dddced !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  color: #4f5970 !important;
+  box-shadow: 0 4px 12px rgba(48,43,88,.025) !important;
+}
+
+.payroll-head-actions select:hover {
+  border-color: #cfc9ec !important;
+}
+
+.payroll-head-actions select:focus {
+  outline: none !important;
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.11) !important;
+}
+
+/* =====================================================================
+   02 — BUTTON LANGUAGE
+   ===================================================================== */
+
+.payroll-page .payroll-export-btn,
+.payroll-page .payroll-primary-btn,
+.payroll-page .payroll-head-actions button {
+  min-height: 40px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, var(--pay-primary), var(--pay-primary-2)) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 20px rgba(113,92,246,.18) !important;
+}
+
+.payroll-page .payroll-export-btn:hover,
+.payroll-page .payroll-primary-btn:hover,
+.payroll-page .payroll-head-actions button:hover {
+  background: linear-gradient(135deg, var(--pay-primary-dark), #7868ee) !important;
+  transform: translateY(-1px);
+}
+
+.payroll-page .payroll-secondary-btn,
+.payroll-page .salary-header-actions button:not(.payroll-primary-btn),
+.payroll-page .salary-modal-actions button:not(.payroll-primary-btn),
+.payroll-page .bulk-download-btn,
+.payroll-page .bulk-file-btn {
+  border: 1px solid #dddbee !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #665c92 !important;
+}
+
+.payroll-page .payroll-secondary-btn:hover,
+.payroll-page .salary-header-actions button:not(.payroll-primary-btn):hover,
+.payroll-page .salary-modal-actions button:not(.payroll-primary-btn):hover,
+.payroll-page .bulk-download-btn:hover,
+.payroll-page .bulk-file-btn:hover {
+  background: #f6f4ff !important;
+  border-color: #cbc5e9 !important;
+  color: #5949aa !important;
+}
+
+.payroll-page button:focus-visible,
+.payroll-page input:focus-visible,
+.payroll-page select:focus-visible,
+.payroll-page textarea:focus-visible {
+  outline: none !important;
+}
+
+.payroll-page button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(113,92,246,.15) !important;
+}
+
+.payroll-page button:disabled,
+.payroll-page input:disabled,
+.payroll-page select:disabled,
+.payroll-page textarea:disabled {
+  opacity: .55 !important;
+  cursor: not-allowed !important;
+}
+
+/* =====================================================================
+   03 — PAYROLL SUB-NAV
+   ===================================================================== */
+
+.payroll-workspace {
+  gap: 15px !important;
+}
+
+.payroll-subnav {
+  background: rgba(255,255,255,.94) !important;
+  border: 1px solid var(--pay-border) !important;
+  border-radius: 15px !important;
+  box-shadow: 0 9px 25px rgba(48,43,88,.045) !important;
+}
+
+.payroll-subnav-title {
+  color: #9994b0 !important;
+}
+
+.payroll-subnav button {
+  min-height: 41px !important;
+  border-radius: 9px !important;
+  color: #737b91 !important;
+}
+
+.payroll-subnav button:hover {
+  background: #f7f5ff !important;
+  color: #6555b7 !important;
+}
+
+.payroll-subnav button.active {
+  background: linear-gradient(135deg, #f2f0ff, #eae7ff) !important;
+  color: #5f50b1 !important;
+  box-shadow: inset 3px 0 var(--pay-primary), 0 3px 10px rgba(113,92,246,.06) !important;
+}
+
+.payroll-subnav-icon {
+  color: #9188c4 !important;
+}
+
+.payroll-subnav button.active .payroll-subnav-icon {
+  color: var(--pay-primary) !important;
+}
+
+.payroll-policy-note {
+  border: 1px solid #e5e1f2 !important;
+  border-radius: 10px !important;
+  background: #faf9ff !important;
+}
+
+.payroll-policy-note > span {
+  background: var(--pay-green-bg) !important;
+  color: var(--pay-green) !important;
+}
+
+/* =====================================================================
+   04 — DASHBOARD KPI CARDS
+   ===================================================================== */
+
+.payroll-stat-grid {
+  gap: 12px !important;
+}
+
+.payroll-stat-card {
+  min-height: 125px !important;
+  padding: 15px !important;
+  background: linear-gradient(135deg, #fff, #fbfaff) !important;
+  border: 1px solid var(--pay-border) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 22px rgba(48,43,88,.045) !important;
+  transition: .18s ease !important;
+}
+
+.payroll-stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(48,43,88,.07) !important;
+}
+
+.payroll-stat-icon {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+}
+
+.payroll-stat-card.blue .payroll-stat-icon {
+  background: var(--pay-primary-soft) !important;
+  color: #6656ba !important;
+}
+.payroll-stat-card.green .payroll-stat-icon {
+  background: var(--pay-green-bg) !important;
+  color: var(--pay-green) !important;
+}
+.payroll-stat-card.orange .payroll-stat-icon {
+  background: var(--pay-orange-bg) !important;
+  color: var(--pay-orange) !important;
+}
+.payroll-stat-card.purple .payroll-stat-icon {
+  background: var(--pay-primary-soft-2) !important;
+  color: #725ecb !important;
+}
+.payroll-stat-card.cyan .payroll-stat-icon {
+  background: var(--pay-cyan-bg) !important;
+  color: var(--pay-cyan) !important;
+}
+.payroll-stat-card.red .payroll-stat-icon {
+  background: var(--pay-red-bg) !important;
+  color: var(--pay-red) !important;
+}
+
+.payroll-stat-card span {
+  color: var(--pay-muted) !important;
+}
+.payroll-stat-card strong {
+  color: var(--pay-ink) !important;
+}
+.payroll-stat-card small {
+  color: #a1a6b5 !important;
+}
+
+/* =====================================================================
+   05 — DASHBOARD MAIN CARDS
+   ===================================================================== */
+
+.payroll-main-grid,
+.payroll-section-grid {
+  gap: 14px !important;
+}
+
+.payroll-card {
+  padding: 17px !important;
+  background: rgba(255,255,255,.96) !important;
+  border: 1px solid var(--pay-border) !important;
+  border-radius: 15px !important;
+  box-shadow: 0 8px 24px rgba(48,43,88,.045) !important;
+}
+
+.payroll-card-head {
+  border-bottom-color: var(--pay-border-soft) !important;
+}
+
+.payroll-eyebrow {
+  color: #9993b0 !important;
+}
+
+.payroll-card-head h2 {
+  color: var(--pay-ink) !important;
+}
+
+.payroll-card-head p {
+  color: var(--pay-muted) !important;
+}
+
+.payroll-link-btn {
+  border-radius: 8px !important;
+  color: #6655b7 !important;
+}
+
+.payroll-card-head .payroll-link-btn {
+  background: #f4f2ff !important;
+  color: #6252b4 !important;
+  padding: 8px 12px !important;
+}
+
+.payroll-card-head .payroll-link-btn:hover {
+  background: #eae7ff !important;
+  color: #5342a5 !important;
+}
+
+/* =====================================================================
+   06 — PAYROLL PROCESS PROGRESS
+   ===================================================================== */
+
+.payroll-progress-track {
+  background: #eceaf3 !important;
+}
+
+.payroll-progress-track span {
+  background: linear-gradient(90deg, #8b7cf6, #715cf6) !important;
+}
+
+.payroll-progress-meta strong {
+  color: #6554b5 !important;
+}
+
+.payroll-progress-meta span {
+  color: var(--pay-muted-2) !important;
+}
+
+.payroll-step-row > div {
+  color: #9b9fb0 !important;
+}
+
+.payroll-step-row b {
+  background: #f0eef5 !important;
+  color: #8a8fa0 !important;
+}
+
+.payroll-step-row .done b {
+  background: var(--pay-green-bg) !important;
+  color: var(--pay-green) !important;
+}
+
+.payroll-step-row .current b {
+  background: var(--pay-primary-soft) !important;
+  color: var(--pay-primary) !important;
+}
+
+.payroll-step-row .done span,
+.payroll-step-row .current span {
+  color: #5c6479 !important;
+}
+
+/* =====================================================================
+   07 — QUICK ACTIONS
+   ===================================================================== */
+
+.payroll-quick-grid button {
+  border: 1px solid #e8e5f0 !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #fff, #fbfaff) !important;
+}
+
+.payroll-quick-grid button:hover {
+  border-color: #cec8ec !important;
+  background: #f7f5ff !important;
+  box-shadow: 0 6px 16px rgba(48,43,88,.05) !important;
+  transform: translateY(-1px);
+}
+
+.payroll-quick-grid b {
+  background: var(--pay-primary-soft) !important;
+  color: #6556b7 !important;
+}
+
+.payroll-quick-grid span {
+  color: var(--pay-ink-2) !important;
+}
+
+.payroll-quick-grid small {
+  color: var(--pay-muted) !important;
+}
+
+/* =====================================================================
+   08 — VENDOR SNAPSHOT
+   ===================================================================== */
+
+.payroll-table-head {
+  background: #f3f1f8 !important;
+  color: #726c8e !important;
+  border-bottom-color: #e4e1eb !important;
+}
+
+.payroll-table-row {
+  border-bottom-color: #eeecf3 !important;
+  color: #687186 !important;
+}
+
+.payroll-table-row:hover {
+  background: #fbfaff !important;
+}
+
+.payroll-table-row strong {
+  color: var(--pay-ink-2) !important;
+}
+
+.rate-badge {
+  background: var(--pay-blue-bg) !important;
+  color: var(--pay-blue) !important;
+}
+
+.active-badge,
+.payroll-status.processed {
+  background: var(--pay-green-bg) !important;
+  color: var(--pay-green) !important;
+}
+
+.override-badge {
+  background: var(--pay-amber-bg) !important;
+  color: var(--pay-amber) !important;
+}
+
+.payroll-status.pending {
+  background: var(--pay-amber-bg) !important;
+  color: var(--pay-amber) !important;
+}
+
+.payroll-status {
+  border-radius: 999px !important;
+  border: 1px solid transparent !important;
+}
+
+.vendor-rule-banner {
+  border-color: #ddd8f1 !important;
+  border-radius: 10px !important;
+  background: #f8f6ff !important;
+  color: #77718e !important;
+}
+
+.vendor-rule-banner strong {
+  color: #6555b6 !important;
+}
+
+.override-row {
+  background: #fffaf0 !important;
+}
+
+/* =====================================================================
+   09 — ATTENTION / CONTROL CHECK CARDS
+   ===================================================================== */
+
+.payroll-attention-card,
+.payroll-progress-card {
+  background: rgba(255,255,255,.96) !important;
+  border-color: var(--pay-border) !important;
+}
+
+.payroll-check-list > div {
+  border-bottom-color: #eeeef4 !important;
+}
+
+.check-icon.success {
+  background: var(--pay-green-bg) !important;
+  color: var(--pay-green) !important;
+}
+
+.check-icon.warning {
+  background: var(--pay-red-bg) !important;
+  color: var(--pay-red) !important;
+}
+
+.check-icon.neutral {
+  background: var(--pay-primary-soft) !important;
+  color: var(--pay-primary) !important;
+}
+
+.payroll-check-list strong {
+  color: var(--pay-ink-2) !important;
+}
+
+.payroll-check-list small {
+  color: var(--pay-muted) !important;
+}
+
+/* =====================================================================
+   10 — FILTER BARS / SEARCH
+   ===================================================================== */
+
+.payroll-filter-bar,
+.salary-register-filter-bar {
+  gap: 11px !important;
+}
+
+.payroll-filter-bar label,
+.salary-register-filter-field label,
+.payroll-search-label {
+  color: #777d92 !important;
+}
+
+.payroll-filter-bar input,
+.payroll-filter-bar select,
+.salary-register-filter-bar input,
+.salary-register-filter-bar select,
+.salary-register-search-field input {
+  height: 40px !important;
+  border: 1px solid #dddced !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #4c566d !important;
+  box-shadow: 0 3px 10px rgba(48,43,88,.02) !important;
+}
+
+.payroll-filter-bar input:hover,
+.payroll-filter-bar select:hover,
+.salary-register-filter-bar input:hover,
+.salary-register-filter-bar select:hover {
+  border-color: #cfc9e9 !important;
+}
+
+.payroll-filter-bar input:focus,
+.payroll-filter-bar select:focus,
+.salary-register-filter-bar input:focus,
+.salary-register-filter-bar select:focus,
+.salary-register-search-field input:focus {
+  outline: none !important;
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.11) !important;
+}
+
+/* =====================================================================
+   11 — PAYROLL REGISTER / TABLES
+   ===================================================================== */
+
+.payroll-table-scroll {
+  border: 1px solid var(--pay-border) !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+}
+
+.payroll-register-table {
+  color: var(--pay-ink-2) !important;
+}
+
+.payroll-register-table th {
+  background: #f2f0f7 !important;
+  color: #706b89 !important;
+  border-bottom-color: #e3e1eb !important;
+}
+
+.payroll-register-table td {
+  border-bottom-color: #eeecf3 !important;
+  color: #667086 !important;
+}
+
+.payroll-register-table tbody tr:hover td {
+  background: #fbfaff !important;
+}
+
+.payroll-register-table td strong {
+  color: var(--pay-ink) !important;
+}
+
+.payroll-register-table td small {
+  color: var(--pay-muted) !important;
+}
+
+.type-pill.roll {
+  background: var(--pay-blue-bg) !important;
+  color: var(--pay-blue) !important;
+  border: 1px solid var(--pay-blue-border) !important;
+}
+
+.type-pill.third {
+  background: var(--pay-primary-soft) !important;
+  color: #6d5cc1 !important;
+  border: 1px solid #ded9f3 !important;
+}
+
+.type-pill,
+.stat-tag {
+  border-radius: 999px !important;
+}
+
+.lop-value {
+  color: var(--pay-red) !important;
+}
+
+/* =====================================================================
+   12 — PROCESSING / MODULE CARDS
+   ===================================================================== */
+
+.payroll-process-card,
+.payroll-module-card {
+  border: 1px solid #e5e2ed !important;
+  border-radius: 11px !important;
+  background: linear-gradient(135deg, #fff, #fbfaff) !important;
+}
+
+.payroll-process-card:hover,
+.payroll-module-card:hover {
+  border-color: #d1cbed !important;
+  box-shadow: 0 7px 18px rgba(48,43,88,.05) !important;
+}
+
+.payroll-process-card > span,
+.payroll-module-card > span {
+  background: var(--pay-primary-soft) !important;
+  color: #6556b7 !important;
+}
+
+.payroll-process-card strong,
+.payroll-module-card strong {
+  color: var(--pay-ink-2) !important;
+}
+
+.payroll-process-card small,
+.payroll-module-card small {
+  color: var(--pay-muted) !important;
+}
+
+.payroll-process-card > b {
+  background: var(--pay-amber-bg) !important;
+  color: var(--pay-amber) !important;
+  border-radius: 999px !important;
+}
+
+.payroll-process-card > b.ready {
+  background: var(--pay-green-bg) !important;
+  color: var(--pay-green) !important;
+}
+
+.payroll-module-card button {
+  color: #6655b7 !important;
+}
+
+/* =====================================================================
+   13 — SALARY STRUCTURE
+   ===================================================================== */
+
+.salary-policy-banner {
+  border: 1px solid #dfdaf1 !important;
+  border-radius: 11px !important;
+  background: linear-gradient(90deg, #f8f6ff, #fff) !important;
+}
+
+.salary-policy-banner strong {
+  color: #6253b2 !important;
+}
+
+.salary-policy-banner span {
+  color: var(--pay-muted) !important;
+}
+
+.salary-master-section {
+  margin-top: 18px !important;
+}
+
+.salary-master-heading h3 {
+  color: var(--pay-ink) !important;
+}
+
+.salary-master-heading > span,
+.salary-locked-badge {
+  background: var(--pay-primary-soft) !important;
+  color: #6657b7 !important;
+  border: 1px solid #ded9f3 !important;
+  border-radius: 999px !important;
+}
+
+.salary-master-table th {
+  background: #f2f0f7 !important;
+  color: #706b89 !important;
+}
+
+.salary-master-table td {
+  border-color: #eeecf3 !important;
+  color: #667086 !important;
+}
+
+.salary-master-table tbody tr:hover td {
+  background: #fbfaff !important;
+}
+
+.salary-master-table td strong {
+  color: var(--pay-ink) !important;
+}
+
+.salary-master-table td:nth-child(4),
+.salary-master-table td:nth-child(5),
+.salary-master-table td:nth-child(6),
+.salary-master-table td:nth-child(7) {
+  color: #4c5570 !important;
+}
+
+/* Salary calculation / allowance cards */
+.salary-addon-box,
+.salary-calculation-box,
+.salary-total-earnings-box {
+  border-color: #e2dff0 !important;
+  border-radius: 11px !important;
+  background: linear-gradient(135deg, #fbfaff, #f7f5ff) !important;
+}
+
+.salary-addon-head,
+.salary-calculation-title {
+  color: #6255a8 !important;
+}
+
+.salary-addon-field label,
+.salary-form-grid label,
+.salary-other-head label {
+  color: #70788d !important;
+}
+
+.salary-addon-field input,
+.salary-addon-field select,
+.salary-form-grid input,
+.salary-form-grid select,
+.salary-other-row input,
+.salary-other-row select {
+  border: 1px solid #dddced !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #4c566d !important;
+}
+
+.salary-addon-field input:focus,
+.salary-addon-field select:focus,
+.salary-form-grid input:focus,
+.salary-form-grid select:focus,
+.salary-other-row input:focus,
+.salary-other-row select:focus {
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.10) !important;
+  outline: none !important;
+}
+
+.salary-add-allowance-btn {
+  border: 1px solid #d8d2f0 !important;
+  background: #f5f3ff !important;
+  color: #6655b6 !important;
+  border-radius: 9px !important;
+}
+
+.salary-add-allowance-btn:hover {
+  background: #ebe8ff !important;
+}
+
+.salary-remove-allowance-btn {
+  border: 1px solid #efc8cd !important;
+  background: var(--pay-red-bg) !important;
+  color: var(--pay-red) !important;
+  border-radius: 8px !important;
+}
+
+.salary-calculation-row {
+  border-bottom-color: #e9e6f1 !important;
+}
+
+.salary-calculation-total {
+  background: #eeeaff !important;
+  color: #5f50ad !important;
+  border-color: #dad4f3 !important;
+}
+
+.salary-other-row {
+  border-color: #e9e6f0 !important;
+}
+
+/* =====================================================================
+   14 — SALARY MODAL
+   ===================================================================== */
+
+.salary-modal-backdrop {
+  background: rgba(35,31,62,.66) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+.salary-modal {
+  background: #fbfaff !important;
+  border: 1px solid #dedced !important;
+  border-radius: 17px !important;
+  box-shadow: 0 30px 90px rgba(35,30,70,.28) !important;
+}
+
+.salary-modal-head {
+  background:
+    radial-gradient(circle at 7% 0%, rgba(113,92,246,.10), transparent 32%),
+    linear-gradient(135deg, #fff, #faf9ff) !important;
+  border-bottom-color: #e8e6f1 !important;
+}
+
+.salary-modal-head h3 {
+  color: var(--pay-ink) !important;
+}
+
+.salary-modal-close {
+  border: 1px solid #dedbea !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #747b90 !important;
+}
+
+.salary-modal-close:hover {
+  background: #f4f2ff !important;
+  color: #5e50ad !important;
+  border-color: #cbc5ea !important;
+}
+
+.salary-modal-actions {
+  background: #faf9fd !important;
+  border-top-color: #e8e6f0 !important;
+}
+
+/* =====================================================================
+   15 — BULK SALARY UPLOAD
+   ===================================================================== */
+
+.bulk-salary-modal {
+  background: #fbfaff !important;
+  border: 1px solid #dedced !important;
+  border-radius: 17px !important;
+  box-shadow: 0 30px 90px rgba(35,30,70,.28) !important;
+}
+
+.salary-modal-backdrop:has(.bulk-salary-modal) {
+  background: rgba(35,31,62,.68) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+.bulk-salary-modal .salary-modal-head {
+  background:
+    radial-gradient(circle at 7% 0%, rgba(113,92,246,.10), transparent 32%),
+    linear-gradient(135deg, #fff, #faf9ff) !important;
+  border-bottom-color: #e8e6f1 !important;
+}
+
+.bulk-modal-subtitle,
+.bulk-step-content small,
+.bulk-file-info,
+.bulk-preview-section small {
+  color: var(--pay-muted) !important;
+}
+
+.bulk-step-grid {
+  gap: 10px !important;
+}
+
+.bulk-step-card {
+  border: 1px solid #e3e0ee !important;
+  border-radius: 11px !important;
+  background: #fff !important;
+}
+
+.bulk-step-card:hover {
+  border-color: #cfc9eb !important;
+  background: #faf9ff !important;
+}
+
+.bulk-step-number {
+  background: var(--pay-primary-soft) !important;
+  color: #6253b1 !important;
+}
+
+.bulk-step-content strong {
+  color: var(--pay-ink-2) !important;
+}
+
+.bulk-upload-body,
+.bulk-preview-wrap,
+.bulk-preview-section {
+  background: #fff !important;
+  border-color: var(--pay-border) !important;
+  border-radius: 12px !important;
+}
+
+.bulk-file-picker {
+  border: 1px dashed #cbc5e8 !important;
+  border-radius: 11px !important;
+  background: #faf9ff !important;
+}
+
+.bulk-file-picker:hover,
+.bulk-file-selected {
+  border-color: #9c91ee !important;
+  background: #f5f3ff !important;
+}
+
+.bulk-file-selected {
+  color: #5f50ad !important;
+}
+
+.bulk-stat {
+  background: #faf9fd !important;
+  border: 1px solid #e7e4ef !important;
+  border-radius: 10px !important;
+}
+
+.bulk-stat strong {
+  color: var(--pay-ink) !important;
+}
+
+.bulk-validation-summary {
+  gap: 10px !important;
+}
+
+.bulk-error-box,
+.bulk-errors {
+  background: var(--pay-red-bg) !important;
+  border: 1px solid var(--pay-red-border) !important;
+  border-radius: 11px !important;
+}
+
+.bulk-errors-title,
+.bulk-error-box strong {
+  color: var(--pay-red) !important;
+}
+
+.bulk-errors li {
+  color: #8d5a62 !important;
+}
+
+.bulk-preview-head {
+  background: #f3f1f8 !important;
+  color: #716b88 !important;
+  border-color: #e5e2eb !important;
+}
+
+.bulk-preview-title {
+  color: var(--pay-ink) !important;
+}
+
+.bulk-preview-table th {
+  background: #f2f0f7 !important;
+  color: #706b89 !important;
+}
+
+.bulk-preview-table td {
+  border-color: #eeecf3 !important;
+  color: #667086 !important;
+}
+
+.bulk-preview-table tbody tr:hover td {
+  background: #fbfaff !important;
+}
+
+/* =====================================================================
+   16 — STATUTORY CONFIGURATION
+   ===================================================================== */
+
+.statutory-page {
+  color: var(--pay-ink) !important;
+  background: transparent !important;
+}
+
+.statutory-page-head {
+  border-color: var(--pay-border) !important;
+}
+
+.statutory-page-head h1,
+.statutory-page-head h2,
+.statutory-page-head h3 {
+  color: var(--pay-ink) !important;
+}
+
+.statutory-page-head p {
+  color: var(--pay-muted) !important;
+}
+
+.statutory-head-actions button {
+  border-radius: 9px !important;
+}
+
+.statutory-grid {
+  gap: 12px !important;
+}
+
+.statutory-card {
+  background: linear-gradient(135deg, #fff, #fbfaff) !important;
+  border: 1px solid var(--pay-border) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 22px rgba(48,43,88,.045) !important;
+}
+
+.statutory-card:hover {
+  border-color: #d1caeb !important;
+}
+
+.statutory-card-top {
+  border-bottom-color: #e9e6f0 !important;
+}
+
+.statutory-card-title {
+  color: var(--pay-ink) !important;
+}
+
+.statutory-icon {
+  background: var(--pay-primary-soft) !important;
+  color: #6253b2 !important;
+  border-radius: 10px !important;
+}
+
+.statutory-pf .statutory-icon {
+  background: #eeeaff !important;
+  color: #6655b7 !important;
+}
+.statutory-esi .statutory-icon {
+  background: var(--pay-cyan-bg) !important;
+  color: var(--pay-cyan) !important;
+}
+.statutory-pt .statutory-icon {
+  background: var(--pay-amber-bg) !important;
+  color: var(--pay-amber) !important;
+}
+.statutory-lwf .statutory-icon {
+  background: var(--pay-green-bg) !important;
+  color: var(--pay-green) !important;
+}
+
+.statutory-config-status {
+  border-radius: 999px !important;
+}
+
+.statutory-field-grid label,
+.statutory-inline-options label {
+  color: #72798d !important;
+}
+
+.statutory-field-grid input,
+.statutory-field-grid select,
+.statutory-input-wrap input,
+.statutory-test-controls input,
+.statutory-test-controls select {
+  border: 1px solid #dddced !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #4c566d !important;
+}
+
+.statutory-field-grid input:focus,
+.statutory-field-grid select:focus,
+.statutory-input-wrap input:focus,
+.statutory-test-controls input:focus,
+.statutory-test-controls select:focus {
+  outline: none !important;
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.10) !important;
+}
+
+.statutory-info-banner,
+.statutory-rule-note {
+  border: 1px solid #ded9f1 !important;
+  border-radius: 10px !important;
+  background: #f8f6ff !important;
+  color: #706a88 !important;
+}
+
+.statutory-info-icon {
+  background: #ebe8ff !important;
+  color: #6555b7 !important;
+}
+
+.statutory-rule-version {
+  background: #f0eeff !important;
+  color: #6655b6 !important;
+  border: 1px solid #ddd8f1 !important;
+  border-radius: 999px !important;
+}
+
+.statutory-switch input:checked + span,
+.statutory-switch input:checked ~ span {
+  background: var(--pay-primary) !important;
+}
+
+.statutory-summary,
+.statutory-test-card {
+  background: #fff !important;
+  border: 1px solid var(--pay-border) !important;
+  border-radius: 13px !important;
+  box-shadow: 0 7px 20px rgba(48,43,88,.04) !important;
+}
+
+.statutory-summary-tags span {
+  background: var(--pay-primary-soft) !important;
+  color: #6656b7 !important;
+  border-color: #ddd8f1 !important;
+  border-radius: 999px !important;
+}
+
+.statutory-test-head {
+  border-bottom-color: #e8e5ef !important;
+}
+
+.statutory-test-head h3 {
+  color: var(--pay-ink) !important;
+}
+
+.statutory-result-grid {
+  gap: 10px !important;
+}
+
+.statutory-result-grid > div {
+  background: #faf9fd !important;
+  border: 1px solid #e6e3ee !important;
+  border-radius: 10px !important;
+}
+
+.statutory-result-grid strong {
+  color: var(--pay-ink) !important;
+}
+
+.statutory-card-footer {
+  border-top-color: #e9e6f0 !important;
+}
+
+/* =====================================================================
+   17 — DEDUCTIONS
+   ===================================================================== */
+
+.payroll-page [class*="deduction"] {
+  color: inherit;
+}
+
+.payroll-page .deduction-card,
+.payroll-page .deductions-card,
+.payroll-page .deduction-table,
+.payroll-page .deduction-summary,
+.payroll-page .deduction-filter-card,
+.payroll-page .deduction-form-card {
+  background: #fff !important;
+  border-color: var(--pay-border) !important;
+  border-radius: 13px !important;
+  box-shadow: 0 7px 20px rgba(48,43,88,.04) !important;
+}
+
+.payroll-page [class*="deduction"] input:not([type="checkbox"]),
+.payroll-page [class*="deduction"] select,
+.payroll-page [class*="deduction"] textarea {
+  border: 1px solid #dddced !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #4c566d !important;
+}
+
+.payroll-page [class*="deduction"] input:not([type="checkbox"]):focus,
+.payroll-page [class*="deduction"] select:focus,
+.payroll-page [class*="deduction"] textarea:focus {
+  outline: none !important;
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.10) !important;
+}
+
+.payroll-page [class*="deduction"] table th {
+  background: #f2f0f7 !important;
+  color: #706b89 !important;
+}
+
+.payroll-page [class*="deduction"] table td {
+  border-color: #eeecf3 !important;
+  color: #667086 !important;
+}
+
+.payroll-page [class*="deduction"] tbody tr:hover td {
+  background: #fbfaff !important;
+}
+
+/* =====================================================================
+   18 — FOOD DEDUCTION MODAL
+   ===================================================================== */
+
+.food-deduction-modal {
+  background: #fbfaff !important;
+  color: var(--pay-ink) !important;
+  border: 1px solid #dedced !important;
+  border-radius: 17px !important;
+  box-shadow: 0 30px 90px rgba(35,30,70,.28) !important;
+}
+
+.food-deduction-modal label {
+  color: #70788d !important;
+}
+
+.food-deduction-modal input:not([type="checkbox"]),
+.food-deduction-modal select {
+  border: 1px solid #dddced !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #4c566d !important;
+}
+
+.food-deduction-modal input:not([type="checkbox"]):focus,
+.food-deduction-modal select:focus {
+  outline: none !important;
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.10) !important;
+}
+
+.food-deduction-modal .food-filter-grid,
+.food-deduction-modal .food-bulk-grid,
+.food-deduction-modal .food-summary-grid {
+  gap: 10px !important;
+}
+
+.food-deduction-modal .food-table {
+  border: 1px solid var(--pay-border) !important;
+  border-radius: 11px !important;
+  overflow: hidden;
+  background: #fff !important;
+}
+
+.food-deduction-modal .food-table-head {
+  background: #f2f0f7 !important;
+  color: #706b89 !important;
+  border-bottom-color: #e4e1eb !important;
+}
+
+.food-deduction-modal .food-table-row {
+  border-bottom-color: #eeecf3 !important;
+  color: #667086 !important;
+}
+
+.food-deduction-modal .food-table-row:hover {
+  background: #fbfaff !important;
+}
+
+.food-deduction-modal .food-calc-box {
+  background: #f7f5ff !important;
+  border: 1px solid #dfdaf2 !important;
+  border-radius: 10px !important;
+}
+
+.food-deduction-modal .food-footer {
+  background: #faf9fd !important;
+  border-top-color: #e8e6f0 !important;
+}
+
+/* =====================================================================
+   19 — OT / ARREAR / REPORTS / GENERIC PAYROLL PANELS
+   ===================================================================== */
+
+/*
+   The OT, Arrear and report screens use several specialized class names.
+   The broad prefix rules below intentionally keep every one of those
+   screens on the same visual system even where their inner markup differs.
+*/
+
+.payroll-page [class*="ot-"],
+.payroll-page [class*="arrear"],
+.payroll-page [class*="report-"],
+.payroll-page [class*="monthly-"],
+.payroll-page [class*="vendor-"],
+.payroll-page [class*="processing-"] {
+  --component-accent: var(--pay-primary);
+}
+
+.payroll-page [class*="ot-card"],
+.payroll-page [class*="arrear-card"],
+.payroll-page [class*="report-card"],
+.payroll-page [class*="monthly-card"],
+.payroll-page [class*="vendor-card"],
+.payroll-page [class*="processing-card"],
+.payroll-page [class*="report-shell"] {
+  background: #fff !important;
+  border-color: var(--pay-border) !important;
+  border-radius: 13px !important;
+  box-shadow: 0 7px 20px rgba(48,43,88,.04) !important;
+}
+
+.payroll-page [class*="ot-"] input,
+.payroll-page [class*="ot-"] select,
+.payroll-page [class*="ot-"] textarea,
+.payroll-page [class*="arrear"] input,
+.payroll-page [class*="arrear"] select,
+.payroll-page [class*="arrear"] textarea,
+.payroll-page [class*="report-"] input,
+.payroll-page [class*="report-"] select,
+.payroll-page [class*="monthly-"] input,
+.payroll-page [class*="monthly-"] select,
+.payroll-page [class*="vendor-"] input,
+.payroll-page [class*="vendor-"] select {
+  border-color: #dddced !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #4c566d !important;
+}
+
+.payroll-page [class*="ot-"] input:focus,
+.payroll-page [class*="ot-"] select:focus,
+.payroll-page [class*="arrear"] input:focus,
+.payroll-page [class*="arrear"] select:focus,
+.payroll-page [class*="report-"] input:focus,
+.payroll-page [class*="report-"] select:focus,
+.payroll-page [class*="monthly-"] input:focus,
+.payroll-page [class*="monthly-"] select:focus,
+.payroll-page [class*="vendor-"] input:focus,
+.payroll-page [class*="vendor-"] select:focus {
+  outline: none !important;
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.10) !important;
+}
+
+.payroll-page [class*="ot-"] table th,
+.payroll-page [class*="arrear"] table th,
+.payroll-page [class*="report-"] table th,
+.payroll-page [class*="monthly-"] table th,
+.payroll-page [class*="vendor-"] table th {
+  background: #f2f0f7 !important;
+  color: #706b89 !important;
+}
+
+.payroll-page [class*="ot-"] table td,
+.payroll-page [class*="arrear"] table td,
+.payroll-page [class*="report-"] table td,
+.payroll-page [class*="monthly-"] table td,
+.payroll-page [class*="vendor-"] table td {
+  border-color: #eeecf3 !important;
+  color: #667086 !important;
+}
+
+/* =====================================================================
+   20 — SEMANTIC STATUS SYSTEM
+   ===================================================================== */
+
+/* Positive / processed */
+.result-success,
+.success,
+.status-success,
+.status-processed,
+.payroll-page .processed,
+.payroll-page .ready,
+.payroll-page .active {
+  color: var(--pay-green) !important;
+}
+
+.result-success,
+.payroll-page .status-success,
+.payroll-page .status-processed,
+.payroll-page .processed {
+  background: var(--pay-green-bg) !important;
+  border-color: var(--pay-green-border) !important;
+}
+
+/* Errors / LOP / failed validation */
+.result-muted.has-errors,
+.has-errors,
+.bulk-errors,
+.bulk-error-box,
+.payroll-page .error,
+.payroll-page .danger,
+.payroll-page .failed {
+  color: var(--pay-red) !important;
+}
+
+.payroll-page .has-errors,
+.payroll-page .error,
+.payroll-page .danger,
+.payroll-page .failed {
+  background: var(--pay-red-bg) !important;
+  border-color: var(--pay-red-border) !important;
+}
+
+/* Pending / warning */
+.pending,
+.warning,
+.payroll-page .pending,
+.payroll-page .warning {
+  color: var(--pay-amber) !important;
+}
+
+.payroll-page .pending,
+.payroll-page .warning {
+  background: var(--pay-amber-bg) !important;
+  border-color: var(--pay-amber-border) !important;
+}
+
+/* Neutral */
+.neutral,
+.result-muted,
+.payroll-page .neutral {
+  color: var(--pay-muted) !important;
+}
+
+/* =====================================================================
+   21 — BADGES / TAGS
+   ===================================================================== */
+
+.stat-tag,
+.rate-badge,
+.active-badge,
+.override-badge,
+.type-pill,
+.payroll-status,
+.salary-locked-badge,
+.statutory-rule-version {
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+}
+
+/* =====================================================================
+   22 — UNIVERSAL CARD HOVER / TABLE ROW BEHAVIOUR
+   ===================================================================== */
+
+.payroll-page [class*="-card"]:hover {
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.payroll-page table tbody tr:hover td {
+  background: #fbfaff !important;
+}
+
+/* =====================================================================
+   23 — EMPTY / RESULT STATES
+   ===================================================================== */
+
+.payroll-page [class*="empty"],
+.payroll-page [class*="no-data"],
+.payroll-page [class*="no-results"],
+.payroll-page [class*="result-muted"] {
+  color: var(--pay-muted) !important;
+}
+
+.payroll-page [class*="empty"] > *,
+.payroll-page [class*="no-data"] > * {
+  color: inherit;
+}
+
+/* =====================================================================
+   24 — MODAL OVERLAY CONSISTENCY
+   ===================================================================== */
+
+.payroll-page .salary-modal-backdrop,
+.payroll-page .food-deduction-modal-backdrop,
+.payroll-page [class*="modal-backdrop"] {
+  background: rgba(35,31,62,.66) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+/* Do not make inline/modal content transparent */
+.payroll-page .salary-modal,
+.payroll-page .bulk-salary-modal,
+.payroll-page .food-deduction-modal,
+.payroll-page [class*="-modal"] {
+  color: var(--pay-ink);
+}
+
+/* =====================================================================
+   25 — SCROLLBARS
+   ===================================================================== */
+
+.payroll-page ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.payroll-page ::-webkit-scrollbar-track {
+  background: #f1eff6;
+}
+
+.payroll-page ::-webkit-scrollbar-thumb {
+  background: #c9c4dc;
+  border-radius: 999px;
+}
+
+.payroll-page ::-webkit-scrollbar-thumb:hover {
+  background: #a9a1c8;
+}
+
+/* =====================================================================
+   26 — RESPONSIVE
+   ===================================================================== */
+
+@media (max-width: 1250px) {
+  .payroll-stat-grid {
+    gap: 10px !important;
+  }
+
+  .payroll-stat-card {
+    border-radius: 12px !important;
+  }
+
+  .payroll-card {
+    border-radius: 13px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .payroll-page {
+    padding-bottom: 30px;
+  }
+
+  .payroll-title-row {
+    align-items: flex-start !important;
+  }
+
+  .payroll-subnav {
+    border-radius: 12px !important;
+    box-shadow: 0 6px 18px rgba(48,43,88,.04) !important;
+  }
+
+  .payroll-stat-card,
+  .payroll-card {
+    box-shadow: 0 6px 18px rgba(48,43,88,.04) !important;
+  }
+
+  .salary-modal-backdrop {
+    padding: 12px !important;
+  }
+
+  .salary-modal,
+  .bulk-salary-modal,
+  .food-deduction-modal {
+    border-radius: 14px !important;
+  }
+}
+
+@media (max-width: 650px) {
+  .payroll-title-row h1 {
+    font-size: 24px !important;
+  }
+
+  .payroll-head-actions {
+    width: 100% !important;
+  }
+
+  .payroll-head-actions select,
+  .payroll-head-actions button {
+    min-width: 0 !important;
+  }
+
+  .payroll-stat-card {
+    min-height: 108px !important;
+  }
+
+  .payroll-card {
+    padding: 13px !important;
+  }
+
+  .payroll-filter-bar,
+  .salary-register-filter-bar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .payroll-subnav {
+    overflow-x: auto !important;
+  }
+
+  .payroll-subnav button {
+    min-width: max-content !important;
+  }
+}
+
+/* =====================================================================
+   27 — PRINT
+   ===================================================================== */
+
+@media print {
+  .payroll-page {
+    background: #fff !important;
+  }
+
+  .payroll-page .payroll-card,
+  .payroll-page .payroll-stat-card,
+  .payroll-page .payroll-table-scroll {
+    box-shadow: none !important;
+  }
+
+  .salary-modal-backdrop,
+  .payroll-page [class*="modal-backdrop"] {
+    background: #fff !important;
+  }
+}

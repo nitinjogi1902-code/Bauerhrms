@@ -1,0 +1,3405 @@
+/* =========================
+   BAUER HRMS - TRAINING
+   Phase 2: Dashboard + Calendar + TNI + Masters + Annual Plan
+   ========================= */
+
+.training-module {
+  padding: 8px 2px 34px;
+  color: #173b5d;
+  font-family: inherit;
+}
+
+.trn-page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.trn-page-head h1 {
+  margin: 3px 0 5px;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  color: #153b5d;
+}
+
+.trn-page-head p,
+.trn-card-head p {
+  margin: 0;
+  color: #71869a;
+  font-size: 12px;
+}
+
+.trn-eyebrow {
+  display: inline-block;
+  color: #6b879d;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.25px;
+}
+
+.trn-page-actions,
+.trn-calendar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.trn-primary,
+.trn-secondary,
+.trn-today-btn,
+.trn-icon-btn,
+.trn-link-btn,
+.trn-more-btn,
+.trn-danger {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 9px 13px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: .18s ease;
+}
+
+.trn-primary {
+  background: #164b73;
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(22, 75, 115, .14);
+}
+
+.trn-primary:hover { background: #103d5f; transform: translateY(-1px); }
+
+.trn-secondary,
+.trn-today-btn {
+  background: #fff;
+  color: #315b79;
+  border-color: #d9e3ea;
+}
+
+.trn-secondary:hover,
+.trn-today-btn:hover,
+.trn-icon-btn:hover { background: #f5f8fa; border-color: #bfcfda; }
+
+.trn-nav {
+  display: flex;
+  gap: 3px;
+  border-bottom: 1px solid #dce6ec;
+  margin-bottom: 18px;
+}
+
+.trn-nav button {
+  border: 0;
+  background: transparent;
+  padding: 10px 15px;
+  color: #7890a2;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.trn-nav button span { margin-right: 6px; }
+
+.trn-nav button.active {
+  color: #174e77;
+  border-bottom-color: #174e77;
+}
+
+.trn-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+  margin-bottom: 14px;
+}
+
+.trn-kpi {
+  min-height: 98px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #e0e8ee;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(31, 65, 88, .045);
+}
+
+.trn-kpi-icon {
+  width: 37px;
+  height: 37px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #f1f6fa;
+  color: #20597e;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.trn-kpi-body { min-width: 0; }
+.trn-kpi-body span { display: block; color: #7b8f9f; font-size: 10px; font-weight: 700; }
+.trn-kpi-body strong { display: block; margin: 3px 0; color: #173f60; font-size: 22px; }
+.trn-kpi-body small { color: #9aabb7; font-size: 9px; }
+
+.trn-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(300px, .85fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.trn-secondary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, .9fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.trn-card {
+  background: #fff;
+  border: 1px solid #dfe8ee;
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(31, 65, 88, .045);
+  overflow: hidden;
+}
+
+.trn-card-head {
+  min-height: 74px;
+  padding: 15px 17px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid #edf2f5;
+}
+
+.trn-card-head.compact { min-height: 64px; }
+
+.trn-card-head h2 {
+  margin: 3px 0 4px;
+  color: #173f60;
+  font-size: 15px;
+}
+
+.trn-mini-stat {
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: #f2f6f8;
+  color: #55748a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.trn-calendar-actions strong {
+  font-size: 12px;
+  color: #274f6d;
+  min-width: 115px;
+  text-align: center;
+}
+
+.trn-icon-btn {
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  background: #fff;
+  border-color: #d9e3ea;
+  color: #42657d;
+  font-size: 18px;
+}
+
+.trn-segmented {
+  display: flex;
+  background: #f4f7f9;
+  padding: 2px;
+  border-radius: 7px;
+}
+
+.trn-segmented button {
+  border: 0;
+  background: transparent;
+  border-radius: 5px;
+  padding: 6px 8px;
+  color: #7990a0;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.trn-segmented button.active {
+  background: #fff;
+  color: #1c5277;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+
+.trn-calendar { padding: 10px; }
+.trn-weekdays,
+.trn-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.trn-weekdays span {
+  padding: 5px 7px 8px;
+  color: #91a1ad;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.trn-calendar-cell {
+  min-height: 92px;
+  padding: 7px;
+  text-align: left;
+  border: 1px solid #edf1f4;
+  background: #fff;
+  cursor: pointer;
+}
+
+.trn-calendar-cell:hover { background: #fbfdfe; }
+.trn-calendar-cell.outside { background: #fafbfc; }
+.trn-calendar-cell.outside .trn-calendar-number { color: #b4c0c8; }
+
+.trn-calendar-cell.today .trn-calendar-number {
+  background: #174e77;
+  color: #fff;
+}
+
+.trn-calendar-number {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #607e92;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.trn-calendar-events {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.trn-calendar-event {
+  width: 100%;
+  min-width: 0;
+  display: block;
+  padding: 4px 5px;
+  border: 0;
+  border-left: 3px solid #5e88a4;
+  border-radius: 3px;
+  background: #f1f6f9;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.trn-calendar-event strong,
+.trn-calendar-event span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.trn-calendar-event strong { color: #2d5974; font-size: 8px; }
+.trn-calendar-event span { color: #7d94a4; font-size: 7px; margin-top: 2px; }
+
+.trn-calendar-event.completed { border-left-color: #4f7f69; background: #f1f7f3; }
+.trn-calendar-event.cancelled { border-left-color: #9a6b6b; background: #faf3f3; }
+.trn-calendar-event.in-progress { border-left-color: #7b6d9d; background: #f5f2fa; }
+
+.trn-more {
+  color: #668398;
+  font-size: 8px;
+  font-weight: 700;
+  padding-left: 4px;
+}
+
+.trn-upcoming-list { padding: 4px 14px 13px; }
+.trn-upcoming-item,
+.trn-list-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 3px;
+  border: 0;
+  border-bottom: 1px solid #edf2f5;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trn-upcoming-item:last-child,
+.trn-list-row:last-child { border-bottom: 0; }
+
+.trn-date-box {
+  flex: 0 0 43px;
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-radius: 7px;
+  background: #f3f7f9;
+  border: 1px solid #e2eaef;
+}
+
+.trn-date-box strong { font-size: 16px; line-height: 15px; color: #234e6b; }
+.trn-date-box span { font-size: 8px; color: #7c91a0; text-transform: uppercase; }
+
+.trn-upcoming-main,
+.trn-list-main { min-width: 0; flex: 1; }
+.trn-upcoming-main strong,
+.trn-list-main strong { display: block; color: #315b76; font-size: 10px; }
+.trn-upcoming-main span,
+.trn-upcoming-main small,
+.trn-list-main span { display: block; margin-top: 3px; color: #8799a6; font-size: 8px; }
+
+.trn-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+  background: #eef3f6;
+  color: #5d7789;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.trn-status.completed { background: #eaf5ef; color: #3e7658; }
+.trn-status.scheduled { background: #eaf2f8; color: #2c6287; }
+.trn-status.planned { background: #f4f0e9; color: #826f4f; }
+.trn-status.in-progress { background: #eeeafa; color: #67568c; }
+.trn-status.cancelled { background: #f8ecec; color: #8b5e5e; }
+.trn-status.postponed { background: #fff4e8; color: #9a6d35; }
+
+.trn-chart {
+  height: 190px;
+  padding: 20px 18px 8px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  align-items: end;
+  gap: 14px;
+}
+
+.trn-chart-col {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 5px;
+  text-align: center;
+}
+
+.trn-chart-values {
+  min-height: 100px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+}
+
+.trn-chart-values span,
+.trn-chart-values i {
+  display: block;
+  width: 9px;
+  min-height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: #6b8da5;
+}
+
+.trn-chart-values i { background: #2f607f; }
+.trn-chart-col strong { color: #71899a; font-size: 9px; }
+.trn-chart-col small { color: #a1afb8; font-size: 8px; }
+
+.trn-chart-legend {
+  display: flex;
+  gap: 15px;
+  padding: 0 18px 14px;
+  color: #8093a1;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.trn-chart-legend i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: #6b8da5;
+}
+
+.trn-chart-legend .actual-dot { background: #2f607f; }
+
+.trn-action-list { padding: 5px 14px 12px; }
+.trn-action-list button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 34px 1fr 16px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 3px;
+  border: 0;
+  border-bottom: 1px solid #edf2f5;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.trn-action-list button:last-child { border-bottom: 0; }
+.trn-action-list b { color: #244f6d; font-size: 15px; }
+.trn-action-list span { color: #617e91; font-size: 9px; font-weight: 700; }
+.trn-action-list small { color: #a0adb6; font-weight: 500; }
+.trn-action-list em { color: #9aabb6; font-style: normal; }
+
+.trn-activity-card { margin-bottom: 14px; }
+.trn-table-wrap { overflow-x: auto; }
+.trn-table { width: 100%; border-collapse: collapse; min-width: 750px; }
+.trn-table th {
+  padding: 9px 13px;
+  background: #f8fafb;
+  border-bottom: 1px solid #e4ebef;
+  color: #8497a4;
+  font-size: 8px;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.trn-table td {
+  padding: 10px 13px;
+  border-bottom: 1px solid #edf2f5;
+  color: #577286;
+  font-size: 9px;
+}
+.trn-table tbody tr { cursor: pointer; }
+.trn-table tbody tr:hover { background: #fbfdfe; }
+.trn-table td strong,
+.trn-table td small {
+  display: block;
+}
+.trn-table td strong { color: #315a74; font-size: 9px; }
+.trn-table td small { margin-top: 3px; color: #9aaab4; font-size: 8px; }
+
+.trn-link-btn,
+.trn-more-btn {
+  padding: 5px 7px;
+  background: transparent;
+  color: #2c6287;
+}
+.trn-link-btn:hover { text-decoration: underline; }
+
+.trn-empty {
+  padding: 24px 14px;
+  text-align: center;
+  color: #91a1ac;
+  font-size: 10px;
+}
+.trn-empty.large { padding: 45px 20px; }
+
+.trn-list-calendar { padding: 8px 14px 16px; }
+.trn-list-row { padding: 12px 4px; }
+.trn-list-main small { display: block; }
+
+.trn-day-view { padding: 18px; }
+.trn-day-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.trn-day-heading h3 { margin: 4px 0 0; font-size: 16px; color: #204d6b; }
+.trn-day-list { display: grid; gap: 8px; }
+.trn-day-list .trn-calendar-event { padding: 11px 12px; }
+
+.trn-register-card { min-height: 360px; }
+.trn-filters {
+  display: grid;
+  grid-template-columns: 1.6fr repeat(3, minmax(130px, .7fr));
+  gap: 8px;
+  padding: 12px 15px;
+  background: #fafcfd;
+  border-bottom: 1px solid #e8eef2;
+}
+.trn-filters select,
+.trn-search input,
+.trn-form-grid input,
+.trn-form-grid select,
+.trn-form-grid textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d8e3e9;
+  border-radius: 6px;
+  background: #fff;
+  color: #355a72;
+  font: inherit;
+  font-size: 10px;
+  outline: none;
+}
+.trn-filters select,
+.trn-search input { height: 34px; padding: 0 10px; }
+.trn-search { position: relative; }
+.trn-search span { position: absolute; left: 10px; top: 9px; color: #91a1ac; }
+.trn-search input { padding-left: 27px; }
+
+.trn-table-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trn-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 39, 54, .42);
+}
+
+.trn-modal {
+  width: min(760px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 22px 70px rgba(0,0,0,.22);
+}
+
+.trn-form-modal { width: min(900px, 100%); }
+
+.trn-modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e7edf1;
+}
+
+.trn-modal-head h2 { margin: 4px 0 5px; color: #173f60; font-size: 19px; }
+.trn-modal-head p { margin: 0; color: #7e919e; font-size: 10px; }
+.trn-close {
+  width: 29px;
+  height: 29px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f5f7;
+  color: #627c8e;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.trn-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 20px;
+}
+.trn-form-grid label {
+  color: #647f91;
+  font-size: 9px;
+  font-weight: 800;
+}
+.trn-form-grid input,
+.trn-form-grid select { height: 36px; padding: 0 9px; margin-top: 5px; }
+.trn-form-grid textarea { padding: 9px; margin-top: 5px; resize: vertical; }
+.trn-form-grid .wide { grid-column: 1 / -1; }
+.trn-check {
+  display: flex !important;
+  align-items: center;
+  gap: 7px;
+  padding-top: 25px;
+}
+.trn-check input { width: 14px; height: 14px; margin: 0; }
+
+.trn-form-footer,
+.trn-detail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 13px 20px;
+  border-top: 1px solid #e7edf1;
+  background: #fafcfd;
+}
+.trn-form-footer > span { color: #8a9ca7; font-size: 8px; }
+.trn-form-footer > div,
+.trn-detail-footer > div { display: flex; gap: 8px; }
+
+.trn-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  padding: 1px;
+  background: #e4ebef;
+}
+.trn-detail-grid > div {
+  min-height: 68px;
+  padding: 11px;
+  background: #fff;
+}
+.trn-detail-grid span,
+.trn-detail-grid strong { display: block; }
+.trn-detail-grid span { color: #8a9ba7; font-size: 8px; }
+.trn-detail-grid strong { margin-top: 5px; color: #355b73; font-size: 10px; }
+
+.trn-danger {
+  background: #fff;
+  color: #9a5b5b;
+  border-color: #e4cfcf;
+}
+.trn-danger:hover { background: #fcf5f5; }
+
+@media (max-width: 1200px) {
+  .trn-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .trn-main-grid,
+  .trn-secondary-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .trn-page-head { align-items: flex-start; flex-direction: column; }
+  .trn-kpi-grid { grid-template-columns: 1fr; }
+  .trn-card-head { align-items: flex-start; flex-direction: column; }
+  .trn-calendar-actions { width: 100%; }
+  .trn-calendar { overflow-x: auto; }
+  .trn-calendar-grid,
+  .trn-weekdays { min-width: 680px; }
+  .trn-filters { grid-template-columns: 1fr; }
+  .trn-form-grid { grid-template-columns: 1fr; }
+  .trn-form-grid .wide { grid-column: auto; }
+  .trn-detail-grid { grid-template-columns: repeat(2, 1fr); }
+  .trn-form-footer,
+  .trn-detail-footer { align-items: flex-start; flex-direction: column; }
+}
+
+
+/* =========================
+   PHASE 2 ADDITIONS
+   ========================= */
+
+.trn-plan-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: #e7edf1;
+}
+.trn-plan-summary > div {
+  background: #fff;
+  padding: 18px;
+}
+.trn-plan-summary span,
+.trn-plan-summary strong {
+  display: block;
+}
+.trn-plan-summary span {
+  color: #879aa7;
+  font-size: 9px;
+  font-weight: 700;
+}
+.trn-plan-summary strong {
+  margin-top: 5px;
+  color: #244f6d;
+  font-size: 19px;
+}
+.compact-summary { border-bottom: 1px solid #e7edf1; }
+
+.trn-priority {
+  display: inline-flex;
+  padding: 4px 7px;
+  border-radius: 10px;
+  background: #f1f4f6;
+  color: #647c8b;
+  font-size: 8px;
+  font-weight: 800;
+}
+.trn-priority.critical { background: #faecec; color: #985757; }
+.trn-priority.high { background: #fff2e5; color: #976536; }
+.trn-priority.medium { background: #eef4f8; color: #3c6985; }
+.trn-priority.low { background: #edf5ef; color: #4c775d; }
+
+.day-event {
+  display: block;
+  padding: 12px;
+  margin-bottom: 7px;
+}
+
+.trn-table td button + button { margin-left: 5px; }
+
+@media (max-width: 1000px) {
+  .trn-nav { overflow-x: auto; }
+  .trn-nav button { white-space: nowrap; }
+  .trn-plan-summary { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 700px) {
+  .trn-plan-summary { grid-template-columns: 1fr 1fr; }
+}
+
+/* Phase 2 management views */
+.trn-phase-card { margin-top: 4px; }
+.trn-inline-form,
+.trn-tni-form {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 14px;
+  margin: 0 0 16px;
+  border: 1px solid #e6edf4;
+  border-radius: 10px;
+  background: #f8fbfd;
+}
+.trn-tni-form { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
+.trn-inline-form input,
+.trn-inline-form select,
+.trn-tni-form input,
+.trn-tni-form select {
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+  border: 1px solid #d8e2eb;
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px 10px;
+  color: #173b5d;
+  font: inherit;
+}
+.trn-inline-form label,
+.trn-tni-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #48647b;
+}
+.trn-inline-form .trn-check {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.trn-inline-form .trn-check input { width: auto; min-height: auto; }
+.trn-inline-form .trn-primary,
+.trn-tni-form .trn-primary { min-height: 38px; }
+.trn-plan-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.trn-plan-summary > div {
+  padding: 13px 15px;
+  border: 1px solid #e4ebf2;
+  border-radius: 9px;
+  background: #fff;
+}
+.trn-plan-summary span {
+  display: block;
+  font-size: 10px;
+  color: #7890a5;
+  margin-bottom: 5px;
+}
+.trn-plan-summary strong { font-size: 18px; color: #173b5d; }
+.trn-table td small,
+.trn-table th small { display: block; margin-top: 3px; color: #8296a8; }
+.trn-more-btn {
+  border: 1px solid #dce6ee;
+  background: #fff;
+  color: #285979;
+  border-radius: 5px;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.trn-more-btn:hover { background: #f1f6fa; }
+@media (max-width: 1050px) {
+  .trn-inline-form { grid-template-columns: repeat(3, 1fr); }
+  .trn-tni-form { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+  .trn-inline-form,
+  .trn-tni-form,
+  .trn-plan-summary { grid-template-columns: 1fr; }
+}
+
+
+/* =========================================================
+   BAUER HRMS — TRAINING PHASE 2 PROFESSIONAL FORM THEME FIX
+   Keeps the existing dashboard/calendar theme and fixes the
+   native-looking Phase 2 master/TNI/annual-plan controls.
+   ========================================================= */
+
+/* Phase-2 content sections */
+.training-module .trn-card {
+  position: relative;
+}
+
+.training-module .trn-card > form {
+  padding: 18px 20px 20px;
+}
+
+/* Standard Phase-2 form layout */
+.training-module .trn-card > form:not(.trn-inline-form) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 13px 14px;
+  align-items: end;
+}
+
+.training-module .trn-card > form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  color: #5f788b;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .15px;
+}
+
+.training-module .trn-card > form label.wide {
+  grid-column: 1 / -1;
+}
+
+.training-module .trn-card > form input,
+.training-module .trn-card > form select,
+.training-module .trn-card > form textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid #d7e2e9 !important;
+  border-radius: 7px !important;
+  outline: none;
+  background: #fff !important;
+  color: #315a73 !important;
+  font-family: inherit;
+  font-size: 10px !important;
+  font-weight: 500;
+  box-shadow: inset 0 1px 2px rgba(24, 60, 84, .025);
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.training-module .trn-card > form input,
+.training-module .trn-card > form select {
+  height: 38px !important;
+  padding: 0 10px !important;
+}
+
+.training-module .trn-card > form textarea {
+  min-height: 76px;
+  padding: 9px 10px !important;
+  resize: vertical;
+}
+
+.training-module .trn-card > form input::placeholder,
+.training-module .trn-card > form textarea::placeholder {
+  color: #a0afb9;
+  opacity: 1;
+}
+
+.training-module .trn-card > form input:focus,
+.training-module .trn-card > form select:focus,
+.training-module .trn-card > form textarea:focus {
+  border-color: #6c9ab7 !important;
+  box-shadow: 0 0 0 3px rgba(43, 102, 139, .08);
+}
+
+/* Make native selects look intentional */
+.training-module .trn-card > form select {
+  appearance: auto;
+  cursor: pointer;
+}
+
+/* Checkbox rows */
+.training-module .trn-card > form label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #e0e8ed;
+  border-radius: 7px;
+  background: #f8fafb;
+  color: #4e6d81;
+}
+
+.training-module .trn-card > form input[type="checkbox"] {
+  width: 15px !important;
+  height: 15px !important;
+  margin: 0;
+  accent-color: #185276;
+  box-shadow: none;
+}
+
+/* Buttons inside Phase-2 forms */
+.training-module .trn-card > form button,
+.training-module .trn-card > div > form button {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 9px 13px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.training-module .trn-card > form button[type="submit"],
+.training-module .trn-card > form .trn-primary {
+  background: #164b73;
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(22, 75, 115, .14);
+}
+
+.training-module .trn-card > form button[type="submit"]:hover,
+.training-module .trn-card > form .trn-primary:hover {
+  background: #103d5f;
+}
+
+/* Form footer */
+.training-module .trn-form-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding-top: 14px;
+  margin-top: 2px;
+  border-top: 1px solid #edf2f5;
+}
+
+.training-module .trn-form-footer > span {
+  color: #91a1ac;
+  font-size: 9px;
+}
+
+.training-module .trn-form-footer > div {
+  display: flex;
+  gap: 7px;
+}
+
+/* Phase-2 summary blocks */
+.training-module .trn-plan-summary {
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.training-module .compact-summary {
+  margin-bottom: 0;
+}
+
+/* Keep tables aligned with the HRMS visual language */
+.training-module .trn-table th {
+  height: 34px;
+  vertical-align: middle;
+}
+
+.training-module .trn-table td {
+  vertical-align: middle;
+}
+
+/* Native empty state */
+.training-module .trn-empty {
+  font-size: 10px;
+}
+
+/* ---------------------------------------------------------
+   Inline legacy Phase-2 forms
+   Some Phase-2 screens use a simple form with labels directly
+   inside the card. This forces those controls into a clean
+   HRMS grid instead of the browser's default inline layout.
+   --------------------------------------------------------- */
+.training-module .trn-card > form > label {
+  min-height: 60px;
+}
+
+.training-module .trn-card > form > button {
+  align-self: end;
+  height: 38px;
+}
+
+/* Training Master — 5-column compact planning row */
+.training-module .trn-card:has(input[placeholder*="Training programme"]) > form,
+.training-module .trn-card:has(input[placeholder*="programme"]) > form {
+  grid-template-columns: minmax(230px, 2fr) minmax(140px, 1fr) minmax(120px, .9fr) 130px auto;
+}
+
+/* Trainer Master — balanced five-column row */
+.training-module .trn-card:has(input[placeholder*="Trainer name"]) > form {
+  grid-template-columns: minmax(190px, 1.3fr) 130px minmax(150px, 1fr) minmax(160px, 1fr) 150px auto;
+}
+
+/* TNI — employee + need + category + priority + target date */
+.training-module .trn-card:has(input[placeholder*="Advanced Excel"]) > form {
+  grid-template-columns: minmax(180px, 1.3fr) minmax(220px, 1.8fr) 130px 120px 145px;
+}
+
+/* Annual plan — compact planning controls */
+.training-module .trn-card:has(input[placeholder*="Training programme / objective"]) > form,
+.training-module .trn-card:has(input[placeholder*="Training programme"]) > form {
+  grid-template-columns: 130px minmax(220px, 2fr) minmax(150px, 1fr) 110px 110px 130px auto;
+}
+
+/* Add button should sit naturally with the controls */
+.training-module .trn-card > form > button {
+  white-space: nowrap;
+}
+
+/* Better visual separation between master controls and table */
+.training-module .trn-card > form + .trn-table-wrap,
+.training-module .trn-card > form + .trn-empty {
+  border-top: 1px solid #edf2f5;
+}
+
+/* Header typography consistency */
+.training-module .trn-card-head h2 {
+  letter-spacing: -.15px;
+}
+
+.training-module .trn-card-head p {
+  line-height: 1.45;
+}
+
+/* Keep horizontal scrolling graceful on smaller screens */
+.training-module {
+  overflow-x: hidden;
+}
+
+@media (max-width: 1100px) {
+  .training-module .trn-card > form:not(.trn-inline-form) {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .training-module .trn-card:has(input[placeholder*="Training programme"]) > form,
+  .training-module .trn-card:has(input[placeholder*="programme"]) > form,
+  .training-module .trn-card:has(input[placeholder*="Trainer name"]) > form,
+  .training-module .trn-card:has(input[placeholder*="Advanced Excel"]) > form {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .training-module .trn-card > form:not(.trn-inline-form),
+  .training-module .trn-card:has(input[placeholder*="Training programme"]) > form,
+  .training-module .trn-card:has(input[placeholder*="programme"]) > form,
+  .training-module .trn-card:has(input[placeholder*="Trainer name"]) > form,
+  .training-module .trn-card:has(input[placeholder*="Advanced Excel"]) > form {
+    grid-template-columns: 1fr;
+  }
+
+  .training-module .trn-form-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .training-module .trn-form-footer > div {
+    justify-content: flex-end;
+  }
+}
+/* =========================
+   BAUER HRMS - TRAINING
+   Phase 2: Dashboard + Calendar + TNI + Masters + Annual Plan
+   ========================= */
+
+.training-module {
+  padding: 8px 2px 34px;
+  color: #173b5d;
+  font-family: inherit;
+}
+
+.trn-page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.trn-page-head h1 {
+  margin: 3px 0 5px;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  color: #153b5d;
+}
+
+.trn-page-head p,
+.trn-card-head p {
+  margin: 0;
+  color: #71869a;
+  font-size: 12px;
+}
+
+.trn-eyebrow {
+  display: inline-block;
+  color: #6b879d;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.25px;
+}
+
+.trn-page-actions,
+.trn-calendar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.trn-primary,
+.trn-secondary,
+.trn-today-btn,
+.trn-icon-btn,
+.trn-link-btn,
+.trn-more-btn,
+.trn-danger {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 9px 13px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: .18s ease;
+}
+
+.trn-primary {
+  background: #164b73;
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(22, 75, 115, .14);
+}
+
+.trn-primary:hover { background: #103d5f; transform: translateY(-1px); }
+
+.trn-secondary,
+.trn-today-btn {
+  background: #fff;
+  color: #315b79;
+  border-color: #d9e3ea;
+}
+
+.trn-secondary:hover,
+.trn-today-btn:hover,
+.trn-icon-btn:hover { background: #f5f8fa; border-color: #bfcfda; }
+
+.trn-nav {
+  display: flex;
+  gap: 3px;
+  border-bottom: 1px solid #dce6ec;
+  margin-bottom: 18px;
+}
+
+.trn-nav button {
+  border: 0;
+  background: transparent;
+  padding: 10px 15px;
+  color: #7890a2;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.trn-nav button span { margin-right: 6px; }
+
+.trn-nav button.active {
+  color: #174e77;
+  border-bottom-color: #174e77;
+}
+
+.trn-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+  margin-bottom: 14px;
+}
+
+.trn-kpi {
+  min-height: 98px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #e0e8ee;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(31, 65, 88, .045);
+}
+
+.trn-kpi-icon {
+  width: 37px;
+  height: 37px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #f1f6fa;
+  color: #20597e;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.trn-kpi-body { min-width: 0; }
+.trn-kpi-body span { display: block; color: #7b8f9f; font-size: 10px; font-weight: 700; }
+.trn-kpi-body strong { display: block; margin: 3px 0; color: #173f60; font-size: 22px; }
+.trn-kpi-body small { color: #9aabb7; font-size: 9px; }
+
+.trn-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(300px, .85fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.trn-secondary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, .9fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.trn-card {
+  background: #fff;
+  border: 1px solid #dfe8ee;
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(31, 65, 88, .045);
+  overflow: hidden;
+}
+
+.trn-card-head {
+  min-height: 74px;
+  padding: 15px 17px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid #edf2f5;
+}
+
+.trn-card-head.compact { min-height: 64px; }
+
+.trn-card-head h2 {
+  margin: 3px 0 4px;
+  color: #173f60;
+  font-size: 15px;
+}
+
+.trn-mini-stat {
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: #f2f6f8;
+  color: #55748a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.trn-calendar-actions strong {
+  font-size: 12px;
+  color: #274f6d;
+  min-width: 115px;
+  text-align: center;
+}
+
+.trn-icon-btn {
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  background: #fff;
+  border-color: #d9e3ea;
+  color: #42657d;
+  font-size: 18px;
+}
+
+.trn-segmented {
+  display: flex;
+  background: #f4f7f9;
+  padding: 2px;
+  border-radius: 7px;
+}
+
+.trn-segmented button {
+  border: 0;
+  background: transparent;
+  border-radius: 5px;
+  padding: 6px 8px;
+  color: #7990a0;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.trn-segmented button.active {
+  background: #fff;
+  color: #1c5277;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+
+.trn-calendar { padding: 10px; }
+.trn-weekdays,
+.trn-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.trn-weekdays span {
+  padding: 5px 7px 8px;
+  color: #91a1ad;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.trn-calendar-cell {
+  min-height: 92px;
+  padding: 7px;
+  text-align: left;
+  border: 1px solid #edf1f4;
+  background: #fff;
+  cursor: pointer;
+}
+
+.trn-calendar-cell:hover { background: #fbfdfe; }
+.trn-calendar-cell.outside { background: #fafbfc; }
+.trn-calendar-cell.outside .trn-calendar-number { color: #b4c0c8; }
+
+.trn-calendar-cell.today .trn-calendar-number {
+  background: #174e77;
+  color: #fff;
+}
+
+.trn-calendar-number {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #607e92;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.trn-calendar-events {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.trn-calendar-event {
+  width: 100%;
+  min-width: 0;
+  display: block;
+  padding: 4px 5px;
+  border: 0;
+  border-left: 3px solid #5e88a4;
+  border-radius: 3px;
+  background: #f1f6f9;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.trn-calendar-event strong,
+.trn-calendar-event span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.trn-calendar-event strong { color: #2d5974; font-size: 8px; }
+.trn-calendar-event span { color: #7d94a4; font-size: 7px; margin-top: 2px; }
+
+.trn-calendar-event.completed { border-left-color: #4f7f69; background: #f1f7f3; }
+.trn-calendar-event.cancelled { border-left-color: #9a6b6b; background: #faf3f3; }
+.trn-calendar-event.in-progress { border-left-color: #7b6d9d; background: #f5f2fa; }
+
+.trn-more {
+  color: #668398;
+  font-size: 8px;
+  font-weight: 700;
+  padding-left: 4px;
+}
+
+.trn-upcoming-list { padding: 4px 14px 13px; }
+.trn-upcoming-item,
+.trn-list-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 3px;
+  border: 0;
+  border-bottom: 1px solid #edf2f5;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trn-upcoming-item:last-child,
+.trn-list-row:last-child { border-bottom: 0; }
+
+.trn-date-box {
+  flex: 0 0 43px;
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-radius: 7px;
+  background: #f3f7f9;
+  border: 1px solid #e2eaef;
+}
+
+.trn-date-box strong { font-size: 16px; line-height: 15px; color: #234e6b; }
+.trn-date-box span { font-size: 8px; color: #7c91a0; text-transform: uppercase; }
+
+.trn-upcoming-main,
+.trn-list-main { min-width: 0; flex: 1; }
+.trn-upcoming-main strong,
+.trn-list-main strong { display: block; color: #315b76; font-size: 10px; }
+.trn-upcoming-main span,
+.trn-upcoming-main small,
+.trn-list-main span { display: block; margin-top: 3px; color: #8799a6; font-size: 8px; }
+
+.trn-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+  background: #eef3f6;
+  color: #5d7789;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.trn-status.completed { background: #eaf5ef; color: #3e7658; }
+.trn-status.scheduled { background: #eaf2f8; color: #2c6287; }
+.trn-status.planned { background: #f4f0e9; color: #826f4f; }
+.trn-status.in-progress { background: #eeeafa; color: #67568c; }
+.trn-status.cancelled { background: #f8ecec; color: #8b5e5e; }
+.trn-status.postponed { background: #fff4e8; color: #9a6d35; }
+
+.trn-chart {
+  height: 190px;
+  padding: 20px 18px 8px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  align-items: end;
+  gap: 14px;
+}
+
+.trn-chart-col {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 5px;
+  text-align: center;
+}
+
+.trn-chart-values {
+  min-height: 100px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+}
+
+.trn-chart-values span,
+.trn-chart-values i {
+  display: block;
+  width: 9px;
+  min-height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: #6b8da5;
+}
+
+.trn-chart-values i { background: #2f607f; }
+.trn-chart-col strong { color: #71899a; font-size: 9px; }
+.trn-chart-col small { color: #a1afb8; font-size: 8px; }
+
+.trn-chart-legend {
+  display: flex;
+  gap: 15px;
+  padding: 0 18px 14px;
+  color: #8093a1;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.trn-chart-legend i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: #6b8da5;
+}
+
+.trn-chart-legend .actual-dot { background: #2f607f; }
+
+.trn-action-list { padding: 5px 14px 12px; }
+.trn-action-list button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 34px 1fr 16px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 3px;
+  border: 0;
+  border-bottom: 1px solid #edf2f5;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.trn-action-list button:last-child { border-bottom: 0; }
+.trn-action-list b { color: #244f6d; font-size: 15px; }
+.trn-action-list span { color: #617e91; font-size: 9px; font-weight: 700; }
+.trn-action-list small { color: #a0adb6; font-weight: 500; }
+.trn-action-list em { color: #9aabb6; font-style: normal; }
+
+.trn-activity-card { margin-bottom: 14px; }
+.trn-table-wrap { overflow-x: auto; }
+.trn-table { width: 100%; border-collapse: collapse; min-width: 750px; }
+.trn-table th {
+  padding: 9px 13px;
+  background: #f8fafb;
+  border-bottom: 1px solid #e4ebef;
+  color: #8497a4;
+  font-size: 8px;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.trn-table td {
+  padding: 10px 13px;
+  border-bottom: 1px solid #edf2f5;
+  color: #577286;
+  font-size: 9px;
+}
+.trn-table tbody tr { cursor: pointer; }
+.trn-table tbody tr:hover { background: #fbfdfe; }
+.trn-table td strong,
+.trn-table td small {
+  display: block;
+}
+.trn-table td strong { color: #315a74; font-size: 9px; }
+.trn-table td small { margin-top: 3px; color: #9aaab4; font-size: 8px; }
+
+.trn-link-btn,
+.trn-more-btn {
+  padding: 5px 7px;
+  background: transparent;
+  color: #2c6287;
+}
+.trn-link-btn:hover { text-decoration: underline; }
+
+.trn-empty {
+  padding: 24px 14px;
+  text-align: center;
+  color: #91a1ac;
+  font-size: 10px;
+}
+.trn-empty.large { padding: 45px 20px; }
+
+.trn-list-calendar { padding: 8px 14px 16px; }
+.trn-list-row { padding: 12px 4px; }
+.trn-list-main small { display: block; }
+
+.trn-day-view { padding: 18px; }
+.trn-day-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.trn-day-heading h3 { margin: 4px 0 0; font-size: 16px; color: #204d6b; }
+.trn-day-list { display: grid; gap: 8px; }
+.trn-day-list .trn-calendar-event { padding: 11px 12px; }
+
+.trn-register-card { min-height: 360px; }
+.trn-filters {
+  display: grid;
+  grid-template-columns: 1.6fr repeat(3, minmax(130px, .7fr));
+  gap: 8px;
+  padding: 12px 15px;
+  background: #fafcfd;
+  border-bottom: 1px solid #e8eef2;
+}
+.trn-filters select,
+.trn-search input,
+.trn-form-grid input,
+.trn-form-grid select,
+.trn-form-grid textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d8e3e9;
+  border-radius: 6px;
+  background: #fff;
+  color: #355a72;
+  font: inherit;
+  font-size: 10px;
+  outline: none;
+}
+.trn-filters select,
+.trn-search input { height: 34px; padding: 0 10px; }
+.trn-search { position: relative; }
+.trn-search span { position: absolute; left: 10px; top: 9px; color: #91a1ac; }
+.trn-search input { padding-left: 27px; }
+
+.trn-table-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trn-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 39, 54, .42);
+}
+
+.trn-modal {
+  width: min(760px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 22px 70px rgba(0,0,0,.22);
+}
+
+.trn-form-modal { width: min(900px, 100%); }
+
+.trn-modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e7edf1;
+}
+
+.trn-modal-head h2 { margin: 4px 0 5px; color: #173f60; font-size: 19px; }
+.trn-modal-head p { margin: 0; color: #7e919e; font-size: 10px; }
+.trn-close {
+  width: 29px;
+  height: 29px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f5f7;
+  color: #627c8e;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.trn-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 20px;
+}
+.trn-form-grid label {
+  color: #647f91;
+  font-size: 9px;
+  font-weight: 800;
+}
+.trn-form-grid input,
+.trn-form-grid select { height: 36px; padding: 0 9px; margin-top: 5px; }
+.trn-form-grid textarea { padding: 9px; margin-top: 5px; resize: vertical; }
+.trn-form-grid .wide { grid-column: 1 / -1; }
+.trn-check {
+  display: flex !important;
+  align-items: center;
+  gap: 7px;
+  padding-top: 25px;
+}
+.trn-check input { width: 14px; height: 14px; margin: 0; }
+
+.trn-form-footer,
+.trn-detail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 13px 20px;
+  border-top: 1px solid #e7edf1;
+  background: #fafcfd;
+}
+.trn-form-footer > span { color: #8a9ca7; font-size: 8px; }
+.trn-form-footer > div,
+.trn-detail-footer > div { display: flex; gap: 8px; }
+
+.trn-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  padding: 1px;
+  background: #e4ebef;
+}
+.trn-detail-grid > div {
+  min-height: 68px;
+  padding: 11px;
+  background: #fff;
+}
+.trn-detail-grid span,
+.trn-detail-grid strong { display: block; }
+.trn-detail-grid span { color: #8a9ba7; font-size: 8px; }
+.trn-detail-grid strong { margin-top: 5px; color: #355b73; font-size: 10px; }
+
+.trn-danger {
+  background: #fff;
+  color: #9a5b5b;
+  border-color: #e4cfcf;
+}
+.trn-danger:hover { background: #fcf5f5; }
+
+@media (max-width: 1200px) {
+  .trn-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .trn-main-grid,
+  .trn-secondary-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .trn-page-head { align-items: flex-start; flex-direction: column; }
+  .trn-kpi-grid { grid-template-columns: 1fr; }
+  .trn-card-head { align-items: flex-start; flex-direction: column; }
+  .trn-calendar-actions { width: 100%; }
+  .trn-calendar { overflow-x: auto; }
+  .trn-calendar-grid,
+  .trn-weekdays { min-width: 680px; }
+  .trn-filters { grid-template-columns: 1fr; }
+  .trn-form-grid { grid-template-columns: 1fr; }
+  .trn-form-grid .wide { grid-column: auto; }
+  .trn-detail-grid { grid-template-columns: repeat(2, 1fr); }
+  .trn-form-footer,
+  .trn-detail-footer { align-items: flex-start; flex-direction: column; }
+}
+
+
+/* =========================
+   PHASE 2 ADDITIONS
+   ========================= */
+
+.trn-plan-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: #e7edf1;
+}
+.trn-plan-summary > div {
+  background: #fff;
+  padding: 18px;
+}
+.trn-plan-summary span,
+.trn-plan-summary strong {
+  display: block;
+}
+.trn-plan-summary span {
+  color: #879aa7;
+  font-size: 9px;
+  font-weight: 700;
+}
+.trn-plan-summary strong {
+  margin-top: 5px;
+  color: #244f6d;
+  font-size: 19px;
+}
+.compact-summary { border-bottom: 1px solid #e7edf1; }
+
+.trn-priority {
+  display: inline-flex;
+  padding: 4px 7px;
+  border-radius: 10px;
+  background: #f1f4f6;
+  color: #647c8b;
+  font-size: 8px;
+  font-weight: 800;
+}
+.trn-priority.critical { background: #faecec; color: #985757; }
+.trn-priority.high { background: #fff2e5; color: #976536; }
+.trn-priority.medium { background: #eef4f8; color: #3c6985; }
+.trn-priority.low { background: #edf5ef; color: #4c775d; }
+
+.day-event {
+  display: block;
+  padding: 12px;
+  margin-bottom: 7px;
+}
+
+.trn-table td button + button { margin-left: 5px; }
+
+@media (max-width: 1000px) {
+  .trn-nav { overflow-x: auto; }
+  .trn-nav button { white-space: nowrap; }
+  .trn-plan-summary { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 700px) {
+  .trn-plan-summary { grid-template-columns: 1fr 1fr; }
+}
+
+/* Phase 2 management views */
+.trn-phase-card { margin-top: 4px; }
+.trn-inline-form,
+.trn-tni-form {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 14px;
+  margin: 0 0 16px;
+  border: 1px solid #e6edf4;
+  border-radius: 10px;
+  background: #f8fbfd;
+}
+.trn-tni-form { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
+.trn-inline-form input,
+.trn-inline-form select,
+.trn-tni-form input,
+.trn-tni-form select {
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+  border: 1px solid #d8e2eb;
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px 10px;
+  color: #173b5d;
+  font: inherit;
+}
+.trn-inline-form label,
+.trn-tni-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #48647b;
+}
+.trn-inline-form .trn-check {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.trn-inline-form .trn-check input { width: auto; min-height: auto; }
+.trn-inline-form .trn-primary,
+.trn-tni-form .trn-primary { min-height: 38px; }
+.trn-plan-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.trn-plan-summary > div {
+  padding: 13px 15px;
+  border: 1px solid #e4ebf2;
+  border-radius: 9px;
+  background: #fff;
+}
+.trn-plan-summary span {
+  display: block;
+  font-size: 10px;
+  color: #7890a5;
+  margin-bottom: 5px;
+}
+.trn-plan-summary strong { font-size: 18px; color: #173b5d; }
+.trn-table td small,
+.trn-table th small { display: block; margin-top: 3px; color: #8296a8; }
+.trn-more-btn {
+  border: 1px solid #dce6ee;
+  background: #fff;
+  color: #285979;
+  border-radius: 5px;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.trn-more-btn:hover { background: #f1f6fa; }
+@media (max-width: 1050px) {
+  .trn-inline-form { grid-template-columns: repeat(3, 1fr); }
+  .trn-tni-form { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+  .trn-inline-form,
+  .trn-tni-form,
+  .trn-plan-summary { grid-template-columns: 1fr; }
+}
+
+
+/* =========================================================
+   BAUER HRMS — TRAINING PHASE 2 PROFESSIONAL FORM THEME FIX
+   Keeps the existing dashboard/calendar theme and fixes the
+   native-looking Phase 2 master/TNI/annual-plan controls.
+   ========================================================= */
+
+/* Phase-2 content sections */
+.training-module .trn-card {
+  position: relative;
+}
+
+.training-module .trn-card > form {
+  padding: 18px 20px 20px;
+}
+
+/* Standard Phase-2 form layout */
+.training-module .trn-card > form:not(.trn-inline-form) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 13px 14px;
+  align-items: end;
+}
+
+.training-module .trn-card > form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  color: #5f788b;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .15px;
+}
+
+.training-module .trn-card > form label.wide {
+  grid-column: 1 / -1;
+}
+
+.training-module .trn-card > form input,
+.training-module .trn-card > form select,
+.training-module .trn-card > form textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid #d7e2e9 !important;
+  border-radius: 7px !important;
+  outline: none;
+  background: #fff !important;
+  color: #315a73 !important;
+  font-family: inherit;
+  font-size: 10px !important;
+  font-weight: 500;
+  box-shadow: inset 0 1px 2px rgba(24, 60, 84, .025);
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.training-module .trn-card > form input,
+.training-module .trn-card > form select {
+  height: 38px !important;
+  padding: 0 10px !important;
+}
+
+.training-module .trn-card > form textarea {
+  min-height: 76px;
+  padding: 9px 10px !important;
+  resize: vertical;
+}
+
+.training-module .trn-card > form input::placeholder,
+.training-module .trn-card > form textarea::placeholder {
+  color: #a0afb9;
+  opacity: 1;
+}
+
+.training-module .trn-card > form input:focus,
+.training-module .trn-card > form select:focus,
+.training-module .trn-card > form textarea:focus {
+  border-color: #6c9ab7 !important;
+  box-shadow: 0 0 0 3px rgba(43, 102, 139, .08);
+}
+
+/* Make native selects look intentional */
+.training-module .trn-card > form select {
+  appearance: auto;
+  cursor: pointer;
+}
+
+/* Checkbox rows */
+.training-module .trn-card > form label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #e0e8ed;
+  border-radius: 7px;
+  background: #f8fafb;
+  color: #4e6d81;
+}
+
+.training-module .trn-card > form input[type="checkbox"] {
+  width: 15px !important;
+  height: 15px !important;
+  margin: 0;
+  accent-color: #185276;
+  box-shadow: none;
+}
+
+/* Buttons inside Phase-2 forms */
+.training-module .trn-card > form button,
+.training-module .trn-card > div > form button {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 9px 13px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.training-module .trn-card > form button[type="submit"],
+.training-module .trn-card > form .trn-primary {
+  background: #164b73;
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(22, 75, 115, .14);
+}
+
+.training-module .trn-card > form button[type="submit"]:hover,
+.training-module .trn-card > form .trn-primary:hover {
+  background: #103d5f;
+}
+
+/* Form footer */
+.training-module .trn-form-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding-top: 14px;
+  margin-top: 2px;
+  border-top: 1px solid #edf2f5;
+}
+
+.training-module .trn-form-footer > span {
+  color: #91a1ac;
+  font-size: 9px;
+}
+
+.training-module .trn-form-footer > div {
+  display: flex;
+  gap: 7px;
+}
+
+/* Phase-2 summary blocks */
+.training-module .trn-plan-summary {
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.training-module .compact-summary {
+  margin-bottom: 0;
+}
+
+/* Keep tables aligned with the HRMS visual language */
+.training-module .trn-table th {
+  height: 34px;
+  vertical-align: middle;
+}
+
+.training-module .trn-table td {
+  vertical-align: middle;
+}
+
+/* Native empty state */
+.training-module .trn-empty {
+  font-size: 10px;
+}
+
+/* ---------------------------------------------------------
+   Inline legacy Phase-2 forms
+   Some Phase-2 screens use a simple form with labels directly
+   inside the card. This forces those controls into a clean
+   HRMS grid instead of the browser's default inline layout.
+   --------------------------------------------------------- */
+.training-module .trn-card > form > label {
+  min-height: 60px;
+}
+
+.training-module .trn-card > form > button {
+  align-self: end;
+  height: 38px;
+}
+
+/* Training Master — 5-column compact planning row */
+.training-module .trn-card:has(input[placeholder*="Training programme"]) > form,
+.training-module .trn-card:has(input[placeholder*="programme"]) > form {
+  grid-template-columns: minmax(230px, 2fr) minmax(140px, 1fr) minmax(120px, .9fr) 130px auto;
+}
+
+/* Trainer Master — balanced five-column row */
+.training-module .trn-card:has(input[placeholder*="Trainer name"]) > form {
+  grid-template-columns: minmax(190px, 1.3fr) 130px minmax(150px, 1fr) minmax(160px, 1fr) 150px auto;
+}
+
+/* TNI — employee + need + category + priority + target date */
+.training-module .trn-card:has(input[placeholder*="Advanced Excel"]) > form {
+  grid-template-columns: minmax(180px, 1.3fr) minmax(220px, 1.8fr) 130px 120px 145px;
+}
+
+/* Annual plan — compact planning controls */
+.training-module .trn-card:has(input[placeholder*="Training programme / objective"]) > form,
+.training-module .trn-card:has(input[placeholder*="Training programme"]) > form {
+  grid-template-columns: 130px minmax(220px, 2fr) minmax(150px, 1fr) 110px 110px 130px auto;
+}
+
+/* Add button should sit naturally with the controls */
+.training-module .trn-card > form > button {
+  white-space: nowrap;
+}
+
+/* Better visual separation between master controls and table */
+.training-module .trn-card > form + .trn-table-wrap,
+.training-module .trn-card > form + .trn-empty {
+  border-top: 1px solid #edf2f5;
+}
+
+/* Header typography consistency */
+.training-module .trn-card-head h2 {
+  letter-spacing: -.15px;
+}
+
+.training-module .trn-card-head p {
+  line-height: 1.45;
+}
+
+/* Keep horizontal scrolling graceful on smaller screens */
+.training-module {
+  overflow-x: hidden;
+}
+
+@media (max-width: 1100px) {
+  .training-module .trn-card > form:not(.trn-inline-form) {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .training-module .trn-card:has(input[placeholder*="Training programme"]) > form,
+  .training-module .trn-card:has(input[placeholder*="programme"]) > form,
+  .training-module .trn-card:has(input[placeholder*="Trainer name"]) > form,
+  .training-module .trn-card:has(input[placeholder*="Advanced Excel"]) > form {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .training-module .trn-card > form:not(.trn-inline-form),
+  .training-module .trn-card:has(input[placeholder*="Training programme"]) > form,
+  .training-module .trn-card:has(input[placeholder*="programme"]) > form,
+  .training-module .trn-card:has(input[placeholder*="Trainer name"]) > form,
+  .training-module .trn-card:has(input[placeholder*="Advanced Excel"]) > form {
+    grid-template-columns: 1fr;
+  }
+
+  .training-module .trn-form-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .training-module .trn-form-footer > div {
+    justify-content: flex-end;
+  }
+}
+
+/* =====================================================================
+   BAUER HRMS — TRAINING & DEVELOPMENT
+   MODERN LAVENDER ENTERPRISE THEME
+   ---------------------------------------------------------------------
+   VISUAL-ONLY OVERRIDE
+   Existing Training JS/state/localStorage logic remains untouched.
+   Theme covers Dashboard, Calendar (Month/List/Day), Training Register,
+   Training Master, Trainer Master, TNI, Annual Plan, all filters,
+   forms, details, statuses, priorities, tables, charts, actions,
+   empty states, modals and responsive layouts.
+   ===================================================================== */
+
+.training-module {
+  --trn-primary: #715cf6;
+  --trn-primary-2: #8e80f7;
+  --trn-primary-dark: #5e4bdc;
+
+  --trn-lavender: #f3f1ff;
+  --trn-lavender-2: #ebe8ff;
+  --trn-lavender-3: #faf9ff;
+
+  --trn-ink: #303951;
+  --trn-ink-2: #4d576d;
+  --trn-muted: #858da0;
+  --trn-muted-2: #a0a6b5;
+
+  --trn-bg: #f7f7fc;
+  --trn-card: rgba(255,255,255,.97);
+  --trn-border: #e1dfed;
+  --trn-border-soft: #eceaf4;
+
+  --trn-green: #168454;
+  --trn-green-bg: #eaf9f1;
+  --trn-green-border: #bfe6d2;
+
+  --trn-red: #c44f5b;
+  --trn-red-bg: #fff1f3;
+  --trn-red-border: #efc5cb;
+
+  --trn-amber: #a66d1d;
+  --trn-amber-bg: #fff7e8;
+  --trn-amber-border: #edd7a9;
+
+  --trn-blue: #58739a;
+  --trn-blue-bg: #eef5fd;
+  --trn-blue-border: #cadced;
+
+  --trn-cyan: #397d91;
+  --trn-cyan-bg: #edf8fb;
+  --trn-purple: #765fb4;
+  --trn-purple-bg: #f3effd;
+  --trn-teal: #347e78;
+  --trn-teal-bg: #edf9f7;
+
+  color: var(--trn-ink) !important;
+  min-height: 100% !important;
+  padding: 30px 34px 58px !important;
+  background:
+    radial-gradient(circle at 88% 0%, rgba(113,92,246,.075), transparent 27%),
+    radial-gradient(circle at 4% 0%, rgba(142,128,247,.055), transparent 25%),
+    linear-gradient(180deg, #faf9ff 0%, var(--trn-bg) 100%) !important;
+}
+
+.training-module,
+.training-module * {
+  box-sizing: border-box;
+}
+
+.training-module button,
+.training-module input,
+.training-module select,
+.training-module textarea {
+  font-family: inherit;
+}
+
+.training-module ::selection {
+  background: #ddd8ff;
+  color: #44377f;
+}
+
+.training-module button:focus-visible,
+.training-module input:focus-visible,
+.training-module select:focus-visible,
+.training-module textarea:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.13) !important;
+}
+
+/* =====================================================================
+   PAGE HEADER
+   ===================================================================== */
+
+.trn-page-head {
+  position: relative !important;
+  align-items: center !important;
+  margin-bottom: 18px !important;
+  padding: 1px 0 21px !important;
+}
+
+.trn-page-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, #ddd9ee, #eeeaf6 72%, transparent) !important;
+}
+
+.trn-eyebrow {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  color: #9289ae !important;
+  font-size: 9px !important;
+  letter-spacing: 1.6px !important;
+  font-weight: 850 !important;
+}
+
+.trn-eyebrow::before {
+  content: "";
+  width: 21px;
+  height: 3px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--trn-primary), var(--trn-primary-2)) !important;
+}
+
+.trn-page-head h1 {
+  margin: 5px 0 5px !important;
+  color: var(--trn-ink) !important;
+  font-size: 30px !important;
+  letter-spacing: -.65px !important;
+}
+
+.trn-page-head p,
+.trn-card-head p {
+  color: var(--trn-muted) !important;
+}
+
+/* =====================================================================
+   BUTTON SYSTEM
+   ===================================================================== */
+
+.trn-primary {
+  border: 0 !important;
+  border-radius: 9px !important;
+  background: linear-gradient(135deg, var(--trn-primary), var(--trn-primary-2)) !important;
+  color: #fff !important;
+  box-shadow:
+    0 9px 22px rgba(113,92,246,.19),
+    inset 0 1px 0 rgba(255,255,255,.18) !important;
+}
+
+.trn-primary:hover {
+  background: linear-gradient(135deg, var(--trn-primary-dark), #7868ee) !important;
+  transform: translateY(-1px);
+  box-shadow:
+    0 11px 25px rgba(113,92,246,.23),
+    inset 0 1px 0 rgba(255,255,255,.18) !important;
+}
+
+.trn-secondary,
+.trn-today-btn {
+  border-color: #ddd9eb !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #655b91 !important;
+}
+
+.trn-secondary:hover,
+.trn-today-btn:hover {
+  background: var(--trn-lavender) !important;
+  border-color: #cbc5e9 !important;
+  color: #5949aa !important;
+}
+
+.trn-icon-btn {
+  border-color: #ddd9eb !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #6b6098 !important;
+}
+
+.trn-icon-btn:hover {
+  background: var(--trn-lavender) !important;
+  border-color: #cbc5e9 !important;
+  color: #5949aa !important;
+}
+
+.trn-link-btn,
+.trn-more-btn {
+  color: #6657b5 !important;
+}
+
+.trn-link-btn:hover,
+.trn-more-btn:hover {
+  color: #5949aa !important;
+  background: #f7f5ff !important;
+}
+
+/* =====================================================================
+   NAVIGATION
+   ===================================================================== */
+
+.trn-nav {
+  gap: 3px !important;
+  margin-bottom: 17px !important;
+  padding: 5px !important;
+  border: 1px solid var(--trn-border) !important;
+  border-radius: 12px !important;
+  background: rgba(255,255,255,.97) !important;
+  box-shadow: 0 5px 16px rgba(48,43,88,.04) !important;
+}
+
+.trn-nav button {
+  border: 0 !important;
+  border-bottom: 0 !important;
+  border-radius: 9px !important;
+  color: #747c90 !important;
+  transition: .16s ease !important;
+}
+
+.trn-nav button:hover {
+  color: #6657b5 !important;
+  background: #f8f6ff !important;
+}
+
+.trn-nav button.active {
+  color: #5f50ae !important;
+  background: linear-gradient(90deg, #eeeaff, #f8f7ff) !important;
+  box-shadow: inset 0 2px 0 rgba(113,92,246,.75) !important;
+}
+
+/* =====================================================================
+   KPI CARDS
+   ===================================================================== */
+
+.trn-kpi-grid {
+  gap: 13px !important;
+  margin-bottom: 15px !important;
+}
+
+.trn-kpi {
+  min-height: 96px !important;
+  border: 1px solid var(--trn-border) !important;
+  border-radius: 13px !important;
+  background: var(--trn-card) !important;
+  box-shadow: 0 7px 20px rgba(48,43,88,.045) !important;
+  transition: .18s ease !important;
+}
+
+.trn-kpi:hover {
+  transform: translateY(-2px);
+  border-color: #d8d2ed !important;
+  box-shadow: 0 11px 25px rgba(48,43,88,.065) !important;
+}
+
+.trn-kpi-icon {
+  border: 1px solid #e0dcf0 !important;
+  background: var(--trn-lavender) !important;
+  color: #6758b7 !important;
+}
+
+.trn-kpi-body span {
+  color: #7d8497 !important;
+}
+
+.trn-kpi-body strong {
+  color: var(--trn-ink) !important;
+}
+
+.trn-kpi-body small {
+  color: #a0a5b3 !important;
+}
+
+/* Tone variants — vibrant but soft, matching modern HRMS dashboards */
+.trn-kpi.blue .trn-kpi-icon {
+  background: var(--trn-blue-bg) !important;
+  border-color: var(--trn-blue-border) !important;
+  color: var(--trn-blue) !important;
+}
+
+.trn-kpi.indigo .trn-kpi-icon {
+  background: var(--trn-lavender) !important;
+  border-color: #d8d1ef !important;
+  color: #6657b5 !important;
+}
+
+.trn-kpi.green .trn-kpi-icon {
+  background: var(--trn-green-bg) !important;
+  border-color: var(--trn-green-border) !important;
+  color: var(--trn-green) !important;
+}
+
+.trn-kpi.orange .trn-kpi-icon {
+  background: var(--trn-amber-bg) !important;
+  border-color: var(--trn-amber-border) !important;
+  color: var(--trn-amber) !important;
+}
+
+.trn-kpi.cyan .trn-kpi-icon {
+  background: var(--trn-cyan-bg) !important;
+  border-color: #c8e4ea !important;
+  color: var(--trn-cyan) !important;
+}
+
+.trn-kpi.purple .trn-kpi-icon {
+  background: var(--trn-purple-bg) !important;
+  border-color: #dcd2ef !important;
+  color: var(--trn-purple) !important;
+}
+
+.trn-kpi.teal .trn-kpi-icon {
+  background: var(--trn-teal-bg) !important;
+  border-color: #cce5e1 !important;
+  color: var(--trn-teal) !important;
+}
+
+.trn-kpi.slate .trn-kpi-icon {
+  background: #f3f2f8 !important;
+  border-color: #e2dfeb !important;
+  color: #6e6a7f !important;
+}
+
+/* =====================================================================
+   ALL CARDS
+   ===================================================================== */
+
+.trn-card {
+  border: 1px solid var(--trn-border) !important;
+  border-radius: 14px !important;
+  background: var(--trn-card) !important;
+  box-shadow: 0 7px 21px rgba(48,43,88,.045) !important;
+}
+
+.trn-card-head {
+  border-bottom-color: #ece9f3 !important;
+}
+
+.trn-card-head h2 {
+  color: var(--trn-ink) !important;
+}
+
+.trn-mini-stat {
+  border: 1px solid #e4e0ef !important;
+  border-radius: 8px !important;
+  background: var(--trn-lavender) !important;
+  color: #6657b5 !important;
+}
+
+/* =====================================================================
+   CALENDAR
+   ===================================================================== */
+
+.trn-calendar-actions strong {
+  color: #5e5875 !important;
+}
+
+.trn-segmented {
+  border: 1px solid #e7e4ef !important;
+  background: #f5f3fa !important;
+}
+
+.trn-segmented button {
+  color: #858a9b !important;
+}
+
+.trn-segmented button:hover {
+  color: #6657b5 !important;
+}
+
+.trn-segmented button.active {
+  background: #fff !important;
+  color: #5f50ae !important;
+  box-shadow: 0 2px 7px rgba(48,43,88,.08) !important;
+}
+
+.trn-weekdays span {
+  color: #9298a8 !important;
+}
+
+.trn-calendar-cell {
+  border-color: #ebe9f1 !important;
+  background: #fff !important;
+}
+
+.trn-calendar-cell:hover {
+  background: #fbfaff !important;
+}
+
+.trn-calendar-cell.outside {
+  background: #faf9fc !important;
+}
+
+.trn-calendar-cell.outside .trn-calendar-number {
+  color: #b5b1c2 !important;
+}
+
+.trn-calendar-cell.today .trn-calendar-number {
+  background: linear-gradient(135deg, var(--trn-primary), var(--trn-primary-2)) !important;
+  box-shadow: 0 5px 12px rgba(113,92,246,.18) !important;
+}
+
+.trn-calendar-number {
+  color: #686f82 !important;
+}
+
+.trn-calendar-event {
+  border-left-color: #8a7af0 !important;
+  border-radius: 5px !important;
+  background: #f1efff !important;
+}
+
+.trn-calendar-event:hover {
+  background: #eae7ff !important;
+}
+
+.trn-calendar-event strong {
+  color: #5c5194 !important;
+}
+
+.trn-calendar-event span {
+  color: #88839f !important;
+}
+
+/* Calendar event semantic statuses */
+.trn-calendar-event.completed {
+  border-left-color: var(--trn-green) !important;
+  background: var(--trn-green-bg) !important;
+}
+
+.trn-calendar-event.cancelled {
+  border-left-color: var(--trn-red) !important;
+  background: var(--trn-red-bg) !important;
+}
+
+.trn-calendar-event.in-progress {
+  border-left-color: var(--trn-purple) !important;
+  background: var(--trn-purple-bg) !important;
+}
+
+.trn-calendar-event.planned {
+  border-left-color: var(--trn-amber) !important;
+  background: var(--trn-amber-bg) !important;
+}
+
+.trn-calendar-event.scheduled {
+  border-left-color: var(--trn-blue) !important;
+  background: var(--trn-blue-bg) !important;
+}
+
+.trn-calendar-event.postponed {
+  border-left-color: #c07a2d !important;
+  background: #fff5e9 !important;
+}
+
+.trn-more {
+  color: #756ca0 !important;
+}
+
+/* =====================================================================
+   UPCOMING / LIST / DAY VIEWS
+   ===================================================================== */
+
+.trn-upcoming-item,
+.trn-list-row {
+  border-bottom-color: #eeecf3 !important;
+}
+
+.trn-upcoming-item:hover,
+.trn-list-row:hover {
+  background: #fbfaff !important;
+}
+
+.trn-date-box {
+  border: 1px solid #ddd8ef !important;
+  border-radius: 9px !important;
+  background: var(--trn-lavender) !important;
+}
+
+.trn-date-box strong {
+  color: #6054a3 !important;
+}
+
+.trn-date-box span {
+  color: #8d86a8 !important;
+}
+
+.trn-upcoming-main strong,
+.trn-list-main strong {
+  color: var(--trn-ink) !important;
+}
+
+.trn-upcoming-main span,
+.trn-upcoming-main small,
+.trn-list-main span {
+  color: #9298a8 !important;
+}
+
+.trn-day-heading h3 {
+  color: var(--trn-ink) !important;
+}
+
+/* =====================================================================
+   STATUS BADGES
+   ===================================================================== */
+
+.trn-status {
+  border: 1px solid transparent !important;
+  font-weight: 800 !important;
+}
+
+.trn-status.completed {
+  background: var(--trn-green-bg) !important;
+  border-color: var(--trn-green-border) !important;
+  color: var(--trn-green) !important;
+}
+
+.trn-status.scheduled {
+  background: var(--trn-blue-bg) !important;
+  border-color: var(--trn-blue-border) !important;
+  color: var(--trn-blue) !important;
+}
+
+.trn-status.planned {
+  background: var(--trn-amber-bg) !important;
+  border-color: var(--trn-amber-border) !important;
+  color: var(--trn-amber) !important;
+}
+
+.trn-status.in-progress {
+  background: var(--trn-purple-bg) !important;
+  border-color: #dcd2ef !important;
+  color: var(--trn-purple) !important;
+}
+
+.trn-status.cancelled {
+  background: var(--trn-red-bg) !important;
+  border-color: var(--trn-red-border) !important;
+  color: var(--trn-red) !important;
+}
+
+.trn-status.postponed {
+  background: var(--trn-amber-bg) !important;
+  border-color: var(--trn-amber-border) !important;
+  color: #a66d1d !important;
+}
+
+.trn-status.draft {
+  background: #f3f2f8 !important;
+  border-color: #e2dfeb !important;
+  color: #706d7e !important;
+}
+
+/* =====================================================================
+   CHART / PERFORMANCE
+   ===================================================================== */
+
+.trn-chart-values span {
+  background: linear-gradient(180deg, #a49af7, #8474ed) !important;
+}
+
+.trn-chart-values i {
+  background: linear-gradient(180deg, #6c58d8, #5846bd) !important;
+}
+
+.trn-chart-col strong {
+  color: #777e91 !important;
+}
+
+.trn-chart-col small {
+  color: #a0a5b3 !important;
+}
+
+.trn-chart-legend {
+  color: #828899 !important;
+}
+
+.trn-chart-legend i {
+  background: #988bf3 !important;
+}
+
+.trn-chart-legend .actual-dot {
+  background: #6652cb !important;
+}
+
+/* =====================================================================
+   PENDING ACTIONS
+   ===================================================================== */
+
+.trn-action-list button {
+  border-bottom-color: #eeecf3 !important;
+  border-radius: 8px !important;
+}
+
+.trn-action-list button:hover {
+  background: #fbfaff !important;
+}
+
+.trn-action-list b {
+  color: #6657b5 !important;
+}
+
+.trn-action-list span {
+  color: #687187 !important;
+}
+
+.trn-action-list small {
+  color: #a0a5b3 !important;
+}
+
+.trn-action-list em {
+  color: #938aa9 !important;
+}
+
+/* =====================================================================
+   TABLES — REGISTER / MASTERS / TNI / ANNUAL PLAN / OTHER VIEWS
+   ===================================================================== */
+
+.trn-table-wrap {
+  border-top: 0 !important;
+}
+
+.trn-table {
+  background: #fff !important;
+}
+
+.trn-table th {
+  background: #f3f1f7 !important;
+  border-bottom-color: #e3e0ea !important;
+  color: #746e88 !important;
+}
+
+.trn-table td {
+  border-bottom-color: #efedf3 !important;
+  color: #687187 !important;
+}
+
+.trn-table tbody tr:hover {
+  background: #fbfaff !important;
+}
+
+.trn-table td strong {
+  color: var(--trn-ink) !important;
+}
+
+.trn-table td small {
+  color: #9b9fae !important;
+}
+
+.trn-table-link {
+  color: #6657b5 !important;
+}
+
+.trn-table-link:hover strong {
+  color: #5949aa !important;
+}
+
+/* =====================================================================
+   FILTER BAR / SEARCH
+   ===================================================================== */
+
+.trn-filters {
+  background: #faf9fd !important;
+  border-bottom-color: #ebe8f2 !important;
+}
+
+.trn-filters select,
+.trn-search input,
+.trn-form-grid input,
+.trn-form-grid select,
+.trn-form-grid textarea,
+.trn-inline-form input,
+.trn-inline-form select,
+.trn-tni-form input,
+.trn-tni-form select,
+.trn-tni-form textarea,
+.trn-plan-form input,
+.trn-plan-form select,
+.trn-plan-form textarea {
+  border-color: #ddd9eb !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #4c566c !important;
+  box-shadow: 0 2px 8px rgba(48,43,88,.018) !important;
+}
+
+.trn-filters select:focus,
+.trn-search input:focus,
+.trn-form-grid input:focus,
+.trn-form-grid select:focus,
+.trn-form-grid textarea:focus,
+.trn-inline-form input:focus,
+.trn-inline-form select:focus,
+.trn-tni-form input:focus,
+.trn-tni-form select:focus,
+.trn-tni-form textarea:focus,
+.trn-plan-form input:focus,
+.trn-plan-form select:focus,
+.trn-plan-form textarea:focus {
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.10) !important;
+}
+
+.trn-search span {
+  color: #9992b1 !important;
+}
+
+.trn-search input::placeholder,
+.trn-form-grid input::placeholder,
+.trn-form-grid textarea::placeholder,
+.trn-inline-form input::placeholder,
+.trn-tni-form input::placeholder,
+.trn-plan-form input::placeholder,
+.trn-plan-form textarea::placeholder {
+  color: #a5a9b7 !important;
+}
+
+/* =====================================================================
+   TRAINING MASTER / TRAINER MASTER / TNI / ANNUAL PLAN MANAGEMENT
+   ===================================================================== */
+
+.trn-phase-card {
+  border-color: var(--trn-border) !important;
+}
+
+.trn-inline-form,
+.trn-tni-form {
+  border-color: #e3dfed !important;
+  border-radius: 11px !important;
+  background: linear-gradient(135deg, #faf9ff, #f7f5ff) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.75) !important;
+}
+
+.trn-inline-form label,
+.trn-tni-form label {
+  color: #6f778a !important;
+}
+
+.trn-inline-form .trn-check {
+  color: #6f778a !important;
+}
+
+.trn-plan-summary {
+  background: #e5e1ef !important;
+}
+
+.trn-plan-summary > div {
+  background: #fff !important;
+}
+
+.trn-plan-summary span {
+  color: #9298a8 !important;
+}
+
+.trn-plan-summary strong {
+  color: #6657b5 !important;
+}
+
+.compact-summary {
+  border-bottom-color: #e9e6f0 !important;
+}
+
+/* =====================================================================
+   PRIORITY BADGES
+   ===================================================================== */
+
+.trn-priority {
+  border: 1px solid transparent !important;
+}
+
+.trn-priority.critical {
+  background: var(--trn-red-bg) !important;
+  border-color: var(--trn-red-border) !important;
+  color: var(--trn-red) !important;
+}
+
+.trn-priority.high {
+  background: var(--trn-amber-bg) !important;
+  border-color: var(--trn-amber-border) !important;
+  color: var(--trn-amber) !important;
+}
+
+.trn-priority.medium {
+  background: var(--trn-blue-bg) !important;
+  border-color: var(--trn-blue-border) !important;
+  color: var(--trn-blue) !important;
+}
+
+.trn-priority.low {
+  background: var(--trn-green-bg) !important;
+  border-color: var(--trn-green-border) !important;
+  color: var(--trn-green) !important;
+}
+
+/* =====================================================================
+   INLINE / ACTION BUTTONS
+   ===================================================================== */
+
+.trn-table td button:not(.trn-table-link),
+.trn-inline-form button,
+.trn-tni-form button,
+.trn-plan-form button {
+  border-radius: 8px !important;
+}
+
+.trn-more-btn:hover {
+  background: #f6f4ff !important;
+  border-color: #d8d2ed !important;
+  color: #5949aa !important;
+}
+
+.trn-danger {
+  border-color: var(--trn-red-border) !important;
+  border-radius: 9px !important;
+  background: var(--trn-red-bg) !important;
+  color: var(--trn-red) !important;
+}
+
+.trn-danger:hover {
+  background: #ffe9ec !important;
+  border-color: #e8b6bd !important;
+}
+
+/* =====================================================================
+   EMPTY STATES
+   ===================================================================== */
+
+.trn-empty {
+  border-color: #e2deed !important;
+  background: #fcfbff !important;
+  color: #999eae !important;
+}
+
+.trn-empty.large {
+  background:
+    radial-gradient(circle at center, rgba(113,92,246,.035), transparent 55%),
+    #fcfbff !important;
+}
+
+/* =====================================================================
+   MODALS / DETAILS
+   ===================================================================== */
+
+.trn-modal-backdrop {
+  background: rgba(42,36,72,.38) !important;
+  backdrop-filter: blur(5px) !important;
+}
+
+.trn-modal {
+  border: 1px solid rgba(225,222,237,.95) !important;
+  border-radius: 16px !important;
+  background: rgba(255,255,255,.985) !important;
+  box-shadow: 0 28px 80px rgba(48,43,88,.23) !important;
+}
+
+.trn-modal-head {
+  border-bottom-color: #ece9f3 !important;
+}
+
+.trn-modal-head h2 {
+  color: var(--trn-ink) !important;
+}
+
+.trn-modal-head p {
+  color: #9298a8 !important;
+}
+
+.trn-close {
+  border: 1px solid #e0ddea !important;
+  background: #f8f7fc !important;
+  color: #747b8d !important;
+  transition: .16s ease !important;
+}
+
+.trn-close:hover {
+  background: var(--trn-lavender) !important;
+  border-color: #d5cfee !important;
+  color: #5f50ae !important;
+}
+
+.trn-form-grid {
+  background: #fff !important;
+}
+
+.trn-form-grid label {
+  color: #72798b !important;
+}
+
+.trn-form-grid input,
+.trn-form-grid select {
+  min-height: 38px !important;
+}
+
+.trn-form-grid textarea {
+  min-height: 86px !important;
+}
+
+.trn-form-footer,
+.trn-detail-footer {
+  border-top-color: #ece9f3 !important;
+  background: #faf9fd !important;
+}
+
+.trn-form-footer > span {
+  color: #9b9fad !important;
+}
+
+.trn-detail-grid {
+  background: #e5e1ed !important;
+}
+
+.trn-detail-grid > div {
+  background: #fff !important;
+}
+
+.trn-detail-grid span {
+  color: #9298a8 !important;
+}
+
+.trn-detail-grid strong {
+  color: var(--trn-ink-2) !important;
+}
+
+/* =====================================================================
+   MISC. PHASE 2 / DAY EVENTS
+   ===================================================================== */
+
+.day-event {
+  border: 1px solid #ddd8ef !important;
+  border-radius: 9px !important;
+  background: #f7f5ff !important;
+  color: #5f50ae !important;
+}
+
+.day-event:hover {
+  background: #eeeaff !important;
+}
+
+/* =====================================================================
+   GLOBAL FORM / CONTROL CATCH-ALL
+   ===================================================================== */
+
+.training-module input[type="text"],
+.training-module input[type="date"],
+.training-module input[type="time"],
+.training-module input[type="number"],
+.training-module input[type="email"],
+.training-module input[type="search"],
+.training-module input[type="tel"],
+.training-module select,
+.training-module textarea {
+  color: #4c566c !important;
+}
+
+.training-module input::placeholder,
+.training-module textarea::placeholder {
+  color: #a5a9b7 !important;
+}
+
+.training-module input:disabled,
+.training-module select:disabled,
+.training-module textarea:disabled,
+.training-module button:disabled {
+  opacity: .55 !important;
+  cursor: not-allowed !important;
+}
+
+/* =====================================================================
+   ERROR / WARNING / VALIDATION STATES
+   ===================================================================== */
+
+.training-module .error,
+.training-module .trn-error {
+  color: var(--trn-red) !important;
+  background: var(--trn-red-bg) !important;
+  border-color: var(--trn-red-border) !important;
+}
+
+.training-module .warning,
+.training-module .trn-warning {
+  color: var(--trn-amber) !important;
+  background: var(--trn-amber-bg) !important;
+  border-color: var(--trn-amber-border) !important;
+}
+
+/* =====================================================================
+   SCROLLBARS
+   ===================================================================== */
+
+.training-module ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.training-module ::-webkit-scrollbar-track {
+  background: #f0eef6;
+}
+
+.training-module ::-webkit-scrollbar-thumb {
+  background: #c9c4dc;
+  border-radius: 999px;
+}
+
+.training-module ::-webkit-scrollbar-thumb:hover {
+  background: #aaa2c8;
+}
+
+/* =====================================================================
+   RESPONSIVE
+   ===================================================================== */
+
+@media (max-width: 1200px) {
+  .training-module {
+    padding: 27px 28px 54px !important;
+  }
+
+  .trn-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .trn-main-grid,
+  .trn-secondary-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 1000px) {
+  .trn-nav {
+    overflow-x: auto !important;
+  }
+
+  .trn-nav button {
+    white-space: nowrap !important;
+  }
+
+  .trn-plan-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .trn-inline-form {
+    grid-template-columns: repeat(3, minmax(120px, 1fr)) !important;
+  }
+
+  .trn-tni-form {
+    grid-template-columns: repeat(2, minmax(160px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .training-module {
+    padding: 22px 18px 45px !important;
+  }
+
+  .trn-page-head {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  .trn-page-actions {
+    width: 100%;
+  }
+
+  .trn-page-actions button {
+    flex: 1;
+  }
+
+  .trn-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .trn-card-head {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  .trn-calendar-actions {
+    width: 100% !important;
+  }
+
+  .trn-calendar {
+    overflow-x: auto !important;
+  }
+
+  .trn-calendar-grid,
+  .trn-weekdays {
+    min-width: 680px !important;
+  }
+
+  .trn-filters {
+    grid-template-columns: 1fr !important;
+  }
+
+  .trn-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .trn-form-grid .wide {
+    grid-column: auto !important;
+  }
+
+  .trn-detail-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .trn-inline-form,
+  .trn-tni-form {
+    grid-template-columns: 1fr !important;
+  }
+
+  .trn-plan-summary {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .trn-form-footer,
+  .trn-detail-footer {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  .trn-modal {
+    width: min(700px, 95vw) !important;
+    max-height: 92vh !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .training-module {
+    padding: 18px 13px 38px !important;
+  }
+
+  .trn-page-actions {
+    flex-direction: column !important;
+  }
+
+  .trn-page-actions button {
+    width: 100% !important;
+  }
+
+  .trn-plan-summary {
+    grid-template-columns: 1fr !important;
+  }
+
+  .trn-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .trn-form-footer > div,
+  .trn-detail-footer > div {
+    width: 100%;
+  }
+
+  .trn-form-footer button,
+  .trn-detail-footer button {
+    flex: 1;
+  }
+
+  .trn-calendar-actions {
+    gap: 5px !important;
+  }
+
+  .trn-segmented {
+    width: 100%;
+  }
+
+  .trn-segmented button {
+    flex: 1;
+  }
+}
+
+/* =====================================================================
+   PRINT
+   ===================================================================== */
+
+@media print {
+  .training-module {
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .trn-card,
+  .trn-kpi,
+  .trn-modal {
+    box-shadow: none !important;
+  }
+}

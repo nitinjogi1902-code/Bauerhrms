@@ -1,3 +1,4 @@
+
 .vendor-agreements-page {
   min-height: 100%;
   padding: 38px 44px 70px;
@@ -56,8 +57,6 @@
 .va-wide { grid-column:span 2; }
 .va-note { margin-top:12px; padding:11px 13px; border-radius:7px; background:#eef7fd; color:#4b708e; font-size:10px; line-height:1.55; }
 .va-modal-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:19px; }
-@media(max-width:950px){ .vendor-agreements-page{padding:27px 20px 50px}.va-summary{grid-template-columns:repeat(2,1fr)}.va-grid{grid-template-columns:1fr 1fr}.va-wide{grid-column:span 2} }
-@media(max-width:650px){ .va-head{flex-direction:column;align-items:flex-start}.va-summary,.va-grid{grid-template-columns:1fr}.va-wide{grid-column:span 1}.va-toolbar{flex-direction:column} }
 
 .va-summary { grid-template-columns: repeat(5, 1fr); }
 .va-po-card { margin-top: 18px; }
@@ -73,5 +72,709 @@
 .va-status.cancelled { color:#a14d4d; background:#fdecec; }
 .va-status.draft { color:#64788c; background:#eef2f5; }
 .va-po-modal { max-width:1050px; }
+
+@media(max-width:950px){ .vendor-agreements-page{padding:27px 20px 50px}.va-summary{grid-template-columns:repeat(2,1fr)}.va-grid{grid-template-columns:1fr 1fr}.va-wide{grid-column:span 2} }
+@media(max-width:650px){ .va-head{flex-direction:column;align-items:flex-start}.va-summary,.va-grid{grid-template-columns:1fr}.va-wide{grid-column:span 1}.va-toolbar{flex-direction:column} }
 @media(max-width:1050px){ .va-summary { grid-template-columns:repeat(3,1fr); } }
 @media(max-width:650px){ .va-summary { grid-template-columns:1fr; } }
+
+/* =====================================================================
+   BAUER HRMS — VENDOR / CONTRACTOR AGREEMENTS
+   MODERN LAVENDER THEME
+   ---------------------------------------------------------------------
+   Visual-only theme layer. Existing JSX, state, validation, localStorage,
+   Agreement records, PO records and all existing functionality remain
+   unchanged. Append this layer AFTER the original Vendor CSS.
+   ===================================================================== */
+
+:root {
+  --va-primary: #715cf6;
+  --va-primary-2: #8b7cf6;
+  --va-primary-dark: #5d4be2;
+  --va-soft: #f3f1ff;
+  --va-soft-2: #ebe8ff;
+
+  --va-ink: #2f3852;
+  --va-ink-2: #46516a;
+  --va-muted: #838ba0;
+  --va-muted-2: #9ba2b3;
+
+  --va-bg: #f7f7fc;
+  --va-card: #ffffff;
+  --va-border: #e2e0ee;
+  --va-border-soft: #eceaf4;
+
+  --va-green: #168454;
+  --va-green-bg: #eaf9f1;
+  --va-green-border: #bfe6d2;
+
+  --va-red: #c44f5b;
+  --va-red-bg: #fff1f3;
+  --va-red-border: #efc5cb;
+
+  --va-amber: #a66d1d;
+  --va-amber-bg: #fff7e8;
+  --va-amber-border: #edd7a9;
+
+  --va-blue: #4c72a0;
+  --va-blue-bg: #eef5fd;
+  --va-blue-border: #cadced;
+
+  --va-gray: #667386;
+  --va-gray-bg: #f3f5f7;
+}
+
+/* PAGE */
+.vendor-agreements-page {
+  min-height: 100%;
+  padding: 34px 42px 70px !important;
+  color: var(--va-ink) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(113,92,246,.075), transparent 28%),
+    radial-gradient(circle at 100% 0%, rgba(139,124,246,.065), transparent 25%),
+    var(--va-bg) !important;
+}
+
+.vendor-agreements-page,
+.vendor-agreements-page * {
+  box-sizing: border-box;
+}
+
+.vendor-agreements-page button,
+.vendor-agreements-page input,
+.vendor-agreements-page select,
+.vendor-agreements-page textarea {
+  font-family: inherit;
+}
+
+.vendor-agreements-page button:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.15) !important;
+}
+
+/* HEADER */
+.va-head {
+  margin-bottom: 23px !important;
+  align-items: flex-end !important;
+}
+
+.va-eyebrow {
+  color: #9189ae !important;
+  font-size: 10px !important;
+  letter-spacing: 1.7px !important;
+}
+
+.va-head h1 {
+  color: var(--va-ink) !important;
+  font-size: 30px !important;
+  line-height: 1.15 !important;
+  letter-spacing: -.55px !important;
+}
+
+.va-head p {
+  color: var(--va-muted) !important;
+}
+
+/* PRIMARY / SECONDARY BUTTONS */
+.va-primary {
+  min-height: 40px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  padding: 10px 17px !important;
+  background: linear-gradient(135deg, var(--va-primary), var(--va-primary-2)) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 20px rgba(113,92,246,.19) !important;
+  transition: .18s ease !important;
+}
+
+.va-primary:hover {
+  background: linear-gradient(135deg, var(--va-primary-dark), #7868ee) !important;
+  transform: translateY(-1px);
+}
+
+.va-secondary {
+  min-height: 40px !important;
+  border: 1px solid #dddced !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  color: #665c92 !important;
+  transition: .18s ease !important;
+}
+
+.va-secondary:hover {
+  border-color: #cbc5e9 !important;
+  background: #f6f4ff !important;
+  color: #5949aa !important;
+}
+
+/* SUMMARY / KPI CARDS */
+.va-summary {
+  grid-template-columns: repeat(5, 1fr) !important;
+  gap: 12px !important;
+  margin-bottom: 15px !important;
+}
+
+.va-summary > div {
+  min-height: 88px !important;
+  padding: 15px 17px !important;
+  background: linear-gradient(135deg, #fff, #fbfaff) !important;
+  border: 1px solid var(--va-border) !important;
+  border-radius: 13px !important;
+  box-shadow: 0 7px 20px rgba(48,43,88,.045) !important;
+  transition: .18s ease !important;
+}
+
+.va-summary > div:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 11px 25px rgba(48,43,88,.065) !important;
+}
+
+.va-summary span {
+  color: var(--va-muted) !important;
+  font-size: 10px !important;
+}
+
+.va-summary strong {
+  color: var(--va-ink) !important;
+  font-size: 23px !important;
+}
+
+/* Give each KPI a subtle semantic tint without changing the layout */
+.va-summary > div:nth-child(1) strong {
+  color: #6254b3 !important;
+}
+.va-summary > div:nth-child(2) strong {
+  color: var(--va-green) !important;
+}
+.va-summary > div:nth-child(3) strong {
+  color: var(--va-amber) !important;
+}
+.va-summary > div:nth-child(4) strong {
+  color: var(--va-red) !important;
+}
+.va-summary > div:nth-child(5) strong {
+  color: #8b6f2c !important;
+}
+
+/* TOOLBAR / SEARCH */
+.va-toolbar {
+  gap: 10px !important;
+  margin-bottom: 14px !important;
+}
+
+.va-toolbar input,
+.va-toolbar select,
+.va-grid input,
+.va-grid select,
+.va-grid textarea {
+  border: 1px solid #dddced !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #4c566d !important;
+  box-shadow: 0 3px 10px rgba(48,43,88,.02) !important;
+}
+
+.va-toolbar input,
+.va-toolbar select,
+.va-grid input,
+.va-grid select {
+  height: 41px !important;
+}
+
+.va-toolbar input::placeholder,
+.va-grid input::placeholder,
+.va-grid textarea::placeholder {
+  color: #a4a9b7 !important;
+}
+
+.va-toolbar input:hover,
+.va-toolbar select:hover,
+.va-grid input:hover,
+.va-grid select:hover,
+.va-grid textarea:hover {
+  border-color: #cfc9e9 !important;
+}
+
+.va-toolbar input:focus,
+.va-toolbar select:focus,
+.va-grid input:focus,
+.va-grid select:focus,
+.va-grid textarea:focus {
+  outline: none !important;
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.11) !important;
+}
+
+/* MAIN CARDS */
+.va-card {
+  background: rgba(255,255,255,.96) !important;
+  border: 1px solid var(--va-border) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 24px rgba(48,43,88,.045) !important;
+  overflow: hidden;
+}
+
+.va-po-card {
+  margin-top: 14px !important;
+}
+
+.va-card-head {
+  padding: 16px 18px !important;
+  border-bottom: 1px solid var(--va-border-soft) !important;
+  background: linear-gradient(135deg, #fff, #fcfbff) !important;
+}
+
+.va-card-head h2 {
+  color: var(--va-ink) !important;
+  font-size: 16px !important;
+}
+
+.va-card-head span {
+  color: var(--va-muted-2) !important;
+}
+
+/* TABLES */
+.va-table-wrap {
+  background: #fff !important;
+}
+
+.va-table-wrap table {
+  min-width: 1450px;
+}
+
+.va-table-wrap th {
+  background: #f2f0f7 !important;
+  color: #706b89 !important;
+  border-bottom: 1px solid #e3e1eb !important;
+  padding: 11px 12px !important;
+}
+
+.va-table-wrap td {
+  padding: 12px !important;
+  border-top: 1px solid #eeecf3 !important;
+  color: #667086 !important;
+}
+
+.va-table-wrap tbody tr:hover td {
+  background: #fbfaff !important;
+}
+
+.va-table-wrap td b {
+  color: var(--va-ink) !important;
+}
+
+/* STATUS — every status used by the JSX */
+.va-status {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 5px 9px !important;
+  border-radius: 999px !important;
+  border: 1px solid transparent !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+.va-status.active {
+  color: var(--va-green) !important;
+  background: var(--va-green-bg) !important;
+  border-color: var(--va-green-border) !important;
+}
+
+.va-status.future {
+  color: var(--va-blue) !important;
+  background: var(--va-blue-bg) !important;
+  border-color: var(--va-blue-border) !important;
+}
+
+.va-status.expired {
+  color: var(--va-red) !important;
+  background: var(--va-red-bg) !important;
+  border-color: var(--va-red-border) !important;
+}
+
+.va-status.on-hold {
+  color: var(--va-amber) !important;
+  background: var(--va-amber-bg) !important;
+  border-color: var(--va-amber-border) !important;
+}
+
+.va-status.cancelled {
+  color: var(--va-red) !important;
+  background: var(--va-red-bg) !important;
+  border-color: var(--va-red-border) !important;
+}
+
+.va-status.draft {
+  color: var(--va-gray) !important;
+  background: var(--va-gray-bg) !important;
+  border-color: #e0e4e8 !important;
+}
+
+/* PO SUMMARY / ADD PO */
+.va-po-head {
+  align-items: center !important;
+}
+
+.va-po-summary b {
+  color: #6254b3 !important;
+}
+
+.va-po-summary span {
+  color: var(--va-muted-2) !important;
+}
+
+.va-po-add {
+  border: 1px solid #ddd8f1 !important;
+  background: var(--va-soft) !important;
+  color: #6556b7 !important;
+  border-radius: 8px !important;
+  padding: 7px 9px !important;
+}
+
+.va-po-add:hover {
+  background: var(--va-soft-2) !important;
+  border-color: #cbc5e9 !important;
+}
+
+.va-po-empty {
+  padding: 35px !important;
+  color: var(--va-muted) !important;
+}
+
+/* DAYS / EXPIRY */
+.va-days {
+  color: #918ca2 !important;
+}
+
+.expired-text {
+  color: var(--va-red) !important;
+}
+
+/* ROW ACTIONS */
+.va-actions {
+  gap: 5px !important;
+}
+
+.va-actions button {
+  border: 1px solid #dddced !important;
+  border-radius: 7px !important;
+  padding: 6px 9px !important;
+  background: #fff !important;
+  color: #665c92 !important;
+  transition: .16s ease !important;
+}
+
+.va-actions button:hover {
+  background: #f6f4ff !important;
+  border-color: #cbc5e9 !important;
+  color: #5949aa !important;
+}
+
+.va-actions .danger {
+  color: var(--va-red) !important;
+  border-color: var(--va-red-border) !important;
+  background: #fffafa !important;
+}
+
+.va-actions .danger:hover {
+  background: var(--va-red-bg) !important;
+  border-color: #e8b7be !important;
+}
+
+/* EMPTY STATE */
+.va-empty {
+  padding: 65px 20px !important;
+  background:
+    radial-gradient(circle at 50% 10%, rgba(113,92,246,.045), transparent 28%),
+    #fff !important;
+}
+
+.va-empty > div {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--va-soft) !important;
+  color: #7567bd !important;
+  font-size: 29px !important;
+}
+
+.va-empty h3 {
+  color: var(--va-ink) !important;
+  font-size: 15px !important;
+}
+
+.va-empty p {
+  color: var(--va-muted) !important;
+}
+
+/* MODAL BACKDROP */
+.va-backdrop {
+  background: rgba(35,31,62,.66) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  padding: 20px !important;
+}
+
+/* AGREEMENT + PO MODALS */
+.va-modal {
+  width: min(1050px,100%) !important;
+  max-height: 94vh !important;
+  padding: 23px !important;
+  background: #fbfaff !important;
+  border: 1px solid #dedced !important;
+  border-radius: 17px !important;
+  box-shadow: 0 30px 90px rgba(35,30,70,.28) !important;
+}
+
+.va-po-modal {
+  max-width: 1050px !important;
+}
+
+.va-modal-head {
+  padding-bottom: 15px !important;
+  margin-bottom: 17px !important;
+  border-bottom-color: #e8e6f1 !important;
+}
+
+.va-modal-head h2 {
+  color: var(--va-ink) !important;
+  font-size: 21px !important;
+}
+
+.va-close {
+  width: 35px !important;
+  height: 35px !important;
+  border: 1px solid #dedbea !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #747b90 !important;
+  transition: .16s ease !important;
+}
+
+.va-close:hover {
+  background: var(--va-soft) !important;
+  color: #5e50ad !important;
+  border-color: #cbc5ea !important;
+}
+
+/* MODAL SECTIONS */
+.va-section {
+  margin-bottom: 14px !important;
+  padding: 15px !important;
+  border: 1px solid #e4e1ed !important;
+  border-radius: 11px !important;
+  background: linear-gradient(135deg, #fff, #faf9ff) !important;
+}
+
+.va-section-title {
+  margin-bottom: 13px !important;
+  padding-bottom: 8px !important;
+  border-bottom-color: #e9e6f0 !important;
+  color: #6254aa !important;
+  font-size: 12px !important;
+  letter-spacing: .2px !important;
+}
+
+.va-grid {
+  gap: 12px !important;
+}
+
+.va-grid label {
+  gap: 6px !important;
+  color: #70788d !important;
+  font-size: 10.5px !important;
+}
+
+.va-grid input,
+.va-grid select {
+  padding: 0 11px !important;
+}
+
+.va-grid textarea {
+  min-height: 74px !important;
+  padding: 9px 11px !important;
+}
+
+.va-wide {
+  grid-column: span 2;
+}
+
+/* INFORMATION / LOGIC NOTE */
+.va-note {
+  margin-top: 11px !important;
+  padding: 11px 13px !important;
+  border: 1px solid #ddd8f1 !important;
+  border-radius: 9px !important;
+  background: #f7f5ff !important;
+  color: #77718e !important;
+  font-size: 10px !important;
+}
+
+.va-note b {
+  color: #6253b0 !important;
+}
+
+/* MODAL FOOTER */
+.va-modal-actions {
+  margin-top: 17px !important;
+  padding-top: 14px;
+  border-top: 1px solid #e8e6f0;
+}
+
+/* UNIVERSAL INPUTS INSIDE THIS MODULE
+   Keeps future form fields aligned with the same theme. */
+.vendor-agreements-page input:not([type="checkbox"]),
+.vendor-agreements-page input:not([type="radio"]),
+.vendor-agreements-page select,
+.vendor-agreements-page textarea {
+  outline: none;
+}
+
+.vendor-agreements-page input[type="checkbox"],
+.vendor-agreements-page input[type="radio"] {
+  accent-color: var(--va-primary);
+}
+
+/* SELECTED / ACTIVE INTERACTIONS */
+.vendor-agreements-page ::selection {
+  background: #ddd8ff;
+  color: #43367d;
+}
+
+/* SCROLLBAR */
+.vendor-agreements-page ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.vendor-agreements-page ::-webkit-scrollbar-track {
+  background: #f1eff6;
+}
+
+.vendor-agreements-page ::-webkit-scrollbar-thumb {
+  background: #c9c4dc;
+  border-radius: 999px;
+}
+
+.vendor-agreements-page ::-webkit-scrollbar-thumb:hover {
+  background: #a9a1c8;
+}
+
+/* DISABLED STATES */
+.vendor-agreements-page button:disabled,
+.vendor-agreements-page input:disabled,
+.vendor-agreements-page select:disabled,
+.vendor-agreements-page textarea:disabled {
+  opacity: .55 !important;
+  cursor: not-allowed !important;
+}
+
+/* RESPONSIVE — preserve every existing section */
+@media (max-width: 1050px) {
+  .vendor-agreements-page {
+    padding: 30px 26px 55px !important;
+  }
+
+  .va-summary {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  .va-modal {
+    width: min(100%, 900px) !important;
+  }
+}
+
+@media (max-width: 950px) {
+  .vendor-agreements-page {
+    padding: 27px 20px 50px !important;
+  }
+
+  .va-summary {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .va-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .va-wide {
+    grid-column: span 2 !important;
+  }
+}
+
+@media (max-width: 650px) {
+  .vendor-agreements-page {
+    padding: 23px 14px 45px !important;
+  }
+
+  .va-head {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  .va-head h1 {
+    font-size: 25px !important;
+  }
+
+  .va-head .va-primary {
+    width: 100%;
+  }
+
+  .va-summary,
+  .va-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .va-wide {
+    grid-column: span 1 !important;
+  }
+
+  .va-toolbar {
+    flex-direction: column !important;
+  }
+
+  .va-toolbar input,
+  .va-toolbar select,
+  .va-toolbar button {
+    width: 100% !important;
+    flex: none !important;
+  }
+
+  .va-modal {
+    padding: 16px !important;
+    border-radius: 14px !important;
+  }
+
+  .va-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .va-modal-actions button {
+    width: 100%;
+  }
+
+  .va-table-wrap table {
+    min-width: 1100px;
+  }
+}
+
+/* PRINT */
+@media print {
+  .vendor-agreements-page {
+    background: #fff !important;
+  }
+
+  .va-card,
+  .va-summary > div {
+    box-shadow: none !important;
+  }
+
+  .va-backdrop {
+    background: #fff !important;
+  }
+}

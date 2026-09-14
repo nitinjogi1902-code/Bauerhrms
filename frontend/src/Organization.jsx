@@ -365,21 +365,85 @@ function getPolicyLabel(policy) {
 }
 
 const DEFAULT_LEAVE_TYPES = [
-  { code: "EL", name: "Earned Leave", paid: true, active: true },
-  { code: "CL", name: "Casual Leave", paid: true, active: true },
-  { code: "SL", name: "Sick Leave", paid: true, active: true },
-  { code: "FL", name: "Force Leave", paid: false, active: true },
-  { code: "CO", name: "Comp Off", paid: true, active: true },
+  {
+    id: "EL", code: "EL", name: "Earned Leave", paid: true, active: true,
+    applicability: { scope: "ALL", value: "" },
+    accrual: { enabled: true, frequency: "MONTHLY", basis: "PRESENT_DAYS", minimumDays: 21, credit: 1.25 },
+    carryForward: { enabled: true, maximum: 30, expiryEnabled: false, expiryMonths: 0, refusedLeaveUnlimited: true },
+    salaryTreatment: { countAsPaidDay: true, lop: false },
+    compOff: { enabled: false, earnBasis: "WEEKLY_OFF_WORKED", earnUnits: 1, utilisationEnabled: true },
+  },
+  {
+    id: "CL", code: "CL", name: "Casual Leave", paid: true, active: true,
+    applicability: { scope: "ALL", value: "" },
+    accrual: { enabled: true, frequency: "YEARLY", basis: "FIXED", minimumDays: 0, credit: 7 },
+    carryForward: { enabled: false, maximum: 0, expiryEnabled: false, expiryMonths: 0, refusedLeaveUnlimited: false },
+    salaryTreatment: { countAsPaidDay: true, lop: false },
+    compOff: { enabled: false, earnBasis: "WEEKLY_OFF_WORKED", earnUnits: 1, utilisationEnabled: true },
+  },
+  {
+    id: "SL", code: "SL", name: "Sick Leave", paid: true, active: true,
+    applicability: { scope: "ALL", value: "" },
+    accrual: { enabled: true, frequency: "YEARLY", basis: "FIXED", minimumDays: 0, credit: 7 },
+    carryForward: { enabled: false, maximum: 0, expiryEnabled: false, expiryMonths: 0, refusedLeaveUnlimited: false },
+    salaryTreatment: { countAsPaidDay: true, lop: false },
+    compOff: { enabled: false, earnBasis: "WEEKLY_OFF_WORKED", earnUnits: 1, utilisationEnabled: true },
+  },
+  {
+    id: "FL", code: "FL", name: "Force Leave", paid: false, active: true,
+    applicability: { scope: "ALL", value: "" },
+    accrual: { enabled: false, frequency: "NONE", basis: "NONE", minimumDays: 0, credit: 0 },
+    carryForward: { enabled: false, maximum: 0, expiryEnabled: false, expiryMonths: 0, refusedLeaveUnlimited: false },
+    salaryTreatment: { countAsPaidDay: false, lop: true },
+    compOff: { enabled: false, earnBasis: "WEEKLY_OFF_WORKED", earnUnits: 1, utilisationEnabled: true },
+  },
+  {
+    id: "CO", code: "CO", name: "Comp Off", paid: true, active: true,
+    applicability: { scope: "ALL", value: "" },
+    accrual: { enabled: true, frequency: "ON_EVENT", basis: "WEEKLY_OFF_WORKED", minimumDays: 0, credit: 1 },
+    carryForward: { enabled: true, maximum: 30, expiryEnabled: true, expiryMonths: 6, refusedLeaveUnlimited: false },
+    salaryTreatment: { countAsPaidDay: true, lop: false },
+    compOff: { enabled: true, earnBasis: "WEEKLY_OFF_WORKED", earnUnits: 1, utilisationEnabled: true },
+  },
 ];
+
+function normalizeLeaveType(item) {
+  const fallback = DEFAULT_LEAVE_TYPES.find((row) => row.code === item?.code) || DEFAULT_LEAVE_TYPES[0];
+  return {
+    ...fallback,
+    ...item,
+    id: item?.id || item?.code || fallback.code,
+    applicability: { ...fallback.applicability, ...(item?.applicability || {}) },
+    accrual: { ...fallback.accrual, ...(item?.accrual || {}) },
+    carryForward: { ...fallback.carryForward, ...(item?.carryForward || {}) },
+    salaryTreatment: { ...fallback.salaryTreatment, ...(item?.salaryTreatment || {}) },
+    compOff: { ...fallback.compOff, ...(item?.compOff || {}) },
+  };
+}
 
 function normalizeLeavePolicy(item) {
   const base = DEFAULT_MASTERS.leavePolicies[0];
   return {
     ...base,
     ...item,
-    leaveTypes: Array.isArray(item?.leaveTypes) && item.leaveTypes.length ? item.leaveTypes : DEFAULT_LEAVE_TYPES,
+    leaveTypes: (Array.isArray(item?.leaveTypes) && item.leaveTypes.length ? item.leaveTypes : DEFAULT_LEAVE_TYPES).map(normalizeLeaveType),
     lopRules: { ...base.lopRules, ...(item?.lopRules || {}) },
   };
+}
+
+function getDefaultLeaveType() {
+  return normalizeLeaveType({
+    id: `leave-${Date.now()}`,
+    code: "",
+    name: "",
+    paid: true,
+    active: true,
+    applicability: { scope: "ALL", value: "" },
+    accrual: { enabled: false, frequency: "YEARLY", basis: "FIXED", minimumDays: 0, credit: 0 },
+    carryForward: { enabled: false, maximum: 0, expiryEnabled: false, expiryMonths: 0, refusedLeaveUnlimited: false },
+    salaryTreatment: { countAsPaidDay: true, lop: false },
+    compOff: { enabled: false, earnBasis: "WEEKLY_OFF_WORKED", earnUnits: 1, utilisationEnabled: true },
+  });
 }
 
 function loadMasters() {
@@ -413,8 +477,10 @@ function Organization() {
   const [value, setValue] = useState("");
   const [shiftForm, setShiftForm] = useState(getDefaultShift());
   const [policyForm, setPolicyForm] = useState(
-    () => loadMasters().leavePolicies?.[0] || DEFAULT_MASTERS.leavePolicies[0]
+    () => normalizeLeavePolicy(loadMasters().leavePolicies?.[0] || DEFAULT_MASTERS.leavePolicies[0])
   );
+  const [leaveTypeForm, setLeaveTypeForm] = useState(getDefaultLeaveType());
+  const [editingLeaveType, setEditingLeaveType] = useState(null);
   const [holidayForm, setHolidayForm] = useState({
     id: "",
     name: "",
@@ -458,9 +524,11 @@ function Organization() {
     }
 
     if (activeMaster === "leavePolicies") {
-      setPolicyForm(
+      setPolicyForm(normalizeLeavePolicy(
         masters.leavePolicies?.[0] || DEFAULT_MASTERS.leavePolicies[0]
-      );
+      ));
+      setEditingLeaveType(null);
+      setLeaveTypeForm(getDefaultLeaveType());
     }
 
     if (activeMaster === "holidays") {
@@ -495,7 +563,7 @@ function Organization() {
     if (activeMaster === "shifts") {
       setShiftForm(normalizeShift(item));
     } else if (activeMaster === "leavePolicies") {
-      setPolicyForm(item);
+      setPolicyForm(normalizeLeavePolicy(item));
     } else if (activeMaster === "holidays") {
       setHolidayForm({
         id: "",
@@ -570,21 +638,40 @@ function Organization() {
   const saveCompOffPolicy = (event) => {
     event.preventDefault();
 
+    let policyToSave = { ...policyForm };
+
+    // If a leave type is currently being edited, commit the editor values
+    // before saving the complete Leave & Comp Off policy.
+    if (editingLeaveType && leaveTypeForm?.code) {
+      const code = String(leaveTypeForm.code || "").trim().toUpperCase();
+      const leaveTypes = (policyForm.leaveTypes || DEFAULT_LEAVE_TYPES).map(normalizeLeaveType);
+      const nextLeaveType = normalizeLeaveType({
+        ...leaveTypeForm,
+        id: editingLeaveType.id,
+        code,
+      });
+
+      policyToSave = {
+        ...policyForm,
+        leaveTypes: leaveTypes.map((item) =>
+          item.id === editingLeaveType.id ? nextLeaveType : item
+        ),
+      };
+    }
+
     const nextPolicy = normalizeLeavePolicy({
-      ...policyForm,
-      id: policyForm.id || "attendance-leave-policy",
-      name: policyForm.name || "Default Attendance & Leave Policy",
-      active: policyForm.active !== false,
+      ...policyToSave,
+      id: policyToSave.id || "attendance-leave-policy",
+      name: policyToSave.name || "Default Attendance & Leave Policy",
+      active: policyToSave.active !== false,
     });
 
-    saveMasters({
-      ...masters,
-      leavePolicies: [nextPolicy],
-    });
-
+    saveMasters({ ...masters, leavePolicies: [nextPolicy] });
     setPolicyForm(nextPolicy);
     setShowForm(false);
     setEditing(null);
+    setEditingLeaveType(null);
+    setLeaveTypeForm(getDefaultLeaveType());
   };
 
   const updateLeaveType = (code, field, fieldValue) => {
@@ -594,6 +681,64 @@ function Organization() {
         item.code === code ? { ...item, [field]: fieldValue } : item
       ),
     }));
+  };
+
+  const updateLeaveTypeSection = (section, field, fieldValue) => {
+    setLeaveTypeForm((previous) => ({
+      ...previous,
+      [section]: { ...(previous[section] || {}), [field]: fieldValue },
+    }));
+  };
+
+  const startAddLeaveType = () => {
+    setEditingLeaveType(null);
+    setLeaveTypeForm(getDefaultLeaveType());
+  };
+
+  const startEditLeaveType = (item) => {
+    setEditingLeaveType(item);
+    setLeaveTypeForm(normalizeLeaveType(item));
+  };
+
+  const saveLeaveType = () => {
+    const code = String(leaveTypeForm.code || "").trim().toUpperCase();
+    const name = String(leaveTypeForm.name || "").trim();
+
+    if (!code || !name) {
+      window.alert("Leave Code and Leave Name are required.");
+      return;
+    }
+
+    const leaveTypes = (policyForm.leaveTypes || DEFAULT_LEAVE_TYPES).map(normalizeLeaveType);
+    const duplicate = leaveTypes.some((item) =>
+      item.code.toLowerCase() === code.toLowerCase() && item.id !== editingLeaveType?.id
+    );
+    if (duplicate) {
+      window.alert("Leave Code already exists.");
+      return;
+    }
+
+    const nextLeaveType = normalizeLeaveType({ ...leaveTypeForm, id: editingLeaveType?.id || `leave-${Date.now()}`, code, name });
+    const nextLeaveTypes = editingLeaveType
+      ? leaveTypes.map((item) => item.id === editingLeaveType.id ? nextLeaveType : item)
+      : [...leaveTypes, nextLeaveType];
+
+    setPolicyForm((previous) => ({ ...previous, leaveTypes: nextLeaveTypes }));
+    setEditingLeaveType(null);
+    setLeaveTypeForm(getDefaultLeaveType());
+  };
+
+  const deleteLeaveType = (item) => {
+    const confirmed = window.confirm(`Delete leave type "${item.code} - ${item.name}" permanently?`);
+    if (!confirmed) return;
+    setPolicyForm((previous) => ({
+      ...previous,
+      leaveTypes: (previous.leaveTypes || []).filter((row) => row.id !== item.id),
+    }));
+    if (editingLeaveType?.id === item.id) {
+      setEditingLeaveType(null);
+      setLeaveTypeForm(getDefaultLeaveType());
+    }
   };
 
   const updateLopRule = (field, fieldValue) => {
@@ -1130,17 +1275,98 @@ function Organization() {
                 </span>
               </div>
 
-              <div className="policy-section-title">Leave Type & Paid Day Treatment</div>
-              <div className="leave-policy-grid">
-                <div className="leave-policy-head"><span>Code</span><span>Leave Type</span><span>Paid Day</span><span>Active</span></div>
+              <div className="policy-section-title leave-type-title-row">
+                <span>Leave Types & Policy Rules</span>
+                <button type="button" className="secondary-action leave-add-button" onClick={startAddLeaveType}>+ Add Leave Type</button>
+              </div>
+
+              <div className="leave-policy-grid leave-policy-grid-v2">
+                <div className="leave-policy-head leave-policy-head-v2"><span>Code</span><span>Leave Type</span><span>Accrual</span><span>Carry Forward</span><span>Salary</span><span>Action</span></div>
                 {(policyForm.leaveTypes || DEFAULT_LEAVE_TYPES).map((item) => (
-                  <div className="leave-policy-row" key={item.code}>
+                  <div className="leave-policy-row leave-policy-row-v2" key={item.id || item.code}>
                     <strong>{item.code}</strong>
-                    <span>{item.name}</span>
-                    <label className="policy-toggle compact"><input type="checkbox" checked={item.paid} onChange={(e) => updateLeaveType(item.code, "paid", e.target.checked)} /><span>{item.paid ? "Paid" : "Unpaid"}</span></label>
-                    <label className="policy-toggle compact"><input type="checkbox" checked={item.active} onChange={(e) => updateLeaveType(item.code, "active", e.target.checked)} /><span>{item.active ? "Active" : "Inactive"}</span></label>
+                    <div><b>{item.name}</b><small>{item.active ? "Active" : "Inactive"} · {item.applicability?.scope === "ALL" ? "All Employees" : item.applicability?.value || item.applicability?.scope}</small></div>
+                    <div><b>{item.accrual?.enabled ? `${item.accrual.credit || 0} / ${item.accrual.frequency === "ON_EVENT" ? "Event" : item.accrual.frequency === "YEARLY" ? "Year" : "Month"}` : "Not Applicable"}</b><small>{item.accrual?.basis || "—"}</small></div>
+                    <div><b>{item.carryForward?.enabled ? `Yes · Max ${item.carryForward.maximum ?? 0}` : "No"}</b><small>{item.carryForward?.expiryEnabled ? `Expiry ${item.carryForward.expiryMonths} months` : "No expiry"}</small></div>
+                    <div><b>{item.salaryTreatment?.countAsPaidDay ? "Paid Day" : "No Paid Day"}</b><small>{item.salaryTreatment?.lop ? "LOP" : "No LOP"}</small></div>
+                    <div className="leave-row-actions">
+                      <button type="button" onClick={() => startEditLeaveType(item)}>Edit</button>
+                      <button type="button" onClick={() => updateLeaveType(item.code, "active", !item.active)}>{item.active ? "Deactivate" : "Activate"}</button>
+                      <button type="button" className="delete-button" onClick={() => deleteLeaveType(item)}>Delete</button>
+                    </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="leave-type-editor">
+                <div className="leave-type-editor-head">
+                  <div>
+                    <span>{editingLeaveType ? "EDIT LEAVE TYPE" : "ADD LEAVE TYPE"}</span>
+                    <h4>{editingLeaveType ? `${leaveTypeForm.code} · ${leaveTypeForm.name}` : "Configure leave rules"}</h4>
+                  </div>
+                  {editingLeaveType && <button type="button" className="text-button" onClick={startAddLeaveType}>Clear / New</button>}
+                </div>
+
+                <div className="leave-editor-grid">
+                  <label>Leave Code<input maxLength={10} value={leaveTypeForm.code} onChange={(e) => setLeaveTypeForm({ ...leaveTypeForm, code: e.target.value.toUpperCase() })} placeholder="e.g. CL" /></label>
+                  <label>Leave Name<input value={leaveTypeForm.name} onChange={(e) => setLeaveTypeForm({ ...leaveTypeForm, name: e.target.value })} placeholder="e.g. Casual Leave" /></label>
+                  <label className="policy-toggle"><span>Active</span><input type="checkbox" checked={leaveTypeForm.active !== false} onChange={(e) => setLeaveTypeForm({ ...leaveTypeForm, active: e.target.checked })} /></label>
+                  <label className="policy-toggle"><span>Paid Leave</span><input type="checkbox" checked={leaveTypeForm.paid !== false} onChange={(e) => setLeaveTypeForm({ ...leaveTypeForm, paid: e.target.checked, salaryTreatment: { ...leaveTypeForm.salaryTreatment, countAsPaidDay: e.target.checked } })} /></label>
+                </div>
+
+                <div className="leave-editor-subtitle">Applicability</div>
+                <div className="leave-editor-grid">
+                  <label>Apply To<select value={leaveTypeForm.applicability?.scope || "ALL"} onChange={(e) => updateLeaveTypeSection("applicability", "scope", e.target.value)}>
+                    <option value="ALL">All Employees</option><option value="SITE">Specific Site</option><option value="EMPLOYEE_GROUP">Employee Group</option><option value="EMPLOYEE">Specific Employee</option>
+                  </select></label>
+                  <label>Assignment / Value<input value={leaveTypeForm.applicability?.value || ""} onChange={(e) => updateLeaveTypeSection("applicability", "value", e.target.value)} placeholder="Optional: site / group / employee" /></label>
+                </div>
+
+                <div className="leave-editor-subtitle">Accrual / Grant</div>
+                <div className="leave-editor-grid leave-editor-grid-4">
+                  <label className="policy-toggle"><span>Accrual Enabled</span><input type="checkbox" checked={Boolean(leaveTypeForm.accrual?.enabled)} onChange={(e) => updateLeaveTypeSection("accrual", "enabled", e.target.checked)} /></label>
+                  <label>Frequency<select value={leaveTypeForm.accrual?.frequency || "YEARLY"} onChange={(e) => updateLeaveTypeSection("accrual", "frequency", e.target.value)}><option value="MONTHLY">Monthly</option><option value="YEARLY">Yearly</option><option value="ON_EVENT">On Event</option><option value="NONE">None</option></select></label>
+                  <label>Accrual Basis<select value={leaveTypeForm.accrual?.basis || "FIXED"} onChange={(e) => updateLeaveTypeSection("accrual", "basis", e.target.value)}><option value="PRESENT_DAYS">Present Days</option><option value="DAYS_WORKED">Days Worked / Labour Code</option><option value="FIXED">Fixed Grant</option><option value="WEEKLY_OFF_WORKED">Weekly Off Worked</option><option value="CUSTOM">Custom</option><option value="NONE">None</option></select></label>
+                  <label>Credit / Rate<input type="number" min="0" step="0.01" value={leaveTypeForm.accrual?.credit ?? 0} onChange={(e) => updateLeaveTypeSection("accrual", "credit", Number(e.target.value))} /></label>
+                  <label>Minimum Days<input type="number" min="0" value={leaveTypeForm.accrual?.minimumDays ?? 0} onChange={(e) => updateLeaveTypeSection("accrual", "minimumDays", Number(e.target.value))} placeholder="e.g. 21 / 180" /></label>
+                </div>
+                <div className="policy-note small-note">For EL, you can configure <strong>Present Days + Monthly + 21 minimum days + 1.25 credit</strong>, or switch the basis to <strong>Days Worked / Labour Code</strong> and set the required eligibility/rate.</div>
+
+                <div className="leave-editor-subtitle">Carry Forward & Expiry</div>
+                <div className="leave-editor-grid leave-editor-grid-4">
+                  <label className="policy-toggle"><span>Carry Forward</span><input type="checkbox" checked={Boolean(leaveTypeForm.carryForward?.enabled)} onChange={(e) => updateLeaveTypeSection("carryForward", "enabled", e.target.checked)} /></label>
+                  <label>Maximum Carry Forward<input type="number" min="0" step="0.5" value={leaveTypeForm.carryForward?.maximum ?? 0} onChange={(e) => updateLeaveTypeSection("carryForward", "maximum", Number(e.target.value))} /></label>
+                  <label className="policy-toggle"><span>Expiry Enabled</span><input type="checkbox" checked={Boolean(leaveTypeForm.carryForward?.expiryEnabled)} onChange={(e) => updateLeaveTypeSection("carryForward", "expiryEnabled", e.target.checked)} /></label>
+                  <label>Expiry After (Months)<input type="number" min="0" value={leaveTypeForm.carryForward?.expiryMonths ?? 0} onChange={(e) => updateLeaveTypeSection("carryForward", "expiryMonths", Number(e.target.value))} /></label>
+                  <label className="policy-toggle"><span>Refused Leave: No Normal Cap</span><input type="checkbox" checked={Boolean(leaveTypeForm.carryForward?.refusedLeaveUnlimited)} onChange={(e) => updateLeaveTypeSection("carryForward", "refusedLeaveUnlimited", e.target.checked)} /></label>
+                </div>
+
+                <div className="leave-editor-subtitle">Attendance / Payroll Treatment</div>
+                <div className="leave-editor-grid">
+                  <label className="policy-toggle"><span>Count as Paid Day</span><input type="checkbox" checked={Boolean(leaveTypeForm.salaryTreatment?.countAsPaidDay)} onChange={(e) => updateLeaveTypeSection("salaryTreatment", "countAsPaidDay", e.target.checked)} /></label>
+                  <label className="policy-toggle"><span>Counts as LOP</span><input type="checkbox" checked={Boolean(leaveTypeForm.salaryTreatment?.lop)} onChange={(e) => updateLeaveTypeSection("salaryTreatment", "lop", e.target.checked)} /></label>
+                </div>
+                {leaveTypeForm.code === "FL" && (
+                  <div className="policy-note fl-note"><strong>FL rule:</strong> The same FL type can be configured differently by Site / Employee Group. For a paid FL site, keep <strong>Count as Paid Day = ON</strong> and <strong>LOP = OFF</strong>. For an unpaid FL site, use <strong>Count as Paid Day = OFF</strong> and <strong>LOP = ON</strong>.</div>
+                )}
+
+                {leaveTypeForm.code === "CO" && (
+                  <>
+                    <div className="leave-editor-subtitle">Comp Off Earn & Utilisation</div>
+                    <div className="leave-editor-grid leave-editor-grid-4">
+                      <label className="policy-toggle"><span>Comp Off Enabled</span><input type="checkbox" checked={Boolean(leaveTypeForm.compOff?.enabled)} onChange={(e) => updateLeaveTypeSection("compOff", "enabled", e.target.checked)} /></label>
+                      <label>Earn Basis<select value={leaveTypeForm.compOff?.earnBasis || "WEEKLY_OFF_WORKED"} onChange={(e) => updateLeaveTypeSection("compOff", "earnBasis", e.target.value)}><option value="WEEKLY_OFF_WORKED">Weekly Off Worked</option><option value="HOLIDAY_WORKED">Holiday Worked</option><option value="CUSTOM">Custom</option></select></label>
+                      <label>Units Earned<input type="number" min="0" step="0.5" value={leaveTypeForm.compOff?.earnUnits ?? 1} onChange={(e) => updateLeaveTypeSection("compOff", "earnUnits", Number(e.target.value))} /></label>
+                      <label className="policy-toggle"><span>Utilisation Enabled</span><input type="checkbox" checked={leaveTypeForm.compOff?.utilisationEnabled !== false} onChange={(e) => updateLeaveTypeSection("compOff", "utilisationEnabled", e.target.checked)} /></label>
+                    </div>
+                    <div className="policy-note small-note">Comp Off balance will be treated separately as <strong>Earned → Available → Utilised → Carry Forward / Expired</strong>. Working on a Weekly Off remains Present / Worked in Attendance.</div>
+                  </>
+                )}
+
+                <div className="leave-editor-actions">
+                  <button type="button" className="cancel-action" onClick={startAddLeaveType}>Clear</button>
+                  <button type="button" className="primary-action" onClick={saveLeaveType}>{editingLeaveType ? "Update Leave Type" : "Add Leave Type"}</button>
+                </div>
               </div>
 
               <div className="policy-section-title">LOP Rules</div>

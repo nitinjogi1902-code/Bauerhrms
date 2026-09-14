@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import JSZip from "jszip";
 import * as XLSX from "xlsx";
 import "./employees.css";
+import { createEmployeeInvitation, getEmployeeAccount } from "./auth";
 
 const ORGANIZATION_STORAGE_KEY = "bauerHrmsOrganizationMasters";
 const EMPLOYEE_STORAGE_KEY = "bauerHrmsEmployees";
+const HOD_MAPPING_STORAGE_KEY = "hrms_hod_mappings";
 const DOCUMENT_DB_NAME = "bauerHrmsEmployeeDocuments";
 const DOCUMENT_STORE = "documents";
 
@@ -105,6 +107,149 @@ function readEmployees() {
   } catch {
     return [];
   }
+}
+
+function readHodMappings() {
+  try {
+    const saved = localStorage.getItem(HOD_MAPPING_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHodMappings(next) {
+  localStorage.setItem(HOD_MAPPING_STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event("bauerHrmsHodMappingsUpdated"));
+}
+
+function downloadHodMappingTemplate() {
+  const worksheet = XLSX.utils.json_to_sheet([
+    {
+      "Employee Code": "",
+      "HOD Employee Code": "",
+    },
+  ]);
+
+  worksheet["!cols"] = [{ wch: 22 }, { wch: 24 }];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "HOD Mapping");
+  XLSX.writeFile(workbook, "BAUER_HOD_Mapping_Template.xlsx");
+}
+
+async function importHodMappingsFromExcel(file, employees, existingMappings) {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+
+  if (!firstSheet) {
+    throw new Error("The Excel file does not contain a worksheet.");
+  }
+
+  const rows = XLSX.utils.sheet_to_json(firstSheet, {
+    defval: "",
+    raw: true,
+  });
+
+  if (!rows.length) {
+    throw new Error("The Excel file has no HOD mapping rows.");
+  }
+
+  const headerMap = Object.keys(rows[0]).reduce((map, header) => {
+    map[String(header).trim().toLowerCase()] = header;
+    return map;
+  }, {});
+
+  if (!headerMap["employee code"] || !headerMap["hod employee code"]) {
+    throw new Error(
+      'The Excel file must contain "Employee Code" and "HOD Employee Code" columns.'
+    );
+  }
+
+  const employeeByCode = new Map(
+    employees
+      .filter((employee) => employee?.employeeId)
+      .map((employee) => [
+        String(employee.employeeId).trim().toLowerCase(),
+        employee,
+      ])
+  );
+
+  const next = [...existingMappings];
+  const errors = [];
+  let added = 0;
+  let updated = 0;
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    const employeeCode = String(row[headerMap["employee code"]] ?? "").trim();
+    const hodEmployeeCode = String(
+      row[headerMap["hod employee code"]] ?? ""
+    ).trim();
+
+    if (!employeeCode || !hodEmployeeCode) {
+      errors.push(
+        `Row ${rowNumber}: Employee Code and HOD Employee Code are required.`
+      );
+      return;
+    }
+
+    const employee = employeeByCode.get(employeeCode.toLowerCase());
+    const hod = employeeByCode.get(hodEmployeeCode.toLowerCase());
+
+    if (!employee) {
+      errors.push(`Row ${rowNumber}: Employee Code "${employeeCode}" was not found.`);
+      return;
+    }
+
+    if (!hod) {
+      errors.push(
+        `Row ${rowNumber}: HOD Employee Code "${hodEmployeeCode}" was not found.`
+      );
+      return;
+    }
+
+    if (employee.id === hod.id) {
+      errors.push(
+        `Row ${rowNumber}: An employee cannot be mapped to themselves as HOD.`
+      );
+      return;
+    }
+
+    if (hod.status === "Inactive") {
+      errors.push(`Row ${rowNumber}: HOD "${hodEmployeeCode}" is inactive.`);
+      return;
+    }
+
+    const existingIndex = next.findIndex(
+      (item) =>
+        String(item.employeeCode || "").trim().toLowerCase() ===
+        employeeCode.toLowerCase()
+    );
+
+    const mapping = {
+      id:
+        existingIndex >= 0
+          ? next[existingIndex].id
+          : crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${index}`,
+      employeeCode: employee.employeeId,
+      hodEmployeeCode: hod.employeeId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (existingIndex >= 0) {
+      next[existingIndex] = mapping;
+      updated += 1;
+    } else {
+      next.push(mapping);
+      added += 1;
+    }
+  });
+
+  return { next, added, updated, errors };
 }
 
 function getActiveOptions(masters, key) {
@@ -754,6 +899,11 @@ export default function Employees() {
   const [editingId, setEditingId] = useState(null);
   const [previewEmployee, setPreviewEmployee] = useState(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [accessEmployee, setAccessEmployee] = useState(null);
+  const [accessMessage, setAccessMessage] = useState("");
+  const [hodMappings, setHodMappings] = useState(readHodMappings);
+  const [showHodMappingModal, setShowHodMappingModal] = useState(false);
+  const [hodMappingImporting, setHodMappingImporting] = useState(false);
 
 const [transferForm, setTransferForm] = useState({
   toLocation: "",
@@ -771,15 +921,18 @@ const [transferForm, setTransferForm] = useState({
   useEffect(() => {
     const refreshMasters = () => setMasters(readMasters());
     const refreshEmployees = () => setEmployees(readEmployees());
+    const refreshHodMappings = () => setHodMappings(readHodMappings());
 
     window.addEventListener("bauerHrmsMastersUpdated", refreshMasters);
     window.addEventListener("bauerHrmsEmployeesUpdated", refreshEmployees);
+    window.addEventListener("bauerHrmsHodMappingsUpdated", refreshHodMappings);
     window.addEventListener("storage", refreshMasters);
     window.addEventListener("storage", refreshEmployees);
 
     return () => {
       window.removeEventListener("bauerHrmsMastersUpdated", refreshMasters);
       window.removeEventListener("bauerHrmsEmployeesUpdated", refreshEmployees);
+    window.removeEventListener("bauerHrmsHodMappingsUpdated", refreshHodMappings);
       window.removeEventListener("storage", refreshMasters);
       window.removeEventListener("storage", refreshEmployees);
     };
@@ -928,6 +1081,77 @@ const transferRecord = {
     }
   };
 
+  const handleHodMappingImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    setHodMappingImporting(true);
+
+    try {
+      const result = await importHodMappingsFromExcel(
+        file,
+        employees,
+        hodMappings
+      );
+
+      saveHodMappings(result.next);
+      setHodMappings(result.next);
+
+      const message = [
+        "HOD Mapping import completed.",
+        `Added: ${result.added}`,
+        `Updated: ${result.updated}`,
+        result.errors.length ? `Skipped: ${result.errors.length}` : "",
+        result.errors.length
+          ? `\n\n${result.errors.slice(0, 10).join("\n")}`
+          : "",
+        result.errors.length > 10
+          ? `\n...and ${result.errors.length - 10} more errors.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      window.alert(message);
+    } catch (error) {
+      window.alert(
+        error?.message || "Unable to import the HOD Mapping Excel file."
+      );
+    } finally {
+      setHodMappingImporting(false);
+    }
+  };
+
+  const openLoginAccess = (employee) => {
+    setAccessEmployee(employee);
+    const account = getEmployeeAccount(employee.id);
+    setAccessMessage(
+      account?.status === "active"
+        ? "Login is already active. You can resend the activation link if required."
+        : "No login has been activated for this employee yet."
+    );
+  };
+
+  const sendLoginCredentials = () => {
+    if (!accessEmployee) return;
+    const email = String(accessEmployee.officialEmail || "").trim();
+    if (!email) {
+      setAccessMessage("Official Email is required before sending login credentials.");
+      return;
+    }
+
+    const invitation = createEmployeeInvitation(accessEmployee);
+    const subject = encodeURIComponent("BAUER HRMS - Employee Account Activation");
+    const body = encodeURIComponent(
+      `Dear ${accessEmployee.name || "Employee"},\n\nYour BAUER HRMS Employee Self Service account has been created.\n\nEmployee ID: ${accessEmployee.employeeId || ""}\nUsername: ${email}\n\nPlease open the link below to create your password and activate your account:\n${invitation.activationUrl}\n\nRegards,\nBAUER HRMS`
+    );
+
+    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+    setAccessMessage("Activation email is prepared in your email application. Send it to the employee.");
+  };
+
   const openAdd = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
@@ -1031,6 +1255,7 @@ const transferRecord = {
       aadhaar,
       gratuityWage: form.gratuityWage ? Number(form.gratuityWage) : "",
       gratuityCategory: getGratuityCategory(form),
+      status: String(form.status || "Active").trim() || "Active",
     };
 
     const employeeId =
@@ -1224,6 +1449,15 @@ const transferRecord = {
             disabled={importing}
           />
         </label>
+
+        <button
+          type="button"
+          className="secondary-btn excel-action"
+          onClick={() => setShowHodMappingModal(true)}
+          title="Manage Employee Code to HOD Employee Code mappings"
+        >
+          👤 HOD Mapping
+        </button>
       </div>
 
       <div className="employee-table-card">
@@ -1295,6 +1529,7 @@ const transferRecord = {
                             <button className="preview-button"onClick={() => openPreview(item)}>Preview
                             </button>
                           <button onClick={() => openEdit(item)}>Edit</button>
+                          <button className="access-button" onClick={() => openLoginAccess(item)}>Login Access</button>
                           <button
                             className="docs-button"
                             onClick={() => downloadAllEmployeeDocuments(item.id, item.employeeId, item.name)}
@@ -1702,6 +1937,38 @@ const transferRecord = {
               </button>
             </div>
           </form>
+        </div>
+      )}
+      {accessEmployee && (
+        <div className="employee-profile-overlay" onMouseDown={(e) => e.target === e.currentTarget && setAccessEmployee(null)}>
+          <div className="employee-profile-modal" style={{maxWidth: "560px"}}>
+            <div className="employee-profile-header">
+              <div>
+                <div className="eyebrow">SYSTEM ACCESS</div>
+                <h2>Employee Login Access</h2>
+                <p>{accessEmployee.name} · {accessEmployee.employeeId}</p>
+              </div>
+              <button type="button" onClick={() => setAccessEmployee(null)}>×</button>
+            </div>
+            <div style={{padding: "18px"}}>
+              <div className="employee-profile-grid" style={{marginBottom: "16px"}}>
+                <div><span>Official Email</span><strong>{accessEmployee.officialEmail || "Not added"}</strong></div>
+                <div><span>Employee ID</span><strong>{accessEmployee.employeeId || "—"}</strong></div>
+                <div><span>Access</span><strong>Employee Self Service</strong></div>
+                <div><span>Login Status</span><strong>{getEmployeeAccount(accessEmployee.id)?.status === "active" ? "Active" : "Not Activated"}</strong></div>
+              </div>
+              <div className="modal-note" style={{marginBottom: "14px"}}>
+                The employee will receive an activation link and create their own password. Passwords are not shown to HR in this screen.
+              </div>
+              {accessMessage && <div className="modal-note" style={{marginBottom: "14px"}}>{accessMessage}</div>}
+              <div className="modal-actions">
+                <button type="button" className="secondary-btn" onClick={() => setAccessEmployee(null)}>Close</button>
+                <button type="button" className="primary-btn" onClick={sendLoginCredentials}>
+                  {getEmployeeAccount(accessEmployee.id)?.status === "active" ? "Resend Activation Link" : "Send Login Credentials"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
             {/* EMPLOYEE PROFILE PREVIEW */}
@@ -2353,6 +2620,196 @@ const transferRecord = {
     </div>
   </div>
 )}
+      {/* ================= BULK HOD MAPPING ================= */}
+      {showHodMappingModal && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowHodMappingModal(false);
+            }
+          }}
+        >
+          <div
+            className="employee-modal"
+            style={{ maxWidth: "980px" }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <div className="eyebrow">APPROVAL WORKFLOW</div>
+                <h2>Bulk HOD Mapping</h2>
+                <p style={{ margin: "6px 0 0", color: "#6b7f93" }}>
+                  Map each Employee Code to the HOD Employee Code who will receive
+                  their leave approval requests.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowHodMappingModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: "12px",
+                marginBottom: "18px",
+              }}
+            >
+              <div style={{ padding: "14px 16px", borderRadius: "12px", background: "#f4f8fc" }}>
+                <span style={{ display: "block", fontSize: "12px", color: "#71869a" }}>
+                  Total Employees
+                </span>
+                <strong style={{ fontSize: "22px", color: "#173d60" }}>
+                  {employees.length}
+                </strong>
+              </div>
+
+              <div style={{ padding: "14px 16px", borderRadius: "12px", background: "#f4f8fc" }}>
+                <span style={{ display: "block", fontSize: "12px", color: "#71869a" }}>
+                  Mapped Employees
+                </span>
+                <strong style={{ fontSize: "22px", color: "#173d60" }}>
+                  {hodMappings.length}
+                </strong>
+              </div>
+
+              <div style={{ padding: "14px 16px", borderRadius: "12px", background: "#f4f8fc" }}>
+                <span style={{ display: "block", fontSize: "12px", color: "#71869a" }}>
+                  Pending Mapping
+                </span>
+                <strong style={{ fontSize: "22px", color: "#173d60" }}>
+                  {Math.max(0, employees.length - hodMappings.length)}
+                </strong>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "14px 16px",
+                border: "1px solid #dbe7f2",
+                borderRadius: "12px",
+                background: "#fbfdff",
+                marginBottom: "16px",
+              }}
+            >
+              <strong style={{ color: "#173d60" }}>Excel format</strong>
+              <div style={{ marginTop: "7px", fontSize: "13px", color: "#63788c" }}>
+                <b>Employee Code</b> → <b>HOD Employee Code</b>
+              </div>
+              <div style={{ marginTop: "5px", fontSize: "12px", color: "#8495a5" }}>
+                Example: EMP001 → HOD001. Both codes must already exist in Employee Master.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "18px" }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={downloadHodMappingTemplate}
+              >
+                ↓ Download HOD Template
+              </button>
+
+              <label className="secondary-btn import-excel-label">
+                {hodMappingImporting ? "Importing..." : "↑ Import HOD Mapping"}
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleHodMappingImport}
+                  disabled={hodMappingImporting}
+                />
+              </label>
+            </div>
+
+            <div
+              style={{
+                border: "1px solid #e1eaf2",
+                borderRadius: "12px",
+                overflow: "auto",
+                maxHeight: "360px",
+              }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: "11px 12px", textAlign: "left" }}>#</th>
+                    <th style={{ padding: "11px 12px", textAlign: "left" }}>Employee Code</th>
+                    <th style={{ padding: "11px 12px", textAlign: "left" }}>Employee Name</th>
+                    <th style={{ padding: "11px 12px", textAlign: "left" }}>HOD Employee Code</th>
+                    <th style={{ padding: "11px 12px", textAlign: "left" }}>HOD Name</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {hodMappings.length ? (
+                    hodMappings.map((mapping, index) => {
+                      const employee = employees.find(
+                        (item) =>
+                          String(item.employeeId || "").trim().toLowerCase() ===
+                          String(mapping.employeeCode || "").trim().toLowerCase()
+                      );
+
+                      const hod = employees.find(
+                        (item) =>
+                          String(item.employeeId || "").trim().toLowerCase() ===
+                          String(mapping.hodEmployeeCode || "").trim().toLowerCase()
+                      );
+
+                      return (
+                        <tr key={mapping.id || `${mapping.employeeCode}-${index}`}>
+                          <td style={{ padding: "10px 12px" }}>{index + 1}</td>
+                          <td style={{ padding: "10px 12px" }}><b>{mapping.employeeCode || "—"}</b></td>
+                          <td style={{ padding: "10px 12px" }}>{employee?.name || "Employee not found"}</td>
+                          <td style={{ padding: "10px 12px" }}><b>{mapping.hodEmployeeCode || "—"}</b></td>
+                          <td style={{ padding: "10px 12px" }}>{hod?.name || "HOD not found"}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="5" style={{ padding: "28px 12px", textAlign: "center", color: "#7a8c9d" }}>
+                        No HOD mappings imported yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                background: "#eef7ff",
+                color: "#315f85",
+                fontSize: "12px",
+              }}
+            >
+              Leave approval routing will use this mapping by Employee Code.
+              Employee Self Service will not modify Attendance.
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "18px" }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setShowHodMappingModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* DATA QUALITY CHECK */}
 {previewEmployee && (() => {
   const quality = calculateEmployeeQuality(previewEmployee);

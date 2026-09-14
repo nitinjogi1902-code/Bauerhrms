@@ -1,357 +1,723 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./Login.css";
+import {
+  activateEmployeeAccount,
+  authenticateAdmin,
+  authenticateEmployee,
+  requestAdminLoginOtp,
+  requestAdminPasswordResetOtp,
+  requestLoginOtp,
+  verifyAdminLoginOtp,
+  verifyAdminPasswordResetOtp,
+  verifyLoginOtp,
+} from "./auth";
+
+const ADMIN_EMAIL = "admin@bauer.com";
+
+const UserIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+    <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+  </svg>
+);
+
+const LockIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="5" y="10" width="14" height="10" rx="2" />
+    <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+  </svg>
+);
+
+const EyeIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" />
+    <circle cx="12" cy="12" r="2.5" />
+  </svg>
+);
+
+const EyeOffIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="m3 3 18 18" />
+    <path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6.1 0 9.5 6 9.5 6a16.7 16.7 0 0 1-3.1 3.8" />
+    <path d="M6.1 6.9C3.8 8.6 2.5 12 2.5 12s3.4 6 9.5 6c1.3 0 2.4-.3 3.4-.7" />
+    <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+  </svg>
+);
+
+const OtpIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="4" y="6" width="16" height="12" rx="2.5" />
+    <path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01" />
+  </svg>
+);
 
 export default function Login({ onLogin }) {
+  const [activationToken, setActivationToken] = useState("");
+  const [activationMode, setActivationMode] = useState(false);
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+
+  const [otpMode, setOtpMode] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpMobile, setOtpMobile] = useState("");
+  const [devOtp, setDevOtp] = useState("");
+  const [otpEmployee, setOtpEmployee] = useState(null);
+  const [otpPurpose, setOtpPurpose] = useState("login");
+  const [resendSeconds, setResendSeconds] = useState(0);
+
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  console.log("NEW BAUER LOGIN LOADED");
+  useEffect(() => {
+    const hash = window.location.hash || "";
 
-  const handleSubmit = (event) => {
+    if (hash.startsWith("#activate=")) {
+      setActivationToken(
+        decodeURIComponent(hash.slice("#activate=".length))
+      );
+      setActivationMode(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return undefined;
+    const timer = window.setInterval(() => setResendSeconds(v => Math.max(0, v - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [resendSeconds]);
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setResendSeconds((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendSeconds]);
+
+  const resetOtp = () => {
+    setOtpMode(false);
+    setOtp("");
+    setOtpMobile("");
+    setDevOtp("");
+    setOtpEmployee(null);
+    setOtpPurpose("login");
+    setResendSeconds(0);
+  };
+
+  const handleActivation = async (event) => {
     event.preventDefault();
     setError("");
 
-    const cleanUsername = username.trim().toLowerCase();
-
-    if (!cleanUsername) {
-      setError("Please enter your username or work email.");
+    if (newPassword.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
 
-    if (!password) {
-      setError("Please enter your password.");
-      return;
-    }
-
-    // Temporary local authentication
-    // Backend/database will be connected later.
-    const validUsername = "admin@bauer.com";
-    const validPassword = "Admin@123";
-
-    if (
-      cleanUsername !== validUsername ||
-      password !== validPassword
-    ) {
-      setError("Invalid username or password.");
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
 
     setLoading(true);
 
-    window.setTimeout(() => {
-      onLogin(rememberMe);
-    }, 700);
+    try {
+      const account = await activateEmployeeAccount(
+        activationToken,
+        newPassword
+      );
+
+      window.location.hash = "";
+      setActivationMode(false);
+      setUsername(account.email || "");
+      setPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setError("");
+
+      window.alert(
+        "Password created successfully. Please login with your official email."
+      );
+    } catch (err) {
+      setError(err?.message || "Unable to activate account.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+
+    if (!username.trim() || !password) {
+      setError("Please enter email and password.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (username.trim().toLowerCase() === ADMIN_EMAIL) {
+        const adminResult = await authenticateAdmin(username, password);
+
+        if (!adminResult) {
+          setError("Invalid email or password.");
+          return;
+        }
+
+        if (adminResult.mobileMissing) {
+          setError(
+            adminResult.message ||
+              "Admin mobile number is not registered. Please add the Admin mobile number in Settings first."
+          );
+          return;
+        }
+
+        const otpResult = await requestAdminLoginOtp();
+
+        setOtpMobile(otpResult.mobile);
+        setDevOtp(otpResult.devOtp || "");
+        setOtpEmployee(adminResult.admin);
+        setOtp("");
+        setOtpMode(true);
+        setResendSeconds(30);
+        return;
+      }
+
+      const result = await authenticateEmployee(username, password);
+
+      if (!result) {
+        setError("Invalid email or password.");
+        return;
+      }
+
+      if (result.inactive) {
+        setError(
+          "Your account is not activated yet. Please use the activation email sent by HR."
+        );
+        return;
+      }
+
+      if (result.mobileMissing) {
+        setError(
+          result.message ||
+            "No registered mobile number is available. Please contact HR."
+        );
+        return;
+      }
+
+      if (!result.otpRequired) {
+        setError("OTP verification is required before login.");
+        return;
+      }
+
+      const otpResult = await requestLoginOtp(username);
+
+      setOtpMobile(otpResult.mobile);
+      setDevOtp(otpResult.devOtp || "");
+      setOtpEmployee(result.employee);
+      setOtp("");
+      setOtpMode(true);
+      setResendSeconds(30);
+    } catch (err) {
+      setError(err?.message || "Unable to login.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (event) => {
+    event.preventDefault();
+    setError("");
+
+    if (!/^\d{6}$/.test(otp.trim())) {
+      setError("Please enter the 6-digit OTP.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (otpPurpose === "reset") {
+        if (newPassword.length < 8) {
+          throw new Error("New password must be at least 8 characters.");
+        }
+        if (newPassword !== confirmPassword) {
+          throw new Error("Passwords do not match.");
+        }
+        await verifyAdminPasswordResetOtp(otp, newPassword);
+        setOtpMode(false);
+        setOtp("");
+        setDevOtp("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setPassword("");
+        setOtpPurpose("login");
+        setError("Password reset successfully. Please login with your new password.");
+        return;
+      }
+
+      let employee;
+      if (username.trim().toLowerCase() === ADMIN_EMAIL) {
+        employee = await verifyAdminLoginOtp(otp);
+      } else {
+        employee = await verifyLoginOtp(username, otp);
+      }
+
+      onLogin(rememberMe, {
+        ...employee,
+        ...(otpEmployee || {}),
+      });
+    } catch (err) {
+      setError(err?.message || "Unable to verify OTP.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendSeconds > 0) return;
+    setError("");
+    setLoading(true);
+
+    try {
+      if (otpPurpose === "reset" && username.trim().toLowerCase() === ADMIN_EMAIL) {
+        const result = await requestAdminPasswordResetOtp();
+        setOtpMobile(result.mobile);
+        setDevOtp(result.devOtp || "");
+      } else if (username.trim().toLowerCase() === ADMIN_EMAIL) {
+        const result = await requestAdminLoginOtp();
+        setOtpMobile(result.mobile);
+        setDevOtp(result.devOtp || "");
+      } else {
+        const result = await requestLoginOtp(username);
+        setOtpMobile(result.mobile);
+        setDevOtp(result.devOtp || "");
+      }
+      setOtp("");
+      setResendSeconds(30);
+    } catch (err) {
+      setError(err?.message || "Unable to resend OTP.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <main className="bauer-login-page">
+    <main className="login-page">
+      <div className="login-bg-brand">
+        <img src="/HR SYNC Logo.png" alt="HRSYNC" />
+        <div>
+          <strong>HRSYNC</strong>
+          <span>PEOPLE • PROCESS • PROGRESS</span>
+        </div>
+      </div>
 
-      {/* =====================================================
-          LEFT BRAND PANEL
-      ====================================================== */}
+      <section className="login-side login-side-left">
+        <div className="left-copy">
+          <span className="eyebrow">SMART HR • BETTER PEOPLE</span>
 
-      <section className="bauer-brand-panel">
+          <h2>
+            People
+            <span>Power</span>
+            <span>Progress</span>
+            Together
+          </h2>
 
-        <div className="brand-background-circle circle-one"></div>
-        <div className="brand-background-circle circle-two"></div>
-        <div className="brand-background-line"></div>
-
-        <div className="brand-content">
-
-          {/* LOGO */}
-          <div className="brand-logo-area">
-            <div className="brand-logo-box">
-              <img
-                src="/bauer-logo.png"
-                alt="BAUER"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-            </div>
-          </div>
-
-          {/* BRAND TITLE */}
-          <div className="brand-kicker">
-            HUMAN RESOURCE MANAGEMENT SYSTEM
-          </div>
-
-          <h1>
-            Workforce
-            <br />
-            <span>Management.</span>
-          </h1>
-
-          <p className="brand-description">
-            One centralized platform for managing people,
-            projects, attendance, payroll and performance.
+          <p>
+            A smarter way to manage people, processes and workplace growth.
           </p>
-
-          {/* BRAND STATS */}
-          <div className="brand-stats">
-
-            <div className="brand-stat">
-              <strong>01</strong>
-              <div>
-                <b>People</b>
-                <span>Employee lifecycle</span>
-              </div>
-            </div>
-
-            <div className="brand-stat">
-              <strong>02</strong>
-              <div>
-                <b>Workforce</b>
-                <span>Project deployment</span>
-              </div>
-            </div>
-
-            <div className="brand-stat">
-              <strong>03</strong>
-              <div>
-                <b>Performance</b>
-                <span>Growth & productivity</span>
-              </div>
-            </div>
-
-          </div>
-
-          {/* BRAND MESSAGE */}
-          <div className="brand-message">
-            <span className="message-dot"></span>
-
-            <div>
-              <strong>Built for HR Operations</strong>
-              <p>
-                Employee master, attendance, leave,
-                payroll and workforce reporting.
-              </p>
-            </div>
-          </div>
-
         </div>
 
-        {/* LEFT FOOTER */}
-        <footer className="brand-footer">
-          <span>BAUER Engineering India Pvt. Ltd.</span>
-          <span>HRMS • Secure Workspace</span>
-        </footer>
+        <div className="people-orbit">
+          <div className="orbit-line orbit-line-one"></div>
+          <div className="orbit-line orbit-line-two"></div>
 
+          <div className="orbit-card orbit-people">
+            <div className="orbit-icon">♟</div>
+            <strong>People</strong>
+            <small>Connected teams</small>
+          </div>
+
+          <div className="orbit-card orbit-process">
+            <div className="orbit-icon">⚙</div>
+            <strong>Process</strong>
+            <small>Smarter workflow</small>
+          </div>
+
+          <div className="orbit-card orbit-progress">
+            <div className="orbit-icon">↗</div>
+            <strong>Progress</strong>
+            <small>Better growth</small>
+          </div>
+
+          <div className="mini-dashboard">
+            <div className="mini-dashboard-top">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+
+            <div className="mini-dashboard-content">
+              <div>
+                <small>WORKFORCE</small>
+                <strong>Building Better Workplaces</strong>
+              </div>
+
+              <div className="growth-bars">
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
+      <section className="login-card">
+        <div className="login-brand">
+          <img src="/HR SYNC Logo.png" alt="HRSYNC" />
 
-      {/* =====================================================
-          RIGHT LOGIN PANEL
-      ====================================================== */}
-
-      <section className="bauer-login-panel">
-
-        <div className="login-content">
-
-          {/* MOBILE LOGO */}
-          <div className="mobile-logo">
-            <div className="mobile-logo-box">
-              <img
-                src="/bauer-logo.png"
-                alt="BAUER"
-              />
-            </div>
+          <div>
+            <strong>HRSYNC</strong>
+            <span>Human Resource Management System</span>
           </div>
+        </div>
 
-
-          {/* LOGIN HEADER */}
-          <div className="login-header">
-
-            <div className="secure-label">
-              <span></span>
-              SECURE HRMS ACCESS
+        {activationMode ? (
+          <form onSubmit={handleActivation}>
+            <div className="login-heading">
+              <div className="heading-badge">🔐</div>
+              <div>
+                <h1>Activate Account</h1>
+                <p>Create your HRSYNC password.</p>
+              </div>
             </div>
 
-            <h2>
-              Welcome back.
-            </h2>
+            <label>
+              New Password
+              <div className="input-wrapper password-wrapper">
+                <span className="input-icon">
+                  <LockIcon />
+                </span>
 
-            <p>
-              Sign in to continue to your HR workspace.
-            </p>
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Minimum 8 characters"
+                  autoFocus
+                />
 
-          </div>
+                <button
+                  type="button"
+                  className="password-toggle"
+                  aria-label={
+                    showNewPassword ? "Hide password" : "Show password"
+                  }
+                  onClick={() => setShowNewPassword((value) => !value)}
+                >
+                  {showNewPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+            </label>
 
+            <label>
+              Confirm Password
+              <div className="input-wrapper password-wrapper">
+                <span className="input-icon">
+                  <LockIcon />
+                </span>
 
-          {/* LOGIN FORM */}
-          <form
-            className="bauer-login-form"
-            onSubmit={handleSubmit}
-          >
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                />
 
-            {/* USERNAME */}
-            <div className="login-field">
+                <button
+                  type="button"
+                  className="password-toggle"
+                  aria-label={
+                    showConfirmPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                  onClick={() =>
+                    setShowConfirmPassword((value) => !value)
+                  }
+                >
+                  {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+            </label>
 
-              <label htmlFor="bauer-username">
-                Username / Work Email
-              </label>
-
-              <input
-                id="bauer-username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
-                autoComplete="username"
-                disabled={loading}
-              />
-
-            </div>
-
-
-            {/* PASSWORD */}
-            <div className="login-field">
-
-              <label htmlFor="bauer-password">
-                Password
-              </label>
-
-              <input
-                id="bauer-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                disabled={loading}
-              />
-
-            </div>
-
-
-            {/* ERROR */}
             {error && (
               <div className="login-error">
-                <div className="error-symbol">!</div>
-
-                <span>{error}</span>
+                <span>!</span>
+                {error}
               </div>
             )}
 
+            <button className="login-submit" disabled={loading}>
+              {loading ? "Activating…" : "Create Password & Activate"}
+            </button>
+          </form>
+        ) : otpMode ? (
+          <form onSubmit={handleVerifyOtp}>
+            <div className="login-heading">
+              <div className="heading-badge">
+                <OtpIcon />
+              </div>
 
-            {/* OPTIONS */}
-            <div className="login-options">
+              <div>
+                <span className="welcome-small">SECURITY VERIFICATION</span>
+                <h1>{otpPurpose === "reset" ? "Reset Password" : "Verify OTP"}</h1>
+                <p>
+                  We sent a 6-digit verification code to{" "}
+                  <strong>{otpMobile}</strong>.
+                </p>
+              </div>
+            </div>
 
-              <label className="remember-me">
+            {otpPurpose === "reset" && (
+              <>
+                <label>
+                  New Password
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                    autoComplete="new-password"
+                  />
+                </label>
+                <label>
+                  Confirm New Password
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    autoComplete="new-password"
+                  />
+                </label>
+              </>
+            )}
 
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) =>
-                    setRememberMe(e.target.checked)
-                  }
-                  disabled={loading}
-                />
-
-                <span className="custom-checkbox"></span>
-
-                <span className="remember-text">
-                  Remember me
+            <label>
+              One-Time Password
+              <div className="input-wrapper otp-input-wrapper">
+                <span className="input-icon">
+                  <OtpIcon />
                 </span>
 
-              </label>
+                <input
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) =>
+                    setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  placeholder="Enter 6-digit OTP"
+                  autoComplete="one-time-code"
+                  autoFocus
+                />
+              </div>
+            </label>
 
+            {devOtp && (
+              <div className="otp-dev-box">
+                <strong>Development OTP:</strong> {devOtp}
+                <small>
+                  This is visible only during Vite development. Connect an
+                  SMS backend before production.
+                </small>
+              </div>
+            )}
+
+            {error && (
+              <div className="login-error">
+                <span>!</span>
+                {error}
+              </div>
+            )}
+
+            <button className="login-submit" disabled={loading}>
+              {loading ? "Verifying…" : "Verify & Login"}
+            </button>
+
+            <div className="otp-actions">
+              <button
+                type="button"
+                className="forgot-password"
+                disabled={loading}
+                onClick={handleResendOtp}
+              >
+                {resendSeconds > 0 ? `Resend OTP in ${resendSeconds}s` : "Resend OTP"}
+              </button>
 
               <button
                 type="button"
                 className="forgot-password"
-                onClick={() =>
-                  alert(
-                    "Please contact the HRMS Administrator to reset your password."
-                  )
-                }
-                disabled={loading}
+                onClick={() => {
+                  resetOtp();
+                  setError("");
+                }}
+              >
+                Change email
+              </button>
+            </div>
+
+            <p className="login-help">
+              Your OTP is valid for 5 minutes. For security, only 5 incorrect
+              attempts are allowed.
+            </p>
+          </form>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="login-heading">
+              <div>
+                <span className="welcome-small">WELCOME TO HRSYNC</span>
+                <h1>Welcome Back</h1>
+                <p>Sign in to continue to your workspace.</p>
+              </div>
+            </div>
+
+            <label>
+              Email / Username
+              <div className="input-wrapper">
+                <span className="input-icon">
+                  <UserIcon />
+                </span>
+
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Official email"
+                  autoComplete="username"
+                />
+              </div>
+            </label>
+
+            <label>
+              Password
+              <div className="input-wrapper password-wrapper">
+                <span className="input-icon">
+                  <LockIcon />
+                </span>
+
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
+                  autoComplete="current-password"
+                />
+
+                <button
+                  type="button"
+                  className="password-toggle"
+                  aria-label={
+                    showPassword ? "Hide password" : "Show password"
+                  }
+                  onClick={() => setShowPassword((value) => !value)}
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+            </label>
+
+            <div className="login-row">
+              <label className="login-check">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span>Remember me</span>
+              </label>
+
+              <button
+                type="button"
+                className="forgot-password"
+                onClick={async () => {
+                  setError("");
+                  if (username.trim().toLowerCase() !== ADMIN_EMAIL) {
+                    setError("Admin password reset is available for the Admin account. Employees should contact HR.");
+                    return;
+                  }
+                  setLoading(true);
+                  try {
+                    const result = await requestAdminPasswordResetOtp();
+                    setOtpPurpose("reset");
+                    setOtpMobile(result.mobile);
+                    setDevOtp(result.devOtp || "");
+                    setOtp("");
+                    setNewPassword("");
+                    setConfirmPassword("");
+                    setResendSeconds(30);
+                    setOtpMode(true);
+                  } catch (err) {
+                    setError(err?.message || "Unable to send password reset OTP.");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
               >
                 Forgot password?
               </button>
-
             </div>
 
+            {error && (
+              <div className="login-error">
+                <span>!</span>
+                {error}
+              </div>
+            )}
 
-            {/* SIGN IN */}
-            <button
-              type="submit"
-              className="signin-button"
-              disabled={loading}
-            >
-
-              {loading ? (
-                <>
-                  <span className="button-loader"></span>
-                  Signing in...
-                </>
-              ) : (
-                <>
-                  <span>Sign in</span>
-                  <span className="button-arrow">→</span>
-                </>
-              )}
-
+            <button className="login-submit" disabled={loading}>
+              <span>{loading ? "Signing in…" : "Login"}</span>
+              {!loading && <span className="login-arrow">→</span>}
             </button>
 
+            <p className="login-help">
+              Employee? Use your official email and the password you created
+              from the HR activation email. A verification OTP is required
+              after your password is validated.
+            </p>
           </form>
+        )}
 
-
-          {/* SECURITY STATUS */}
-          <div className="security-status">
-
-            <span className="security-status-dot"></span>
-
-            <span>
-              Secure HRMS environment
-            </span>
-
-          </div>
-
-
-          {/* LOGIN INFORMATION */}
-          <div className="login-info-card">
-
-            <div className="info-icon">
-              HR
-            </div>
-
-            <div className="info-content">
-              <strong>BAUER HRMS</strong>
-
-              <span>
-                Authorized workforce management portal
-              </span>
-            </div>
-
-            <div className="info-status">
-              <span></span>
-              Online
-            </div>
-
-          </div>
-
-
-          {/* COPYRIGHT */}
-          <div className="login-footer">
-
-            <span>
-              © 2026 BAUER Engineering India Pvt. Ltd.
-            </span>
-
-            <span>
-              Human Resource Management System
-            </span>
-
-          </div>
-
-        </div>
-
+        <footer>© 2026 HRSYNC. All rights reserved.</footer>
       </section>
 
+      <section className="login-side login-side-right">
+        <div className="workforce-visual">
+          <div className="workforce-glow"></div>
+
+          <img
+            src="/hrsync-workforce.png"
+            alt="HRSYNC Workforce"
+            className="workforce-image"
+          />
+
+          <div className="workforce-caption">
+            <span>SMART HR • BETTER PEOPLE</span>
+            <strong>People. Process. Progress.</strong>
+            <small>One connected workforce experience.</small>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

@@ -209,6 +209,37 @@ function Payroll() {
     return {};
   }
 };
+const ORGANIZATION_STORAGE_KEY = "bauerHrmsOrganizationMasters";
+
+const getOrganizationLeaveTypes = () => {
+  try {
+    const organization = JSON.parse(localStorage.getItem(ORGANIZATION_STORAGE_KEY) || "{}");
+    const leavePolicy = Array.isArray(organization?.leavePolicies)
+      ? organization.leavePolicies[0]
+      : null;
+    return Array.isArray(leavePolicy?.leaveTypes) ? leavePolicy.leaveTypes : [];
+  } catch (error) {
+    console.error("Unable to load Organization leave policy:", error);
+    return [];
+  }
+};
+
+const getLeaveSalaryTreatment = (status) => {
+  const leaveType = getOrganizationLeaveTypes().find(
+    (item) => String(item?.code || item?.id || "").toUpperCase() === String(status || "").toUpperCase()
+  );
+
+  // Backward-compatible defaults preserve existing payroll behaviour until HR configures a leave type.
+  if (!leaveType) {
+    return { countAsPaidDay: ["EL", "CL", "SL", "FL", "CO"].includes(status), lop: false };
+  }
+
+  return {
+    countAsPaidDay: leaveType?.salaryTreatment?.countAsPaidDay !== false,
+    lop: Boolean(leaveType?.salaryTreatment?.lop),
+  };
+};
+
 const calculateMonthlyAttendance = (employeeId, month) => {
   const records = getMonthlyAttendance(employeeId, month);
 
@@ -241,9 +272,12 @@ const calculateMonthlyAttendance = (employeeId, month) => {
       case "EL":
       case "CL":
       case "SL":
-      case "FL":
-        paidLeave += 1;
+      case "FL": {
+        const treatment = getLeaveSalaryTreatment(status);
+        if (treatment.countAsPaidDay) paidLeave += 1;
+        if (!treatment.countAsPaidDay || treatment.lop) lop += 1;
         break;
+      }
 
       case "WO":
         weeklyOff += 1;
@@ -258,9 +292,12 @@ const calculateMonthlyAttendance = (employeeId, month) => {
         lop += 1;
         break;
 
-      case "CO":
-        compOff += 1;
+      case "CO": {
+        const treatment = getLeaveSalaryTreatment(status);
+        if (treatment.countAsPaidDay) compOff += 1;
+        if (!treatment.countAsPaidDay || treatment.lop) lop += 1;
         break;
+      }
 
       default:
         break;

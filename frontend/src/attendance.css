@@ -4184,3 +4184,1251 @@
     -webkit-print-color-adjust: exact !important;
   }
 }
+
+/* =====================================================================
+   BAUER HRMS — ATTENDANCE MODULE
+   FINAL UNIFIED MODERN LAVENDER THEME
+   ---------------------------------------------------------------------
+   This block is intentionally at the END so it wins over the older
+   blue Attendance styles already present above.
+
+   Covered:
+   Dashboard • Daily Attendance • Monthly Timesheet • Attendance Reports
+   • Bulk Import • Exceptions • Filters • KPI cards • tables • status
+   controls • modals • report preview • responsive states.
+   ===================================================================== */
+
+:root {
+  --att-primary: #715cf6;
+  --att-primary-2: #8b7cf6;
+  --att-primary-dark: #5d4be2;
+  --att-primary-soft: #f3f1ff;
+  --att-primary-soft-2: #ebe8ff;
+
+  --att-ink: #2f3852;
+  --att-ink-2: #46516a;
+  --att-muted: #838ba0;
+  --att-muted-2: #9ba2b3;
+
+  --att-border: #e2e0ee;
+  --att-border-soft: #eceaf4;
+  --att-bg: #f7f7fc;
+  --att-card: #ffffff;
+
+  --att-green: #168454;
+  --att-green-bg: #eaf9f1;
+  --att-green-border: #bfe6d2;
+
+  --att-red: #c44f5b;
+  --att-red-bg: #fff1f3;
+  --att-red-border: #efc5cb;
+
+  --att-amber: #a66d1d;
+  --att-amber-bg: #fff7e8;
+  --att-amber-border: #edd7a9;
+
+  --att-blue: #3d70a6;
+  --att-blue-bg: #eef5fd;
+  --att-blue-border: #cadced;
+
+  --att-gray: #667386;
+  --att-gray-bg: #f3f5f7;
+}
+
+/* =====================================================================
+   1. MODULE FOUNDATION
+   ===================================================================== */
+
+.attendance-module {
+  background:
+    radial-gradient(circle at 2% 0%, rgba(113,92,246,.08), transparent 27%),
+    radial-gradient(circle at 98% 0%, rgba(139,124,246,.07), transparent 25%),
+    var(--att-bg) !important;
+  color: var(--att-ink) !important;
+}
+
+.attendance-module button,
+.attendance-module input,
+.attendance-module select,
+.attendance-module textarea {
+  font-family: inherit;
+}
+
+.attendance-module button {
+  transition:
+    background .16s ease,
+    border-color .16s ease,
+    color .16s ease,
+    box-shadow .16s ease,
+    transform .16s ease;
+}
+
+/* Page heading */
+.attendance-page-header h2 {
+  color: var(--att-ink) !important;
+  font-size: 30px !important;
+  letter-spacing: -.45px;
+}
+
+.attendance-page-header p,
+.module-eyebrow {
+  color: var(--att-muted) !important;
+}
+
+.module-eyebrow {
+  letter-spacing: 1.55px !important;
+  color: #8075c8 !important;
+}
+
+/* =====================================================================
+   2. BUTTON SYSTEM
+   ===================================================================== */
+
+.attendance-module .primary-button,
+.attendance-module .monthly-save-btn,
+.attendance-module .monthly-submit-btn,
+.attendance-module .monthly-close-btn {
+  background: linear-gradient(135deg, var(--att-primary), var(--att-primary-2)) !important;
+  border-color: rgba(113,92,246,.35) !important;
+  color: #fff !important;
+  border-radius: 10px !important;
+  box-shadow:
+    0 8px 20px rgba(113,92,246,.18),
+    inset 0 1px 0 rgba(255,255,255,.22) !important;
+}
+
+.attendance-module .primary-button:hover,
+.attendance-module .monthly-save-btn:hover,
+.attendance-module .monthly-submit-btn:hover,
+.attendance-module .monthly-close-btn:hover {
+  background: linear-gradient(135deg, var(--att-primary-dark), #7867ee) !important;
+  transform: translateY(-1px);
+}
+
+.attendance-module .secondary-btn,
+.attendance-module .filter-reset,
+.attendance-module .link-button,
+.attendance-module .employee-month-btn,
+.attendance-module .monthly-small-action {
+  background: rgba(255,255,255,.95) !important;
+  border-color: #dddbee !important;
+  color: #625a88 !important;
+  border-radius: 9px !important;
+}
+
+.attendance-module .secondary-btn:hover,
+.attendance-module .filter-reset:hover,
+.attendance-module .link-button:hover,
+.attendance-module .employee-month-btn:hover,
+.attendance-module .monthly-small-action:hover {
+  background: #f6f4ff !important;
+  border-color: #cfc8f0 !important;
+  color: #5748aa !important;
+}
+
+.attendance-module .danger-light-btn,
+.attendance-module .danger-outline {
+  background: var(--att-red-bg) !important;
+  border-color: var(--att-red-border) !important;
+  color: var(--att-red) !important;
+  border-radius: 9px !important;
+}
+
+.attendance-module .danger-light-btn:hover,
+.attendance-module .danger-outline:hover {
+  background: #ffe8eb !important;
+  border-color: #e7aeb6 !important;
+}
+
+/* =====================================================================
+   3. VIEW TABS
+   ===================================================================== */
+
+.attendance-view-tabs {
+  background: rgba(255,255,255,.88) !important;
+  border: 1px solid var(--att-border) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 24px rgba(49,43,91,.045) !important;
+  padding: 6px !important;
+}
+
+.attendance-view-tabs button {
+  color: #7b8297 !important;
+  border-radius: 9px !important;
+}
+
+.attendance-view-tabs button:hover {
+  background: #f6f4ff !important;
+  color: #6658b5 !important;
+}
+
+.attendance-view-tabs button.active {
+  background: linear-gradient(135deg, #f1efff, #eae7ff) !important;
+  color: #6554ba !important;
+  box-shadow:
+    inset 0 -2px 0 var(--att-primary),
+    0 3px 10px rgba(113,92,246,.08) !important;
+}
+
+/* =====================================================================
+   4. FILTERS
+   ===================================================================== */
+
+.attendance-filter-panel {
+  background: rgba(255,255,255,.92) !important;
+  border: 1px solid var(--att-border) !important;
+  border-radius: 15px !important;
+  box-shadow: 0 9px 25px rgba(48,43,88,.05) !important;
+}
+
+.attendance-filter-title strong {
+  color: var(--att-ink) !important;
+}
+
+.attendance-filter-title span,
+.attendance-filter-grid label {
+  color: var(--att-muted) !important;
+}
+
+.attendance-filter-grid input,
+.attendance-filter-grid select {
+  height: 40px !important;
+  border: 1px solid #dddced !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #4b5670 !important;
+}
+
+.attendance-filter-grid input:hover,
+.attendance-filter-grid select:hover {
+  border-color: #d0cdea !important;
+}
+
+.attendance-filter-grid input:focus,
+.attendance-filter-grid select:focus {
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(120,103,242,.12) !important;
+}
+
+/* =====================================================================
+   5. KPI CARDS — VIBRANT BUT CONTROLLED
+   ===================================================================== */
+
+.attendance-kpi-grid {
+  gap: 12px !important;
+}
+
+.attendance-kpi {
+  min-height: 88px;
+  background: linear-gradient(135deg, #fff, #fbfaff) !important;
+  border: 1px solid var(--att-border) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 22px rgba(48,43,88,.045) !important;
+}
+
+.attendance-kpi:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(48,43,88,.07) !important;
+}
+
+.attendance-kpi > span {
+  border-radius: 11px !important;
+}
+
+.attendance-kpi small {
+  color: var(--att-muted) !important;
+}
+
+.attendance-kpi strong {
+  color: var(--att-ink) !important;
+}
+
+/* KPI semantic colors */
+.attendance-kpi.present > span {
+  background: var(--att-green-bg) !important;
+  color: var(--att-green) !important;
+}
+.attendance-kpi.absent > span,
+.attendance-kpi.missing > span {
+  background: var(--att-red-bg) !important;
+  color: var(--att-red) !important;
+}
+.attendance-kpi.leave > span {
+  background: var(--att-amber-bg) !important;
+  color: var(--att-amber) !important;
+}
+.attendance-kpi.late > span {
+  background: #fff1e7 !important;
+  color: #c56c27 !important;
+}
+.attendance-kpi.ot > span {
+  background: var(--att-primary-soft) !important;
+  color: var(--att-primary-dark) !important;
+}
+.attendance-kpi.onsite > span,
+.attendance-kpi.wfh > span {
+  background: var(--att-blue-bg) !important;
+  color: var(--att-blue) !important;
+}
+.attendance-kpi.co > span {
+  background: #eaf8f2 !important;
+  color: #278364 !important;
+}
+
+/* =====================================================================
+   6. DASHBOARD PANELS
+   ===================================================================== */
+
+.attendance-panel,
+.attendance-table-card,
+.attendance-toolbar,
+.attendance-summary-card,
+.monthly-timesheet-card {
+  background: rgba(255,255,255,.95) !important;
+  border-color: var(--att-border) !important;
+  box-shadow: 0 8px 24px rgba(48,43,88,.045) !important;
+}
+
+.attendance-panel {
+  border-radius: 15px !important;
+}
+
+.panel-heading {
+  border-bottom-color: var(--att-border-soft) !important;
+}
+
+.panel-heading h3 {
+  color: var(--att-ink) !important;
+}
+
+.panel-heading p,
+.hours-note {
+  color: var(--att-muted) !important;
+}
+
+.link-button {
+  color: #6656ba !important;
+}
+
+/* Donut */
+.attendance-donut {
+  background: conic-gradient(
+    #22b36b var(--present),
+    #f0eef8 0
+  ) !important;
+}
+.attendance-donut::before {
+  background: #fff !important;
+}
+.attendance-donut strong {
+  color: var(--att-ink) !important;
+}
+.attendance-donut span,
+.donut-legend > div {
+  color: var(--att-muted) !important;
+}
+
+/* =====================================================================
+   7. EXCEPTIONS — RED/AMBER HIGHLIGHT
+   ===================================================================== */
+
+.exception-row {
+  border-bottom-color: var(--att-border-soft) !important;
+  border-radius: 10px;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+.exception-row:hover {
+  background: #faf9ff !important;
+}
+
+.exception-avatar,
+.table-avatar {
+  background: linear-gradient(145deg, #eeeaff, #e3dfff) !important;
+  color: #6555b7 !important;
+}
+
+.exception-row strong {
+  color: var(--att-ink-2) !important;
+}
+
+.exception-row > div:nth-child(2) span {
+  color: var(--att-muted) !important;
+}
+
+.exception-tags span {
+  background: var(--att-amber-bg) !important;
+  color: var(--att-amber) !important;
+  border: 1px solid var(--att-amber-border) !important;
+  border-radius: 999px !important;
+}
+
+/* =====================================================================
+   8. SITE / VENDOR / HOURS
+   ===================================================================== */
+
+.site-table-head,
+.site-table-row,
+.vendor-row {
+  border-color: var(--att-border-soft) !important;
+}
+
+.site-table-head {
+  background: #f5f3fb !important;
+  color: #7d8295 !important;
+  border: 1px solid #e7e4f0;
+}
+
+.site-table-row {
+  color: #667086 !important;
+}
+
+.site-table-row:hover,
+.vendor-row:hover {
+  background: #faf9ff !important;
+}
+
+.site-table-row strong,
+.vendor-row strong {
+  color: var(--att-ink-2) !important;
+}
+
+.site-table-row strong small,
+.vendor-row span,
+.vendor-numbers small {
+  color: var(--att-muted) !important;
+}
+
+.text-green,
+.vendor-numbers b {
+  color: var(--att-green) !important;
+}
+
+.text-red,
+.vendor-numbers.red b {
+  color: var(--att-red) !important;
+}
+
+.progress-bar {
+  background: #eceaf3 !important;
+}
+.progress-bar i {
+  background: linear-gradient(90deg, #8b7cf6, #715cf6) !important;
+}
+
+.hours-highlight > div {
+  background: linear-gradient(135deg, #faf9ff, #f3f1ff) !important;
+  border: 1px solid #e7e3f5 !important;
+}
+.hours-highlight span {
+  color: var(--att-muted) !important;
+}
+.hours-highlight strong {
+  color: var(--att-ink) !important;
+}
+.hours-bar {
+  background: #ebe9f2 !important;
+}
+.hours-bar i {
+  background: linear-gradient(90deg, #8b7cf6, #715cf6) !important;
+}
+
+/* =====================================================================
+   9. DAILY ATTENDANCE TOOLBAR + SUMMARY
+   ===================================================================== */
+
+.attendance-toolbar {
+  border-radius: 13px !important;
+}
+
+.attendance-toolbar strong {
+  color: var(--att-ink) !important;
+}
+.attendance-toolbar span {
+  color: var(--att-muted) !important;
+}
+
+.attendance-summary-card {
+  border-radius: 11px !important;
+}
+.attendance-summary-card span {
+  color: var(--att-muted) !important;
+}
+.attendance-summary-card strong {
+  color: var(--att-ink) !important;
+}
+
+/* =====================================================================
+   10. ATTENDANCE TABLE
+   ===================================================================== */
+
+.attendance-table-card {
+  border-radius: 15px !important;
+}
+
+.attendance-table-card th {
+  background: linear-gradient(180deg, #f6f5fa, #f0eff5) !important;
+  color: #7e8497 !important;
+  border-bottom: 1px solid #e6e4ef !important;
+}
+
+.attendance-table-card td {
+  border-top-color: #eeedf3 !important;
+  color: #626c81 !important;
+}
+
+.attendance-table-card tbody tr:hover td {
+  background: #faf9ff !important;
+}
+
+.attendance-employee strong {
+  color: var(--att-ink) !important;
+}
+.attendance-employee span {
+  color: var(--att-muted) !important;
+}
+
+.type-badge {
+  background: #f0eeff !important;
+  color: #6658b6 !important;
+  border: 1px solid #ddd8f4 !important;
+  border-radius: 999px !important;
+}
+
+/* Inputs in table */
+.attendance-status-select,
+.attendance-time-input,
+.attendance-small-input,
+.attendance-remarks-input {
+  border: 1px solid #dddced !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #4b5670 !important;
+}
+
+.attendance-status-select:hover,
+.attendance-time-input:hover,
+.attendance-small-input:hover,
+.attendance-remarks-input:hover {
+  border-color: #cfcbe7 !important;
+}
+
+.attendance-status-select:focus,
+.attendance-time-input:focus,
+.attendance-small-input:focus,
+.attendance-remarks-input:focus {
+  outline: none !important;
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(120,103,242,.11) !important;
+}
+
+/* =====================================================================
+   11. STATUS HIGHLIGHTS — RED / GREEN / AMBER / BLUE / GRAY
+   ===================================================================== */
+
+.attendance-status-select.status-p {
+  border-color: var(--att-green-border) !important;
+  background: var(--att-green-bg) !important;
+  color: var(--att-green) !important;
+}
+.attendance-status-select.status-a {
+  border-color: var(--att-red-border) !important;
+  background: var(--att-red-bg) !important;
+  color: var(--att-red) !important;
+}
+.attendance-status-select.status-el,
+.attendance-status-select.status-cl,
+.attendance-status-select.status-sl,
+.attendance-status-select.status-fl {
+  border-color: var(--att-amber-border) !important;
+  background: var(--att-amber-bg) !important;
+  color: var(--att-amber) !important;
+}
+.attendance-status-select.status-co {
+  border-color: #bfe1d4 !important;
+  background: #eef9f5 !important;
+  color: #287d62 !important;
+}
+.attendance-status-select.status-od,
+.attendance-status-select.status-wfh {
+  border-color: var(--att-blue-border) !important;
+  background: var(--att-blue-bg) !important;
+  color: var(--att-blue) !important;
+}
+.attendance-status-select.status-wo,
+.attendance-status-select.status-ho {
+  border-color: #d9dfe5 !important;
+  background: var(--att-gray-bg) !important;
+  color: var(--att-gray) !important;
+}
+.attendance-status-select.status-hd {
+  border-color: #e9d0a7 !important;
+  background: #fff7eb !important;
+  color: #a56b20 !important;
+}
+.attendance-status-select.status-lop {
+  border-color: #efc2b3 !important;
+  background: #fff0eb !important;
+  color: #b9573e !important;
+}
+
+.attendance-source-badge,
+.monthly-source-badge {
+  border-color: #dedbec !important;
+  background: #f7f5ff !important;
+  color: #756b9b !important;
+  border-radius: 999px !important;
+}
+
+/* =====================================================================
+   12. MONTHLY TIMESHEET
+   ===================================================================== */
+
+.monthly-timesheet-page {
+  margin-top: 20px !important;
+}
+
+.monthly-timesheet-topbar h3 {
+  color: var(--att-ink) !important;
+}
+.monthly-timesheet-topbar p {
+  color: var(--att-muted) !important;
+}
+
+.monthly-employee-selector,
+.monthly-employee-card {
+  background: linear-gradient(135deg, #fff, #faf9ff) !important;
+  border-color: var(--att-border) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 24px rgba(48,43,88,.045) !important;
+}
+
+.monthly-search-block label,
+.monthly-period-field label {
+  color: #777d92 !important;
+}
+
+.monthly-search-input,
+.monthly-period-field input {
+  border-color: #dddced !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  color: #4b5670 !important;
+}
+
+.monthly-search-input:focus-within,
+.monthly-period-field input:focus {
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(120,103,242,.11) !important;
+}
+
+.monthly-search-input > span,
+.monthly-search-icon {
+  color: #796dc1 !important;
+}
+
+.monthly-search-input input,
+.monthly-period-field input {
+  color: #4b5670 !important;
+}
+
+.monthly-search-clear {
+  background: #f0eeff !important;
+  color: #6657b4 !important;
+}
+
+.monthly-search-results {
+  border-color: #ddd9ee !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 50px rgba(42,36,85,.16) !important;
+}
+
+.monthly-search-result {
+  border-bottom-color: #eeecf4 !important;
+}
+.monthly-search-result:hover,
+.monthly-search-result.selected {
+  background: #f7f5ff !important;
+}
+
+.monthly-result-avatar,
+.monthly-profile-avatar,
+.monthly-employee-avatar {
+  background: linear-gradient(145deg, #eeeaff, #e2ddff) !important;
+  color: #6555b7 !important;
+}
+
+.monthly-result-main strong {
+  color: var(--att-ink) !important;
+}
+.monthly-result-main small,
+.monthly-result-site {
+  color: var(--att-muted) !important;
+}
+
+.monthly-timesheet-card {
+  border-radius: 14px !important;
+  overflow: hidden;
+}
+
+.monthly-table-heading {
+  background: linear-gradient(135deg, #fff, #faf9ff) !important;
+  border-bottom-color: #e9e7f2 !important;
+}
+
+.monthly-table-heading h3,
+.monthly-timesheet-card h3 {
+  color: var(--att-ink) !important;
+}
+
+.monthly-timesheet-table th {
+  background: #f4f2f9 !important;
+  color: #7e8498 !important;
+}
+
+.monthly-timesheet-table td {
+  border-color: #eeedf3 !important;
+  color: #626b80 !important;
+}
+
+.monthly-timesheet-table tbody tr:hover td {
+  background: #fbfaff !important;
+}
+
+.monthly-status-select,
+.monthly-time-input,
+.monthly-hours-input,
+.monthly-remarks-input {
+  border-color: #dddced !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #4b5670 !important;
+}
+
+.monthly-status-select:focus,
+.monthly-time-input:focus,
+.monthly-hours-input:focus,
+.monthly-remarks-input:focus {
+  outline: none !important;
+  border-color: #8d80f4 !important;
+  box-shadow: 0 0 0 3px rgba(120,103,242,.11) !important;
+}
+
+.monthly-save-status-row {
+  color: var(--att-muted) !important;
+}
+
+.monthly-save-dot {
+  background: var(--att-green) !important;
+}
+
+.monthly-audit-badge,
+.monthly-submitted-badge {
+  background: var(--att-green-bg) !important;
+  border-color: var(--att-green-border) !important;
+  color: var(--att-green) !important;
+  border-radius: 999px !important;
+}
+
+/* Monthly KPI */
+.monthly-kpi-grid > div {
+  background: #fff !important;
+  border: 1px solid var(--att-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 6px 18px rgba(48,43,88,.04);
+}
+.monthly-kpi-grid small,
+.monthly-kpi-grid span {
+  color: var(--att-muted) !important;
+}
+.monthly-kpi-grid strong {
+  color: var(--att-ink) !important;
+}
+.monthly-kpi-grid strong.green {
+  color: var(--att-green) !important;
+}
+.monthly-kpi-grid strong.red {
+  color: var(--att-red) !important;
+}
+.monthly-kpi-grid strong.amber {
+  color: var(--att-amber) !important;
+}
+
+/* =====================================================================
+   13. MONTHLY MODAL
+   ===================================================================== */
+
+.attendance-monthly-overlay {
+  background: rgba(35,31,62,.64) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+.attendance-monthly-modal {
+  background: #f8f7fc !important;
+  border: 1px solid #dedced !important;
+  border-radius: 17px !important;
+  box-shadow: 0 28px 85px rgba(35,30,70,.26) !important;
+  overflow: hidden;
+}
+
+.attendance-monthly-modal-header {
+  background:
+    radial-gradient(circle at 7% 0%, rgba(113,92,246,.10), transparent 32%),
+    linear-gradient(135deg, #fff, #faf9ff) !important;
+  border-bottom-color: #e8e6f1 !important;
+}
+
+.attendance-monthly-modal-header h2,
+.attendance-monthly-modal-header h3 {
+  color: var(--att-ink) !important;
+}
+
+.attendance-monthly-modal-header p,
+.monthly-profile-meta {
+  color: var(--att-muted) !important;
+}
+
+/* =====================================================================
+   14. BULK IMPORT MODAL — COMPLETE THEME
+   ===================================================================== */
+
+.attendance-import-overlay {
+  background: rgba(35,31,62,.66) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+.attendance-import-modal {
+  background: #fbfaff !important;
+  border: 1px solid #dedced !important;
+  border-radius: 17px !important;
+  box-shadow: 0 30px 90px rgba(35,30,70,.28) !important;
+  overflow: hidden;
+}
+
+.attendance-import-header {
+  background:
+    radial-gradient(circle at 8% 0%, rgba(113,92,246,.10), transparent 32%),
+    linear-gradient(135deg, #fff, #faf9ff) !important;
+  border-bottom-color: #e8e6f1 !important;
+}
+
+.attendance-import-header h2,
+.attendance-import-validation-title,
+.attendance-import-error-heading {
+  color: var(--att-ink) !important;
+}
+
+.attendance-import-header p,
+.attendance-import-info,
+.attendance-import-note {
+  color: var(--att-muted) !important;
+}
+
+.attendance-import-info,
+.attendance-import-summary-card {
+  background: #f7f5ff !important;
+  border-color: #e1dcf3 !important;
+  border-radius: 10px !important;
+}
+
+.attendance-import-info-icon {
+  background: #ebe8ff !important;
+  color: #6555b7 !important;
+}
+
+.attendance-import-stats {
+  gap: 10px !important;
+}
+
+.attendance-import-summary-card {
+  background: #fff !important;
+  box-shadow: 0 5px 16px rgba(48,43,88,.035);
+}
+
+.attendance-import-summary-card strong {
+  color: var(--att-ink) !important;
+}
+
+.import-valid {
+  background: var(--att-green-bg) !important;
+  color: var(--att-green) !important;
+  border-color: var(--att-green-border) !important;
+}
+
+.import-error,
+.import-invalid-value,
+.attendance-import-invalid-value {
+  background: var(--att-red-bg) !important;
+  color: var(--att-red) !important;
+  border-color: var(--att-red-border) !important;
+}
+
+.attendance-import-warning-icon {
+  color: var(--att-amber) !important;
+}
+
+.attendance-import-validation,
+.attendance-import-error-section {
+  background: #fff !important;
+  border-color: var(--att-border) !important;
+  border-radius: 11px !important;
+}
+
+.attendance-import-error-row {
+  background: #fff8f8 !important;
+  border-color: #f1dadd !important;
+}
+
+.attendance-import-error-row:hover {
+  background: #fff1f3 !important;
+}
+
+.attendance-import-error-employee,
+.attendance-import-error-issue {
+  color: #59647a !important;
+}
+
+.attendance-import-error-count,
+.attendance-import-error-value {
+  color: var(--att-red) !important;
+}
+
+.attendance-import-footer {
+  background: #faf9fd !important;
+  border-top-color: #e9e7f1 !important;
+}
+
+/* =====================================================================
+   15. ATTENDANCE REPORTS — MODERN THEME
+   ===================================================================== */
+
+.attendance-reports-page,
+.attendance-report-shell {
+  color: var(--att-ink) !important;
+}
+
+.attendance-reports-page .attendance-report-header,
+.attendance-report-shell .report-toolbar {
+  background:
+    radial-gradient(circle at 5% 0%, rgba(113,92,246,.08), transparent 30%),
+    linear-gradient(135deg, #fff, #faf9ff) !important;
+  border-color: var(--att-border) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 24px rgba(48,43,88,.045) !important;
+}
+
+.attendance-reports-page .attendance-report-header h3,
+.attendance-report-shell .report-toolbar h3 {
+  color: var(--att-ink) !important;
+}
+
+.attendance-reports-page .attendance-report-header p,
+.attendance-report-shell .report-toolbar p {
+  color: var(--att-muted) !important;
+}
+
+.attendance-report-filter-card,
+.report-filter-card {
+  background: #fff !important;
+  border-color: var(--att-border) !important;
+  border-radius: 13px !important;
+  box-shadow: 0 7px 20px rgba(48,43,88,.04) !important;
+}
+
+.report-filter-note {
+  background: #f7f5ff !important;
+  border-color: #e2def3 !important;
+  color: #716a8e !important;
+}
+
+.report-preview-card,
+.report-summary-strip {
+  background: #fff !important;
+  border-color: var(--att-border) !important;
+  border-radius: 12px !important;
+}
+
+.report-mini-stat {
+  border-color: #e8e6ef !important;
+  background: #faf9fd !important;
+}
+
+.report-mini-stat strong {
+  color: var(--att-ink) !important;
+}
+
+.report-mini-stat small {
+  color: var(--att-muted) !important;
+}
+
+.report-present,
+.report-count.p {
+  color: var(--att-green) !important;
+}
+.report-absent,
+.report-count.a {
+  color: var(--att-red) !important;
+}
+.report-leave,
+.report-count.leave {
+  color: var(--att-amber) !important;
+}
+.report-wo,
+.report-count.wo {
+  color: var(--att-gray) !important;
+}
+.report-lop,
+.report-count.lop {
+  color: #b9573e !important;
+}
+
+.report-status-cell.status-p {
+  color: #24764f !important;
+  background: #f0fbf5 !important;
+}
+.report-status-cell.status-a {
+  color: #bf4652 !important;
+  background: #fff0f2 !important;
+}
+.report-status-cell.status-el,
+.report-status-cell.status-cl,
+.report-status-cell.status-sl,
+.report-status-cell.status-fl {
+  color: #95691e !important;
+  background: #fff8e9 !important;
+}
+.report-status-cell.status-co {
+  color: #287d62 !important;
+  background: #eef9f5 !important;
+}
+.report-status-cell.status-od,
+.report-status-cell.status-wfh {
+  color: #3d70a6 !important;
+  background: #eef5fd !important;
+}
+.report-status-cell.status-wo,
+.report-status-cell.status-ho {
+  color: #687789 !important;
+  background: #f1f4f6 !important;
+}
+.report-status-cell.status-hd {
+  color: #a16b20 !important;
+  background: #fff7e9 !important;
+}
+
+.attendance-report-table th {
+  background: #f2f0f7 !important;
+  color: #72798c !important;
+  border-color: #e3e1eb !important;
+}
+
+.attendance-report-table td {
+  border-color: #eceaf1 !important;
+}
+
+.attendance-report-table td:first-child {
+  background: #fff !important;
+}
+
+.report-employee-cell strong {
+  color: var(--att-ink) !important;
+}
+.report-employee-cell small {
+  color: var(--att-muted) !important;
+}
+
+.attendance-report-modal {
+  background: rgba(35,31,62,.68) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.attendance-report-modal-inner {
+  background: #f6f5fa !important;
+  border: 1px solid #dedced !important;
+  border-radius: 17px !important;
+  box-shadow: 0 30px 90px rgba(35,30,70,.28) !important;
+}
+
+.report-modal-actions {
+  background: rgba(255,255,255,.97) !important;
+  border-bottom-color: #e7e5ef !important;
+}
+
+.report-modal-actions .primary-button {
+  background: linear-gradient(135deg, var(--att-primary), var(--att-primary-2)) !important;
+  border-color: var(--att-primary) !important;
+}
+
+.report-brand-header {
+  background:
+    radial-gradient(circle at 7% 0%, rgba(113,92,246,.25), transparent 34%),
+    linear-gradient(135deg, #5747b9, #7667df) !important;
+}
+
+.report-footer {
+  background: #f5f3fa !important;
+  color: #747b8f !important;
+}
+
+/* =====================================================================
+   16. EMPTY / NO DATA STATES
+   ===================================================================== */
+
+.empty-state,
+.no-attendance,
+.monthly-empty-state,
+.monthly-no-employee,
+.monthly-no-results {
+  color: var(--att-muted) !important;
+}
+
+.monthly-empty-icon {
+  background: #f0eeff !important;
+  color: #6657b5 !important;
+}
+
+/* =====================================================================
+   17. WEEKEND / SPECIAL DAYS
+   ===================================================================== */
+
+.weekend-row td {
+  background: #faf9fd !important;
+}
+
+.sticky-date {
+  background: #f8f7fc !important;
+}
+
+.day-chip,
+.shift-chip {
+  border-radius: 999px !important;
+  border-color: #ddd9ee !important;
+  background: #f6f4ff !important;
+  color: #6658b3 !important;
+}
+
+/* =====================================================================
+   18. UNIVERSAL FOCUS + DISABLED STATES
+   ===================================================================== */
+
+.attendance-module input:focus,
+.attendance-module select:focus,
+.attendance-module textarea:focus,
+.attendance-module button:focus-visible {
+  outline: none;
+}
+
+.attendance-module button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(113,92,246,.15) !important;
+}
+
+.attendance-module button:disabled,
+.attendance-module input:disabled,
+.attendance-module select:disabled {
+  opacity: .52;
+  cursor: not-allowed;
+}
+
+/* =====================================================================
+   19. RESPONSIVE — KEEP THE SAME THEME ON SMALL SCREENS
+   ===================================================================== */
+
+@media (max-width: 900px) {
+  .attendance-module {
+    padding: 22px 18px 40px !important;
+  }
+
+  .attendance-page-header h2 {
+    font-size: 26px !important;
+  }
+
+  .attendance-kpi {
+    border-radius: 12px !important;
+  }
+
+  .attendance-panel,
+  .attendance-filter-panel,
+  .attendance-toolbar,
+  .attendance-table-card,
+  .monthly-employee-selector,
+  .monthly-employee-card,
+  .monthly-timesheet-card {
+    border-radius: 13px !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .attendance-import-modal,
+  .attendance-monthly-modal {
+    border-radius: 14px !important;
+  }
+
+  .attendance-import-overlay,
+  .attendance-monthly-overlay,
+  .attendance-report-modal {
+    padding: 10px !important;
+  }
+
+  .attendance-view-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+  }
+
+  .attendance-view-tabs button {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 600px) {
+  .attendance-module {
+    padding: 18px 12px 32px !important;
+  }
+
+  .attendance-page-header h2 {
+    font-size: 23px !important;
+  }
+
+  .attendance-header-actions,
+  .attendance-toolbar,
+  .attendance-toolbar-actions,
+  .monthly-top-actions,
+  .monthly-quick-actions {
+    width: 100%;
+  }
+
+  .attendance-header-actions > *,
+  .attendance-toolbar-actions > *,
+  .monthly-top-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .attendance-filter-panel,
+  .attendance-panel,
+  .attendance-toolbar,
+  .attendance-table-card {
+    box-shadow: 0 6px 18px rgba(48,43,88,.04) !important;
+  }
+}
+
+/* =====================================================================
+   20. PRINT — PRESERVE REPORT PRINT FUNCTIONALITY
+   ===================================================================== */
+
+@media print {
+  .attendance-module {
+    background: #fff !important;
+  }
+
+  .attendance-report-modal {
+    background: #fff !important;
+  }
+
+  .attendance-report-modal-inner,
+  .report-print-page {
+    box-shadow: none !important;
+  }
+}
