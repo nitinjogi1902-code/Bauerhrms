@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import "./organization.css";
-
+import "./Organization.css";
 const STORAGE_KEY = "bauerHrmsOrganizationMasters";
 
 
