@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import "./dashboard.css";
+import { supabase } from "./supabaseClient";
 
 import Attendance from "./attendance";
 import Employees from "./employees";
@@ -13,6 +14,7 @@ import Training from "./Training";
 import PMS from "./PMS";
 import Reports from "./Reports_MIS_Control_Tower";
 import Settings from "./Settings";
+import ForceLeave from "./forceLeave";
 
 const menuItems = [
   { name: "Dashboard", icon: "dashboard" },
@@ -38,6 +40,7 @@ const apps = [
   ["Self Service", "Employee self service", "user", "orange"],
   ["EDOC", "Employee documents", "file", "cyan"],
   ["Recruitment", "Candidate management", "user-plus", "purple"],
+  ["Force Leave", "Force Leave management", "calendar", "purple"],
   ["Onboarding", "New employee joining", "sparkles", "violet"],
   ["Performance", "Performance management", "target", "pink"],
   ["Task", "Task management", "check", "indigo"],
@@ -317,18 +320,351 @@ function Icon({ name, size = 18, strokeWidth = 1.8 }) {
 }
 
 
+function normalizePermissionCode(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value.trim().toLowerCase();
+  if (typeof value === "object") {
+    return String(
+      value.permission_code ||
+      value.permissionCode ||
+      value.code ||
+      value.key ||
+      value.name ||
+      ""
+    ).trim().toLowerCase();
+  }
+  return "";
+}
+
+function getCurrentUserPermissions(currentUser) {
+  const sources = [
+    currentUser?.permissions,
+    currentUser?.permissionCodes,
+    currentUser?.permission_codes,
+    currentUser?.permissionKeys,
+    currentUser?.permission_keys,
+  ];
+
+  return new Set(
+    sources
+      .flatMap((source) => (Array.isArray(source) ? source : source ? [source] : []))
+      .map(normalizePermissionCode)
+      .filter(Boolean)
+  );
+}
+
+const MENU_PERMISSION_MAP = {
+  Dashboard: "dashboard.view",
+  "Self Service": "self_service.view",
+  Employees: "employees.view",
+  Attendance: "attendance.view",
+  Leave: "leave.view",
+  Payroll: "payroll.view",
+  Vendors: "vendors.view",
+  Organization: "organization.view",
+  Recruitment: "recruitment.view",
+  Training: "training.view",
+  PMS: "pms.view",
+  Reports: "reports.view",
+  Settings: "settings.view",
+};
+
 function Dashboard({ onLogout, currentUser = null }) {
+  const [resolvedPermissions, setResolvedPermissions] = useState([]);
+  const [permissionsResolved, setPermissionsResolved] = useState(false);
+
+  const userPermissions = useMemo(
+    () => getCurrentUserPermissions(currentUser),
+    [currentUser]
+  );
+
+  const isPlatformSuperAdmin = Boolean(
+    currentUser?.isPlatformSuperAdmin === true ||
+      currentUser?.role === "Super Admin" ||
+      currentUser?.role === "Platform Super Admin"
+  );
+
+  const hasPermission = (permission) => {
+    const code = String(permission || "").trim().toLowerCase();
+    if (isPlatformSuperAdmin) return true;
+    if (!permissionsResolved) return false;
+    // For company users, effective access MUST come from the intersection of
+    // company-enabled modules and the user's role permissions. Never fall
+    // back to permissionCodes carried in the login session, because those
+    // may contain role permissions for modules disabled by the Platform Admin.
+    return resolvedPermissions.includes(code);
+  };
+
+  const canAccessMenu = (menuName) => {
+  if (menuName === "Force Leave") return true;
+
+  return (
+    isPlatformSuperAdmin ||
+    hasPermission(MENU_PERMISSION_MAP[menuName])
+  );
+};
+
+  const firstAllowedMenu = useMemo(() => {
+    const employeeRole = String(currentUser?.role || "").trim().toLowerCase() === "employee";
+    if (employeeRole && canAccessMenu("Self Service")) return "Self Service";
+    return menuItems.find((item) => canAccessMenu(item.name))?.name || "Dashboard";
+  }, [currentUser, userPermissions, resolvedPermissions, permissionsResolved]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPermissions = async () => {
+      if (isPlatformSuperAdmin) {
+        setPermissionsResolved(true);
+        setResolvedPermissions([]);
+        return;
+      }
+
+      setPermissionsResolved(false);
+
+      const authUserId =
+        currentUser?.userId ||
+        currentUser?.user_id ||
+        currentUser?.authUserId ||
+        currentUser?.auth_user_id ||
+        currentUser?.id;
+
+      if (!authUserId) {
+        setResolvedPermissions([]);
+        setPermissionsResolved(true);
+        return;
+      }
+
+      try {
+        const { data: organizationUser, error: organizationUserError } = await supabase
+          .from("organization_users")
+          .select("id, organization_id, status")
+          .eq("user_id", authUserId)
+          .maybeSingle();
+
+        if (organizationUserError) throw organizationUserError;
+
+        if (
+          !organizationUser ||
+          String(organizationUser.status || "active").toLowerCase() !== "active"
+        ) {
+          if (!cancelled) { setResolvedPermissions([]); setPermissionsResolved(true); }
+          return;
+        }
+
+        const { data: roleLinks, error: roleError } = await supabase
+          .from("organization_user_roles")
+          .select("role_id")
+          .eq("organization_user_id", organizationUser.id);
+
+        if (roleError) throw roleError;
+
+        const roleIds = (roleLinks || []).map((item) => item.role_id).filter(Boolean);
+        if (!roleIds.length) {
+          if (!cancelled) { setResolvedPermissions([]); setPermissionsResolved(true); }
+          return;
+        }
+
+        const { data: rolePermissions, error: permissionError } = await supabase
+          .from("role_permissions")
+          .select("permission_id")
+          .in("role_id", roleIds);
+
+        if (permissionError) throw permissionError;
+
+        const permissionIds = Array.from(
+          new Set((rolePermissions || []).map((item) => item.permission_id).filter(Boolean))
+        );
+
+        if (!permissionIds.length) {
+          if (!cancelled) { setResolvedPermissions([]); setPermissionsResolved(true); }
+          return;
+        }
+
+        const [
+          { data: permissions, error: permissionsError },
+          { data: organizationModules, error: organizationModulesError },
+        ] = await Promise.all([
+          supabase
+            .from("permissions")
+            .select("id, permission_code")
+            .in("id", permissionIds),
+          supabase
+            .from("organization_modules")
+            .select("module_id")
+            .eq("organization_id", organizationUser.organization_id),
+        ]);
+
+        if (permissionsError) throw permissionsError;
+        if (organizationModulesError) throw organizationModulesError;
+
+        const enabledModuleIds = Array.from(
+          new Set(
+            (organizationModules || [])
+              .map((item) => item?.module_id)
+              .filter(Boolean)
+          )
+        );
+
+        if (!enabledModuleIds.length) {
+          if (!cancelled) { setResolvedPermissions([]); setPermissionsResolved(true); }
+          return;
+        }
+
+        const { data: enabledModules, error: enabledModulesError } = await supabase
+          .from("platform_modules")
+          .select("id, module_code")
+          .in("id", enabledModuleIds)
+          .eq("is_active", true);
+
+        if (enabledModulesError) throw enabledModulesError;
+
+        const enabledModuleCodes = new Set(
+          (enabledModules || [])
+            .map((item) => String(item?.module_code || "").trim().toLowerCase())
+            .filter(Boolean)
+        );
+
+        // Effective access = Role Permission AND Company Module Access.
+        const codes = Array.from(
+          new Set(
+            (permissions || [])
+              .map((item) => String(item?.permission_code || "").trim().toLowerCase())
+              .filter(Boolean)
+              .filter((code) => {
+                const moduleCode = code.split(".")[0];
+                return enabledModuleCodes.has(moduleCode);
+              })
+          )
+        );
+
+        if (!cancelled) { setResolvedPermissions(codes); setPermissionsResolved(true); }
+      } catch (error) {
+        console.error("Unable to load company user permissions:", error);
+        if (!cancelled) { setResolvedPermissions([]); setPermissionsResolved(true); }
+      }
+    };
+
+    loadPermissions();
+    return () => { cancelled = true; };
+  }, [
+    currentUser?.userId,
+    currentUser?.user_id,
+    currentUser?.authUserId,
+    currentUser?.auth_user_id,
+    currentUser?.id,
+    isPlatformSuperAdmin,
+  ]);
+
   const [activeMenu, setActiveMenu] = useState(
-    currentUser?.role === "Employee" ? "Self Service" : "Dashboard"
+    firstAllowedMenu
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
-  const [financialYear, setFinancialYear] = useState("2026-27");
-  const [month, setMonth] = useState("Aug-2026");
+  // Dashboard period controls are date-driven.
+  // FY follows the Indian financial year (April-March), and the current
+  // month/FY are generated automatically from today's date.
+  const getDashboardCurrentFinancialYear = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const fyStart = month >= 4 ? year : year - 1;
+    return `${fyStart}-${String(fyStart + 1).slice(-2)}`;
+  };
+
+  const getDashboardCurrentMonthValue = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  const [financialYear, setFinancialYear] = useState(
+    getDashboardCurrentFinancialYear()
+  );
+  const [month, setMonth] = useState(getDashboardCurrentMonthValue());
+
+  const dashboardCurrentFY = getDashboardCurrentFinancialYear();
+  const dashboardCurrentMonth = getDashboardCurrentMonthValue();
+
+  const dashboardFinancialYearOptions = useMemo(() => {
+    const currentFYStart = Number(dashboardCurrentFY.slice(0, 4));
+    const firstFYStart = Math.min(2024, currentFYStart);
+
+    return Array.from(
+      { length: currentFYStart - firstFYStart + 1 },
+      (_, index) => {
+        const startYear = currentFYStart - index;
+        return `${startYear}-${String(startYear + 1).slice(-2)}`;
+      }
+    );
+  }, [dashboardCurrentFY]);
+
+  const dashboardMonthOptions = useMemo(() => {
+    const match = String(financialYear || "").match(/^(\d{4})-(\d{2})$/);
+    if (!match) return [];
+
+    const fyStartYear = Number(match[1]);
+    const fyEndYear = fyStartYear + 1;
+    const isCurrentFY = financialYear === dashboardCurrentFY;
+
+    const startDate = new Date(fyStartYear, 3, 1); // April
+    const endDate = isCurrentFY
+      ? new Date(
+          Number(dashboardCurrentMonth.slice(0, 4)),
+          Number(dashboardCurrentMonth.slice(5, 7)),
+          0
+        )
+      : new Date(fyEndYear, 2, 1); // March
+
+    const options = [];
+    const cursor = new Date(startDate);
+
+    while (cursor <= endDate) {
+      const year = cursor.getFullYear();
+      const monthNumber = cursor.getMonth() + 1;
+      const value = `${year}-${String(monthNumber).padStart(2, "0")}`;
+
+      options.push({
+        value,
+        label: cursor.toLocaleString("en-IN", {
+          month: "long",
+          year: "numeric",
+        }),
+      });
+
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    return options.reverse();
+  }, [financialYear, dashboardCurrentFY, dashboardCurrentMonth]);
+
+  useEffect(() => {
+    if (!dashboardFinancialYearOptions.includes(financialYear)) {
+      setFinancialYear(dashboardCurrentFY);
+      return;
+    }
+
+    const validMonths = dashboardMonthOptions.map((item) => item.value);
+
+    if (!validMonths.includes(month)) {
+      setMonth(
+        financialYear === dashboardCurrentFY
+          ? dashboardCurrentMonth
+          : validMonths[0] || dashboardCurrentMonth
+      );
+    }
+  }, [
+    financialYear,
+    month,
+    dashboardFinancialYearOptions,
+    dashboardMonthOptions,
+    dashboardCurrentFY,
+    dashboardCurrentMonth,
+  ]);
   const [search, setSearch] = useState("");
   const [employees, setEmployees] = useState(() => readDashboardEmployeeRecords());
-  const [employeeCount, setEmployeeCount] = useState(() => readDashboardEmployeeRecords().length);
+  const [employeeCount, setEmployeeCount] = useState(0);
+  const [employeeCountLoading, setEmployeeCountLoading] = useState(true);
   const [agreements, setAgreements] = useState([]);
   const [pos, setPos] = useState([]);
   const [organization, setOrganization] = useState({});
@@ -345,10 +681,53 @@ function Dashboard({ onLogout, currentUser = null }) {
     readRecruitmentJSON(RECRUITMENT_OFFER_KEY)
   );
 
+  const loadTenantEmployeeCount = async () => {
+    try {
+      setEmployeeCountLoading(true);
+
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+
+      if (!user?.id) {
+        setEmployeeCount(0);
+        return;
+      }
+
+      const { data: membership, error: membershipError } = await supabase
+        .from("organization_users")
+        .select("organization_id, status")
+        .eq("user_id", user.id)
+        .eq("status", "Active")
+        .maybeSingle();
+
+      if (membershipError) throw membershipError;
+
+      if (!membership?.organization_id) {
+        setEmployeeCount(0);
+        return;
+      }
+
+      const organizationId = membership.organization_id;
+
+      const { count, error: employeeCountError } = await supabase
+        .from("employees")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId);
+
+      if (employeeCountError) throw employeeCountError;
+
+      setEmployeeCount(Number(count || 0));
+    } catch (error) {
+      console.error("Unable to load tenant employee count:", error);
+      setEmployeeCount(0);
+    } finally {
+      setEmployeeCountLoading(false);
+    }
+  };
+
   const loadVendorDashboardData = () => {
     const employeeRecords = readDashboardEmployeeRecords();
     setEmployees(employeeRecords);
-    setEmployeeCount(employeeRecords.length);
     setAgreements(readDashboardData(AGREEMENT_STORAGE_KEY));
     setPos(readDashboardData(PO_STORAGE_KEY));
     setOrganization(readDashboardData(ORG_STORAGE_KEY));
@@ -356,9 +735,11 @@ function Dashboard({ onLogout, currentUser = null }) {
 
   useEffect(() => {
     loadVendorDashboardData();
+    loadTenantEmployeeCount();
 
     const refresh = () => {
       loadVendorDashboardData();
+      loadTenantEmployeeCount();
       setRecruitmentRequirements(readRecruitmentJSON(RECRUITMENT_REQ_KEY));
       setRecruitmentCandidates(readRecruitmentJSON(RECRUITMENT_CANDIDATE_KEY));
       setRecruitmentInterviews(readRecruitmentJSON(RECRUITMENT_INTERVIEW_KEY));
@@ -399,10 +780,13 @@ function Dashboard({ onLogout, currentUser = null }) {
   );
 
   const handleMenu = (name) => {
+    if (!canAccessMenu(name)) return;
+
     if (currentUser?.role === "Employee" && name !== "Self Service") {
-      setActiveMenu("Self Service");
+      if (canAccessMenu("Self Service")) setActiveMenu("Self Service");
       return;
     }
+
     setActiveMenu(name);
     if (window.innerWidth < 900) setSidebarOpen(false);
   };
@@ -700,6 +1084,12 @@ function Dashboard({ onLogout, currentUser = null }) {
 
   const isEmployee = currentUser?.role === "Employee";
 
+  useEffect(() => {
+    if (!canAccessMenu(activeMenu)) {
+      setActiveMenu(firstAllowedMenu);
+    }
+  }, [activeMenu, firstAllowedMenu]);
+
   const pmsRole = useMemo(() => {
     const role = String(currentUser?.role || "").trim().toLowerCase();
 
@@ -753,6 +1143,7 @@ function Dashboard({ onLogout, currentUser = null }) {
 
         <nav className="sidebar-nav">
           {menuItems
+            .filter((item) => canAccessMenu(item.name))
             .filter(
               (item) => !isEmployee || item.name === "Self Service"
             )
@@ -777,7 +1168,7 @@ function Dashboard({ onLogout, currentUser = null }) {
                     ) && (
                       <span className="menu-badge">
                         {item.name === "Employees"
-                          ? employeeCount.toLocaleString("en-IN")
+                          ? (employeeCountLoading ? "…" : employeeCount.toLocaleString("en-IN"))
                           : recruitmentBadgeCount.toLocaleString("en-IN")}
                       </span>
                     )}
@@ -915,9 +1306,11 @@ function Dashboard({ onLogout, currentUser = null }) {
           ) : activeMenu === "Employees" ? (
             <Employees />
           ) : activeMenu === "Leave" ? (
-            <Leave employees={employees} />
-          ) : activeMenu === "Payroll" ? (
-            <Payroll />
+  <Leave employees={employees} />
+) : activeMenu === "Force Leave" ? (
+  <ForceLeave employees={employees} currentUser={currentUser}/>
+) : activeMenu === "Payroll" ? (
+  <Payroll />
           ) : activeMenu === "Recruitment" ? (
             <Recruitment employees={employees} masters={organization} />
           ) : activeMenu === "Self Service" ? (
@@ -983,13 +1376,13 @@ function Dashboard({ onLogout, currentUser = null }) {
                     <label>Financial year</label>
                     <select
                       value={financialYear}
-                      onChange={(event) =>
-                        setFinancialYear(event.target.value)
-                      }
+                      onChange={(event) => setFinancialYear(event.target.value)}
                     >
-                      <option>2026-27</option>
-                      <option>2025-26</option>
-                      <option>2024-25</option>
+                      {dashboardFinancialYearOptions.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="filter-field">
@@ -998,10 +1391,11 @@ function Dashboard({ onLogout, currentUser = null }) {
                       value={month}
                       onChange={(event) => setMonth(event.target.value)}
                     >
-                      <option>Aug-2026</option>
-                      <option>Jul-2026</option>
-                      <option>Jun-2026</option>
-                      <option>May-2026</option>
+                      {dashboardMonthOptions.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -1235,6 +1629,7 @@ function Dashboard({ onLogout, currentUser = null }) {
                   </div>
 
                   <div className="quick-actions-grid">
+                    {hasPermission("employees.view") && (
                     <button type="button" onClick={() => handleMenu("Employees")}>
                       <span className="quick-action-icon purple">
                         <Icon name="user-plus" size={18} />
@@ -1245,7 +1640,9 @@ function Dashboard({ onLogout, currentUser = null }) {
                       </span>
                       <Icon name="arrow" size={13} />
                     </button>
+                    )}
 
+                    {hasPermission("attendance.view") && (
                     <button
                       type="button"
                       onClick={() => handleMenu("Attendance")}
@@ -1259,7 +1656,9 @@ function Dashboard({ onLogout, currentUser = null }) {
                       </span>
                       <Icon name="arrow" size={13} />
                     </button>
+                    )}
 
+                    {hasPermission("leave.view") && (
                     <button type="button" onClick={() => handleMenu("Leave")}>
                       <span className="quick-action-icon green">
                         <Icon name="calendar" size={18} />
@@ -1270,7 +1669,9 @@ function Dashboard({ onLogout, currentUser = null }) {
                       </span>
                       <Icon name="arrow" size={13} />
                     </button>
+                    )}
 
+                    {hasPermission("payroll.view") && (
                     <button type="button" onClick={() => handleMenu("Payroll")}>
                       <span className="quick-action-icon orange">
                         <Icon name="wallet" size={18} />
@@ -1281,6 +1682,7 @@ function Dashboard({ onLogout, currentUser = null }) {
                       </span>
                       <Icon name="arrow" size={13} />
                     </button>
+                    )}
                   </div>
                 </article>
 
@@ -1294,8 +1696,10 @@ function Dashboard({ onLogout, currentUser = null }) {
                   </div>
 
                   <div className="module-grid">
-                    {filteredApps.slice(0, 8).map(
-                      ([name, description, icon, color]) => (
+                    {filteredApps
+                      .filter(([name]) => canAccessMenu(name))
+                      .slice(0, 8)
+                      .map(([name, description, icon, color]) => (
                         <button
                           type="button"
                           className="module-card"

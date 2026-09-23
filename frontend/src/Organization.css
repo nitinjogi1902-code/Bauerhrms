@@ -3242,3 +3242,2783 @@
     box-shadow: none !important;
   }
 }
+
+/* =========================================================
+   WORKFORCE CATEGORY MASTER
+   ========================================================= */
+/* Add this block at the END of Organization.css */
+.workforce-category-form{border:1px solid #dbe6ee;border-radius:12px;padding:18px;background:#fff;box-shadow:0 8px 24px rgba(31,67,102,.045);margin-bottom:16px}
+.workforce-category-intro{display:flex;align-items:center;gap:12px;margin:14px 0 16px;padding:12px 14px;border:1px solid #e2e0ee;border-radius:10px;background:#f8f7ff}
+.workforce-category-icon{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:10px;color:#715cf6;background:#ebe8ff}
+.workforce-category-intro strong,.workforce-category-intro span{display:block}.workforce-category-intro strong{color:#2f3852;font-size:12px}.workforce-category-intro span{margin-top:3px;color:#858ca0;font-size:10px;line-height:1.5}
+.workforce-category-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.workforce-category-grid label,.workforce-switch-grid label{color:#53617a;font-size:11px;font-weight:700}
+.workforce-category-grid input,.workforce-category-grid select{width:100%;min-height:38px;margin-top:6px;padding:0 11px;border:1px solid #dfe3ec;border-radius:8px;background:#fff;color:#2f3852;font-size:12px}
+.workforce-switch-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}.workforce-switch-grid .policy-toggle{min-height:52px;padding:10px 12px;border:1px solid #e6e3ef;border-radius:9px;background:#faf9ff}
+.workforce-master-table .table-subtext{display:block;margin-top:3px;color:#8a93a5;font-size:9px}.workforce-master-table td{vertical-align:middle}
+@media (max-width:1050px){.workforce-category-grid,.workforce-switch-grid{grid-template-columns:1fr 1fr}}
+@media (max-width:650px){.workforce-category-grid,.workforce-switch-grid{grid-template-columns:1fr}.workforce-category-intro{align-items:flex-start}}
+
+/* =========================================================
+   STATUTORY POLICY CONFIGURATION
+   ========================================================= */
+.statutory-policy-form{margin:0 0 22px;padding:24px;border:1px solid rgba(119,93,190,.14);border-radius:20px;background:linear-gradient(180deg,#fff,#fbfaff);box-shadow:0 10px 30px rgba(67,44,120,.06)}
+.statutory-form-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.statutory-form-header span{font-size:11px;font-weight:800;letter-spacing:.12em;color:#8a79b8}
+.statutory-form-header h3{margin:5px 0 0;font-size:22px;color:#29223f}
+.policy-switch{display:flex!important;align-items:center;gap:9px!important;flex-direction:row!important;font-weight:700!important;color:#51466d}
+.policy-switch input{width:18px!important;height:18px!important;accent-color:#7d67c5}
+.statutory-basic-grid{display:grid;grid-template-columns:2fr 1fr 1.2fr;gap:14px;margin-bottom:18px}
+.statutory-basic-grid label,.statutory-fields label,.pt-top-fields label{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:700;color:#5f5577}
+.statutory-basic-grid input,.statutory-fields input,.statutory-fields select,.pt-top-fields input{width:100%;box-sizing:border-box;border:1px solid #e4dff0;background:#fff;border-radius:10px;padding:11px 12px;color:#312941;outline:none}
+.statutory-basic-grid input:focus,.statutory-fields input:focus,.statutory-fields select:focus,.pt-top-fields input:focus{border-color:#9a86d4;box-shadow:0 0 0 3px rgba(127,103,197,.09)}
+.statutory-rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.statutory-rule-card{border:1px solid #e8e2f2;border-radius:16px;padding:18px;background:#fff}
+.statutory-wide-card{grid-column:1/-1}
+.statutory-rule-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.statutory-rule-title b{display:block;font-size:15px;color:#312941}
+.statutory-rule-title small{display:block;margin-top:3px;color:#8a809c;font-size:11px}
+.statutory-rule-title>input{width:18px;height:18px;accent-color:#7d67c5}
+.statutory-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:end}
+.check-field{display:flex!important;flex-direction:row!important;align-items:center;gap:8px!important;padding-bottom:10px}
+.check-field input{width:17px!important;height:17px!important;accent-color:#7d67c5}
+.pt-top-fields{max-width:300px;margin-bottom:15px}
+.pt-slab-table{border:1px solid #ece7f4;border-radius:12px;overflow:hidden}
+.pt-slab-head,.pt-slab-row{display:grid;grid-template-columns:1fr 1fr 1fr 44px;gap:10px;align-items:center;padding:9px 12px}
+.pt-slab-head{background:#f7f4fb;color:#786d8d;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.pt-slab-row{border-top:1px solid #eeeaf5}
+.pt-slab-row input{border:1px solid #e4dff0;border-radius:9px;padding:9px 10px;width:100%;box-sizing:border-box}
+.icon-delete{border:0;background:#f9eef1;color:#a34e67;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer}
+.icon-delete:disabled{opacity:.35;cursor:not-allowed}
+.add-slab-btn{margin-top:12px!important}
+.statutory-master-table{min-width:1050px}
+.statutory-master-table td{vertical-align:middle}
+@media(max-width:900px){.statutory-basic-grid,.statutory-rule-grid{grid-template-columns:1fr}.statutory-wide-card{grid-column:auto}.statutory-fields{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.statutory-form-header{align-items:flex-start;flex-direction:column}.statutory-basic-grid,.statutory-fields{grid-template-columns:1fr}.pt-slab-head,.pt-slab-row{grid-template-columns:1fr 1fr}.pt-slab-head span:nth-child(3),.pt-slab-row input:nth-child(3){grid-column:1}.pt-slab-head span:last-child{display:none}.pt-slab-row .icon-delete{grid-column:2;grid-row:1}}
+
+/* ========================= Salary Rules ========================= */
+.salary-rule-form { display:flex; flex-direction:column; gap:18px; margin-bottom:22px; padding:22px; border:1px solid rgba(111,87,180,.16); border-radius:18px; background:linear-gradient(180deg,#fff 0%,#fbfaff 100%); box-shadow:0 10px 30px rgba(71,52,120,.08); }
+.salary-rule-header { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+.salary-rule-header > div > span { font-size:11px; font-weight:800; letter-spacing:.12em; color:#7c68aa; }
+.salary-rule-header h3 { margin:5px 0 3px; font-size:21px; color:#302650; }
+.salary-rule-header small { color:#766f88; }
+.salary-rule-basic-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+.salary-rule-basic-grid label, .salary-rule-form label { display:flex; flex-direction:column; gap:7px; font-size:12px; font-weight:700; color:#4e4762; }
+.salary-rule-basic-grid input, .salary-rule-basic-grid select, .salary-component-table input, .salary-component-table select { width:100%; border:1px solid #ddd7eb; background:#fff; border-radius:9px; padding:9px 10px; color:#332c45; outline:none; }
+.salary-rule-basic-grid input:focus, .salary-rule-basic-grid select:focus, .salary-component-table input:focus, .salary-component-table select:focus { border-color:#9a82d3; box-shadow:0 0 0 3px rgba(154,130,211,.12); }
+.salary-rule-section { border:1px solid #e6e0f0; border-radius:14px; padding:16px; background:#fff; }
+.salary-rule-section-title { display:flex; align-items:center; justify-content:space-between; gap:15px; margin-bottom:13px; }
+.salary-rule-section-title b { display:block; color:#342b4c; font-size:14px; }
+.salary-rule-section-title small { display:block; margin-top:3px; color:#81798f; font-weight:400; }
+.salary-category-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.salary-category-option { flex-direction:row !important; align-items:center; gap:10px !important; padding:12px; border:1px solid #e5dfef; border-radius:11px; cursor:pointer; background:#fff; transition:.18s ease; }
+.salary-category-option.selected { border-color:#a28ad7; background:#f7f3ff; }
+.salary-category-option input { accent-color:#7659b8; }
+.salary-category-option span { display:flex; flex-direction:column; gap:2px; }
+.salary-category-option small { color:#827a90; font-weight:400; }
+.salary-component-table-wrap { overflow-x:auto; border:1px solid #e9e3f0; border-radius:10px; }
+.salary-component-table { width:100%; min-width:1180px; border-collapse:collapse; }
+.salary-component-table th { background:#f8f6fb; color:#625a72; font-size:10px; text-transform:uppercase; letter-spacing:.05em; padding:10px 7px; text-align:left; }
+.salary-component-table td { padding:8px 7px; border-top:1px solid #eeeaf3; vertical-align:middle; }
+.salary-component-table td > input[type="checkbox"] { width:16px; height:16px; }
+.salary-component-table .icon-delete { border:0; background:#fff0f1; color:#bd5661; border-radius:7px; width:30px; height:30px; font-size:18px; cursor:pointer; }
+.salary-rule-preview { display:flex; flex-direction:column; gap:10px; padding:14px 16px; border-radius:12px; background:#f5f1ff; border:1px solid #e2d8f7; }
+.salary-rule-preview b { color:#392e55; }
+.salary-rule-preview small { display:block; margin-top:3px; color:#776d88; }
+.salary-preview-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.salary-preview-chips span { padding:8px 11px; background:#fff; border:1px solid #e2d8f2; border-radius:9px; color:#5b536c; font-size:12px; }
+.salary-preview-chips b { margin-right:5px; }
+.salary-rules-master-table { min-width:1000px; }
+
+@media (max-width: 1050px) {
+  .salary-rule-basic-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .salary-category-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 650px) {
+  .salary-rule-form { padding:14px; }
+  .salary-rule-basic-grid, .salary-category-grid { grid-template-columns:1fr; }
+  .salary-rule-header, .salary-rule-section-title { flex-direction:column; align-items:stretch; }
+}
+
+/* ================================================================
+   HRSYNC ORGANIZATION — OT POLICIES
+   ================================================================ */
+.ot-policy-form { display:flex; flex-direction:column; gap:18px; }
+.ot-policy-info { display:flex; gap:12px; align-items:flex-start; padding:14px 16px; border:1px solid #e3ddff; border-radius:12px; background:linear-gradient(135deg,#faf9ff,#f4f1ff); color:#4b456b; }
+.ot-policy-info strong { color:#5f4ee7; font-size:13px; white-space:nowrap; }
+.ot-policy-info span { font-size:12px; line-height:1.5; color:#74718a; }
+.ot-policy-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+.ot-policy-grid-4 { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.ot-policy-grid-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.ot-policy-grid label { display:flex; flex-direction:column; gap:7px; font-size:11px; font-weight:700; color:#596078; }
+.ot-policy-grid input,.ot-policy-grid select { width:100%; min-height:38px; border:1px solid #dfddec; border-radius:9px; padding:0 11px; background:#fff; color:#30364d; outline:none; }
+.ot-policy-grid input:focus,.ot-policy-grid select:focus { border-color:#8b7cf6; box-shadow:0 0 0 3px rgba(113,92,246,.1); }
+.ot-policy-section { padding:17px; border:1px solid #e8e5f1; border-radius:13px; background:#fff; }
+.ot-switch-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-top:14px; }
+.ot-switch-grid .policy-toggle { min-height:54px; }
+.ot-policy-master-table { min-width:1250px; }
+.ot-policy-master-table td:nth-child(6),.ot-policy-master-table td:nth-child(7),.ot-policy-master-table td:nth-child(8) { font-weight:800; color:#6554df; }
+@media(max-width:1000px){ .ot-policy-grid,.ot-policy-grid-4{grid-template-columns:repeat(2,minmax(0,1fr));}.ot-switch-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
+@media(max-width:650px){ .ot-policy-grid,.ot-policy-grid-2,.ot-switch-grid{grid-template-columns:1fr;} .ot-policy-info{flex-direction:column;} }
+
+/* =============================================================
+   HRSYNC — DEDUCTION POLICIES
+   Modern lavender organization-master theme
+   ============================================================= */
+.deduction-policy-form { display:flex; flex-direction:column; gap:16px; }
+.deduction-form-header { display:flex; justify-content:space-between; align-items:flex-start; gap:18px; padding:18px 20px; border:1px solid #e3e0f2; border-radius:14px; background:linear-gradient(135deg,#fbfaff,#fff); }
+.deduction-form-header span { display:block; color:#8b7cf6; font-size:9px; font-weight:900; letter-spacing:1.2px; }
+.deduction-form-header h3 { margin:5px 0 4px; color:#30384f; font-size:19px; }
+.deduction-form-header small { color:#8a91a5; font-size:10px; line-height:1.5; }
+.deduction-basic-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; padding:16px; border:1px solid #e7e4f1; border-radius:14px; background:#fff; }
+.deduction-basic-grid label,.deduction-control-grid label,.deduction-rule-row label { display:flex; flex-direction:column; gap:6px; color:#68728a; font-size:10px; font-weight:800; }
+.deduction-basic-grid input,.deduction-basic-grid select,.deduction-control-grid input,.deduction-control-grid select,.deduction-rule-row input,.deduction-rule-row select { width:100%; min-height:38px; padding:0 10px; border:1px solid #ddd9ec; border-radius:9px; background:#fff; color:#30384f; outline:none; font:inherit; font-weight:600; box-sizing:border-box; }
+.deduction-basic-grid input:focus,.deduction-basic-grid select:focus,.deduction-control-grid input:focus,.deduction-control-grid select:focus,.deduction-rule-row input:focus,.deduction-rule-row select:focus { border-color:#8b7cf6; box-shadow:0 0 0 3px rgba(113,92,246,.10); }
+.deduction-policy-section { padding:16px; border:1px solid #e7e4f1; border-radius:14px; background:#fff; }
+.deduction-category-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:12px; }
+.deduction-category-chip { display:flex; align-items:center; gap:9px; padding:11px 12px; border:1px solid #e2deef; border-radius:10px; background:#faf9ff; cursor:pointer; }
+.deduction-category-chip.selected { border-color:#b9affb; background:#f3f1ff; }
+.deduction-category-chip input { accent-color:#715cf6; }
+.deduction-category-chip span { display:flex; flex-direction:column; gap:2px; }
+.deduction-category-chip strong { color:#3d4660; font-size:11px; }
+.deduction-category-chip small { color:#9299aa; font-size:8px; }
+.deduction-control-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px; }
+.deduction-switch-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:12px; }
+.deduction-rule-list { display:flex; flex-direction:column; gap:10px; margin-top:12px; overflow-x:auto; }
+.deduction-rule-row { min-width:1160px; display:grid; grid-template-columns:90px 150px 145px 145px 105px 75px 75px 120px 120px 90px 70px; gap:8px; align-items:end; padding:12px; border:1px solid #e8e5f1; border-radius:11px; background:#fbfaff; }
+.deduction-rule-row .check-field { flex-direction:row; align-items:center; gap:5px; padding-bottom:10px; white-space:nowrap; }
+.deduction-rule-row .check-field input { width:auto; min-height:auto; accent-color:#715cf6; }
+.secondary-small-btn { border:1px solid #d8d3ef; border-radius:8px; background:#f7f5ff; color:#6655d9; padding:8px 11px; font-size:10px; font-weight:800; cursor:pointer; }
+.secondary-small-btn:hover { background:#eeeaff; }
+.deduction-remove { min-height:34px; padding:0 8px; border-radius:8px; cursor:pointer; }
+.deduction-remove:disabled { opacity:.45; cursor:not-allowed; }
+.deduction-policy-master-table { min-width:1180px; }
+.deduction-policy-master-table td:nth-child(2) strong { color:#3c4560; }
+.deduction-policy-master-table td:nth-child(6) { font-weight:800; color:#6655d9; }
+
+@media (max-width:1000px) {
+  .deduction-basic-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .deduction-category-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:650px) {
+  .deduction-form-header { flex-direction:column; }
+  .deduction-basic-grid,.deduction-control-grid,.deduction-switch-grid,.deduction-category-grid { grid-template-columns:1fr; }
+}
+
+
+/* =========================================================
+   PAYROLL CALENDAR — ORGANIZATION MASTER
+   Integrated into Organization; no separate Payroll Calendar module.
+   ========================================================= */
+
+.payroll-calendar-form {
+  margin-bottom: 18px;
+  padding: 20px;
+  border: 1px solid #d9d5f1;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfaff 0%, #f6f4ff 100%);
+  box-shadow: 0 8px 24px rgba(73, 61, 145, .055);
+}
+
+.payroll-calendar-intro {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 13px 15px;
+  border: 1px solid #e5e1fb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.payroll-calendar-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid #ddd8fb;
+  border-radius: 11px;
+  background: #f1efff;
+  color: #715cf6;
+}
+
+.payroll-calendar-intro strong,
+.payroll-calendar-intro span {
+  display: block;
+}
+
+.payroll-calendar-intro strong {
+  color: #3c3564;
+  font-size: 12px;
+}
+
+.payroll-calendar-intro span {
+  margin-top: 4px;
+  color: #85809c;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.payroll-calendar-section {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid #e5e1f0;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.payroll-calendar-section-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 13px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eeeaf7;
+}
+
+.payroll-calendar-section-title b {
+  color: #3d3567;
+  font-size: 12px;
+}
+
+.payroll-calendar-section-title small {
+  color: #9993ad;
+  font-size: 9px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.payroll-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payroll-calendar-grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.payroll-calendar-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #625b7d;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.payroll-calendar-form input,
+.payroll-calendar-form select,
+.payroll-calendar-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d8d4e7;
+  border-radius: 8px;
+  outline: none;
+  background: #fff;
+  color: #40395f;
+  font: inherit;
+  font-size: 11px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.payroll-calendar-form input,
+.payroll-calendar-form select {
+  height: 40px;
+  padding: 0 10px;
+}
+
+.payroll-calendar-form textarea {
+  min-height: 76px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.payroll-calendar-form input:focus,
+.payroll-calendar-form select:focus,
+.payroll-calendar-form textarea:focus {
+  border-color: #9588f2;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.10);
+}
+
+.calendar-full-field {
+  margin-top: 12px;
+}
+
+.calendar-category-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.calendar-category-card {
+  position: relative;
+  min-height: 66px;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px !important;
+  padding: 11px 12px;
+  border: 1px solid #e1deee;
+  border-radius: 10px;
+  background: #fbfaff;
+  cursor: pointer;
+  transition: .15s ease;
+}
+
+.calendar-category-card:hover {
+  border-color: #bcb3f6;
+  transform: translateY(-1px);
+}
+
+.calendar-category-card.selected {
+  border-color: #a69af5;
+  background: linear-gradient(135deg, #f0edff, #faf9ff);
+  box-shadow: inset 0 0 0 1px rgba(113,92,246,.07);
+}
+
+.calendar-category-card input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: #715cf6;
+}
+
+.calendar-category-card span {
+  min-width: 0;
+}
+
+.calendar-category-card strong,
+.calendar-category-card small {
+  display: block;
+}
+
+.calendar-category-card strong {
+  overflow: hidden;
+  color: #403864;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-category-card small {
+  margin-top: 4px;
+  color: #948ea8;
+  font-size: 8px;
+}
+
+.calendar-automation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.payroll-calendar-form .policy-toggle {
+  min-height: 42px;
+  box-sizing: border-box;
+}
+
+.payroll-calendar-form .master-form-actions {
+  margin-top: 18px;
+}
+
+.payroll-calendar-table-wrap {
+  overflow-x: auto;
+}
+
+.payroll-calendar-master-table {
+  min-width: 1250px;
+}
+
+.payroll-calendar-master-table th,
+.payroll-calendar-master-table td {
+  white-space: nowrap;
+}
+
+.payroll-calendar-master-table td:nth-child(2) {
+  min-width: 190px;
+  white-space: normal;
+}
+
+.payroll-calendar-master-table td:nth-child(9) {
+  max-width: 220px;
+  white-space: normal;
+}
+
+.payroll-calendar-master-table .action-column {
+  width: 215px;
+}
+
+/* =========================================================
+   LAVENDER THEME ALIGNMENT
+   Keeps the existing Organization structure but aligns
+   common surfaces with the HRMS lavender visual language.
+   ========================================================= */
+
+.organization-page {
+  background:
+    radial-gradient(circle at 86% 0%, rgba(113,92,246,.075), transparent 27%),
+    radial-gradient(circle at 3% 0%, rgba(141,127,247,.055), transparent 25%),
+    linear-gradient(180deg, #faf9ff 0%, #f7f7fc 100%);
+  color: #2f3852;
+}
+
+.organization-heading h1,
+.master-content-header h2 {
+  color: #2f3852;
+}
+
+.organization-eyebrow {
+  color: #9289ae;
+}
+
+.organization-eyebrow::before {
+  background: linear-gradient(90deg, #715cf6, #8d7ff7);
+}
+
+.primary-action {
+  background: linear-gradient(135deg, #715cf6, #5d4be2);
+  box-shadow: 0 9px 22px rgba(93,75,226,.16);
+}
+
+.primary-action:hover {
+  background: linear-gradient(135deg, #7b69f7, #533fd6);
+}
+
+.secondary-action {
+  background: #f1efff;
+  color: #5d4be2;
+  border-color: #ddd8fb;
+}
+
+.secondary-action:hover {
+  background: #eae7ff;
+  border-color: #cfc8fa;
+}
+
+.master-nav:hover {
+  background: #f6f4ff;
+  color: #5d4be2;
+}
+
+.master-nav.active {
+  background: linear-gradient(90deg, #eeeaff 0%, #f7f6ff 100%);
+  color: #5d4be2;
+  box-shadow: inset 3px 0 0 #715cf6;
+}
+
+.master-nav.active .master-nav-icon {
+  border-color: #d7d0fa;
+  color: #715cf6;
+  background: #fff;
+}
+
+.master-content,
+.master-sidebar {
+  border-color: #e2e0ee;
+  box-shadow: 0 12px 34px rgba(55,45,105,.045);
+}
+
+.master-table th {
+  background: #f5f3fc;
+  border-bottom-color: #e6e2f0;
+  color: #756d8e;
+}
+
+.master-table td {
+  border-bottom-color: #eeeaf5;
+  color: #68617d;
+}
+
+.master-table tbody tr:hover {
+  background: #fbfaff;
+}
+
+.master-search {
+  border-color: #dedbea;
+}
+
+.master-search:focus-within {
+  border-color: #9c91f1;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.09);
+}
+
+.status-pill.active {
+  background: #eaf9f1;
+  color: #168454;
+}
+
+.master-note {
+  border-left-color: #8d7ff7;
+  background: linear-gradient(90deg, #f5f2ff, #faf9ff);
+  color: #85809b;
+}
+
+.master-note strong {
+  color: #554b83;
+}
+
+@media (max-width: 1050px) {
+  .payroll-calendar-grid,
+  .payroll-calendar-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .calendar-category-grid,
+  .calendar-automation-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .payroll-calendar-grid,
+  .payroll-calendar-grid-4,
+  .calendar-category-grid,
+  .calendar-automation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payroll-calendar-section-title {
+    flex-direction: column;
+  }
+
+  .payroll-calendar-section-title small {
+    text-align: left;
+  }
+}
+
+
+/* =====================================================================
+   FINAL FIX — ORGANIZATION MASTER SIDEBAR / PAYROLL CALENDAR VISIBILITY
+   Keeps all existing styles above and only fixes the navigation area.
+   ===================================================================== */
+
+.organization-layout {
+  align-items: stretch !important;
+}
+
+.master-sidebar {
+  height: calc(100vh - 180px) !important;
+  min-height: 520px !important;
+  max-height: calc(100vh - 180px) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+  scrollbar-width: thin;
+  scrollbar-color: #d5d0ea transparent;
+}
+
+.master-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.master-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.master-sidebar::-webkit-scrollbar-thumb {
+  background: #d5d0ea;
+  border-radius: 10px;
+}
+
+.master-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #b9b1dc;
+}
+
+.master-sidebar-title {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  background: rgba(255,255,255,.98) !important;
+}
+
+/* Every master navigation item remains visible/clickable. */
+.master-nav {
+  display: grid !important;
+  flex-shrink: 0 !important;
+  width: 100% !important;
+  min-height: 48px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  white-space: nowrap !important;
+}
+
+/* Explicit Payroll Calendar navigation item. */
+.master-nav-payrollCalendars {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Payroll Calendar keeps the lavender visual language. */
+.payroll-calendar-form {
+  border-color: #d9d5f1 !important;
+  background: linear-gradient(180deg, #fbfaff 0%, #f6f4ff 100%) !important;
+}
+
+.payroll-calendar-master-table {
+  min-width: 1250px !important;
+}
+
+/* Do not let the mobile/tablet media rules collapse the sidebar
+   into a layout where lower masters become difficult to access. */
+@media (max-width: 1100px) {
+  .master-sidebar {
+    height: auto !important;
+    max-height: 520px !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+}
+
+@media (max-width: 800px) {
+  .master-sidebar {
+    max-height: 520px !important;
+    overflow-y: auto !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .master-sidebar {
+    max-height: 520px !important;
+    overflow-y: auto !important;
+  }
+}
+
+/* =====================================================================
+   PRORATION RULES — FINAL UI
+   ===================================================================== */
+.proration-rule-form { border-color:#ddd9eb !important; background:linear-gradient(180deg,#fbfaff 0%,#f6f4ff 100%) !important; }
+.proration-rule-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; margin-top:14px; }
+.proration-rule-grid label,
+.proration-notes-field { display:flex; flex-direction:column; gap:7px; color:#4c566c; font-size:13px; font-weight:600; }
+.proration-rule-grid input,
+.proration-rule-grid select,
+.proration-notes-field textarea { width:100%; box-sizing:border-box; }
+.proration-check-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.proration-notes-field { margin-top:16px; }
+.proration-notes-field textarea { resize:vertical; min-height:78px; }
+.proration-rule-master-table { min-width:1250px !important; }
+@media (max-width:1100px) { .proration-rule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:720px) { .proration-rule-grid,.proration-check-grid { grid-template-columns:1fr; } }
+
+
+/* ==========================================================================
+   HRSYNC ORGANIZATION — FINAL UI CONSISTENCY SYSTEM
+   Visual-only hardening layer.
+   Goal: one typography, one control scale, one grid rhythm, one checkbox size,
+   and consistent lavender enterprise styling across every Organization master.
+   ========================================================================== */
+
+.organization-page,
+.organization-page * {
+  box-sizing: border-box;
+}
+
+.organization-page {
+  --ui-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --ui-text: #34384c;
+  --ui-text-2: #596077;
+  --ui-muted: #8a8fa2;
+  --ui-border: #e2deee;
+  --ui-border-strong: #d7d1e7;
+  --ui-bg: #ffffff;
+  --ui-soft: #faf9ff;
+  --ui-soft-2: #f5f3ff;
+  --ui-primary: #715cf6;
+  --ui-primary-dark: #5d4be2;
+  --ui-primary-soft: #eeeaff;
+  --ui-control-h: 40px;
+  --ui-radius: 9px;
+  font-family: var(--ui-font) !important;
+  font-size: 13px !important;
+  line-height: 1.45;
+  color: var(--ui-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- Typography: one standard throughout Organization ---------- */
+
+.organization-page h1,
+.organization-page h2,
+.organization-page h3,
+.organization-page h4,
+.organization-page p,
+.organization-page span,
+.organization-page small,
+.organization-page label,
+.organization-page button,
+.organization-page input,
+.organization-page select,
+.organization-page textarea,
+.organization-page th,
+.organization-page td {
+  font-family: var(--ui-font) !important;
+}
+
+.organization-page .organization-heading h1 {
+  font-size: 30px !important;
+  line-height: 1.15 !important;
+  font-weight: 750 !important;
+}
+
+.organization-page .organization-heading p {
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+
+.organization-page .organization-eyebrow {
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 800 !important;
+  letter-spacing: 1.7px !important;
+}
+
+.organization-page .master-content-header h2 {
+  font-size: 21px !important;
+  line-height: 1.25 !important;
+  font-weight: 750 !important;
+}
+
+.organization-page .master-content-header p {
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+}
+
+.organization-page .master-sidebar-title {
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  font-weight: 800 !important;
+  letter-spacing: 1.6px !important;
+}
+
+.organization-page .master-nav {
+  font-size: 12px !important;
+  line-height: 1 !important;
+  font-weight: 600 !important;
+}
+
+.organization-page .master-nav.active {
+  font-weight: 700 !important;
+}
+
+.organization-page .master-nav b {
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+}
+
+.organization-page .record-count {
+  font-size: 11px !important;
+}
+
+.organization-page .master-table {
+  font-size: 12px !important;
+}
+
+.organization-page .master-table th {
+  font-size: 10px !important;
+  line-height: 1.25 !important;
+  font-weight: 800 !important;
+  letter-spacing: .45px !important;
+}
+
+.organization-page .master-table td {
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}
+
+.organization-page .master-name {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.organization-page .table-subtext {
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+}
+
+.organization-page .status-pill {
+  min-height: 24px !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 750 !important;
+}
+
+/* ---------- Shared controls: exact same height/weight ---------- */
+
+.organization-page input:not([type="checkbox"]):not([type="radio"]),
+.organization-page select {
+  min-height: var(--ui-control-h) !important;
+  height: var(--ui-control-h) !important;
+  padding: 0 11px !important;
+  border: 1px solid var(--ui-border-strong) !important;
+  border-radius: var(--ui-radius) !important;
+  background: #fff !important;
+  color: var(--ui-text) !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  line-height: 1.2 !important;
+  outline: none !important;
+}
+
+.organization-page textarea {
+  min-height: 78px !important;
+  padding: 10px 11px !important;
+  border: 1px solid var(--ui-border-strong) !important;
+  border-radius: var(--ui-radius) !important;
+  background: #fff !important;
+  color: var(--ui-text) !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  line-height: 1.45 !important;
+  outline: none !important;
+}
+
+.organization-page input:not([type="checkbox"]):not([type="radio"]):focus,
+.organization-page select:focus,
+.organization-page textarea:focus {
+  border-color: #9588f2 !important;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.10) !important;
+}
+
+.organization-page input::placeholder,
+.organization-page textarea::placeholder {
+  color: #a2a5b3 !important;
+  opacity: 1 !important;
+}
+
+/* Date controls need the same height but browser icons must remain usable. */
+.organization-page input[type="date"],
+.organization-page input[type="time"] {
+  padding-right: 9px !important;
+}
+
+/* ---------- Checkbox standard ---------- */
+
+.organization-page input[type="checkbox"],
+.organization-page input[type="radio"] {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex: 0 0 16px !important;
+  accent-color: var(--ui-primary) !important;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.organization-page .policy-switch input,
+.organization-page .policy-toggle input,
+.organization-page .check-field input,
+.organization-page .policy-check input,
+.organization-page .weekoff-day-check input,
+.organization-page .calendar-category-card input,
+.organization-page .statutory-rule-title > input {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  flex: 0 0 16px !important;
+}
+
+/* ---------- Shared labels ---------- */
+
+.organization-page .master-form label,
+.organization-page .policy-grid label,
+.organization-page .shift-form-grid label,
+.organization-page .workforce-category-grid label,
+.organization-page .payroll-calendar-form label,
+.organization-page .proration-rule-grid label,
+.organization-page .salary-rule-basic-grid label,
+.organization-page .deduction-basic-grid label,
+.organization-page .deduction-control-grid label,
+.organization-page .deduction-rule-row label,
+.organization-page .ot-policy-grid label,
+.organization-page .statutory-basic-grid label,
+.organization-page .statutory-fields label,
+.organization-page .pt-top-fields label {
+  color: #596077 !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  font-weight: 650 !important;
+}
+
+.organization-page .master-form label,
+.organization-page .policy-grid label,
+.organization-page .shift-form-grid label,
+.organization-page .workforce-category-grid label,
+.organization-page .payroll-calendar-form label,
+.organization-page .proration-rule-grid label,
+.organization-page .salary-rule-basic-grid label,
+.organization-page .deduction-basic-grid label,
+.organization-page .deduction-control-grid label,
+.organization-page .deduction-rule-row label,
+.organization-page .ot-policy-grid label,
+.organization-page .statutory-basic-grid label,
+.organization-page .statutory-fields label,
+.organization-page .pt-top-fields label {
+  gap: 7px !important;
+}
+
+/* ---------- Master shell ---------- */
+
+.organization-page .master-content {
+  min-width: 0 !important;
+  overflow: hidden;
+}
+
+.organization-page .master-content-header {
+  min-height: 64px;
+}
+
+.organization-page .master-toolbar {
+  min-height: 74px;
+}
+
+.organization-page .master-search {
+  height: 40px !important;
+  min-height: 40px !important;
+}
+
+.organization-page .master-search input {
+  height: auto !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.organization-page .primary-action,
+.organization-page .secondary-action,
+.organization-page .cancel-action {
+  min-height: 40px !important;
+  height: 40px !important;
+  border-radius: 9px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+}
+
+.organization-page .row-actions button {
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+}
+
+/* ---------- Basic / simple masters ---------- */
+
+.organization-page .master-form {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: end !important;
+  gap: 14px !important;
+  padding: 16px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #fbfaff 0%, #f7f5ff 100%) !important;
+}
+
+.organization-page .master-form > div:first-child {
+  min-width: 0;
+}
+
+.organization-page .master-form-actions {
+  align-items: center !important;
+  height: 40px !important;
+}
+
+/* ---------- All policy forms share one outer rhythm ---------- */
+
+.organization-page .policy-form,
+.organization-page .salary-rule-form,
+.organization-page .statutory-policy-form,
+.organization-page .deduction-policy-form,
+.organization-page .workforce-category-form {
+  width: 100% !important;
+  border-color: #e2deee !important;
+  border-radius: 14px !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfaff 100%) !important;
+  box-shadow: 0 8px 24px rgba(55,45,105,.045) !important;
+}
+
+.organization-page .policy-form-title,
+.organization-page .salary-rule-header,
+.organization-page .statutory-form-header,
+.organization-page .deduction-form-header {
+  min-height: 54px;
+}
+
+.organization-page .policy-form-title > div,
+.organization-page .salary-rule-header > div,
+.organization-page .statutory-form-header > div,
+.organization-page .deduction-form-header > div {
+  min-width: 0;
+}
+
+.organization-page .policy-form-title h3,
+.organization-page .salary-rule-header h3,
+.organization-page .statutory-form-header h3,
+.organization-page .deduction-form-header h3 {
+  font-size: 18px !important;
+  line-height: 1.25 !important;
+  font-weight: 750 !important;
+  color: #34304a !important;
+}
+
+.organization-page .policy-form-title > div > span,
+.organization-page .salary-rule-header > div > span,
+.organization-page .statutory-form-header > div > span,
+.organization-page .deduction-form-header > div > span {
+  font-size: 9px !important;
+  line-height: 1.2 !important;
+  font-weight: 850 !important;
+  letter-spacing: 1.4px !important;
+  color: #8a7db7 !important;
+}
+
+.organization-page .policy-form-title small,
+.organization-page .salary-rule-header small,
+.organization-page .statutory-form-header small,
+.organization-page .deduction-form-header small {
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+  color: #8b8fa1 !important;
+}
+
+/* ---------- Section cards / section headings ---------- */
+
+.organization-page .policy-section,
+.organization-page .ot-policy-section,
+.organization-page .deduction-policy-section,
+.organization-page .salary-rule-section,
+.organization-page .payroll-calendar-section,
+.organization-page .statutory-rule-card,
+.organization-page .weekoff-days-panel,
+.organization-page .shift-breaks-panel {
+  border-color: #e4e0ee !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+}
+
+.organization-page .salary-rule-section-title,
+.organization-page .policy-section-title,
+.organization-page .payroll-calendar-section-title,
+.organization-page .weekoff-days-head,
+.organization-page .shift-breaks-head {
+  min-height: 32px;
+}
+
+.organization-page .salary-rule-section-title b,
+.organization-page .policy-section-title b,
+.organization-page .payroll-calendar-section-title b {
+  font-size: 13px !important;
+  line-height: 1.3 !important;
+  font-weight: 750 !important;
+  color: #3e3a55 !important;
+}
+
+.organization-page .salary-rule-section-title small,
+.organization-page .policy-section-title small,
+.organization-page .payroll-calendar-section-title small {
+  font-size: 10px !important;
+  line-height: 1.45 !important;
+  color: #9498a9 !important;
+}
+
+/* ---------- Workforce Category ---------- */
+
+.organization-page .workforce-category-form {
+  padding: 18px !important;
+}
+
+.organization-page .workforce-category-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.organization-page .workforce-category-grid input,
+.organization-page .workforce-category-grid select {
+  margin-top: 0 !important;
+}
+
+.organization-page .workforce-category-intro {
+  min-height: 62px !important;
+  margin: 0 0 16px !important;
+  padding: 11px 13px !important;
+}
+
+.organization-page .workforce-category-intro strong,
+.organization-page .workforce-category-intro span {
+  font-size: 11px !important;
+}
+
+.organization-page .workforce-category-intro span {
+  font-size: 10px !important;
+}
+
+.organization-page .workforce-switch-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.organization-page .workforce-switch-grid .policy-toggle {
+  min-height: 48px !important;
+  height: auto !important;
+  padding: 10px 11px !important;
+}
+
+/* ---------- Proration Rules ---------- */
+
+.organization-page .proration-rule-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  margin-top: 14px !important;
+}
+
+.organization-page .proration-rule-grid input,
+.organization-page .proration-rule-grid select {
+  margin-top: 0 !important;
+}
+
+.organization-page .proration-check-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.organization-page .proration-check-grid .policy-toggle {
+  min-height: 48px !important;
+  height: auto !important;
+}
+
+/* ---------- Payroll Profile ---------- */
+
+.organization-page .payroll-profile-form {
+  padding: 18px !important;
+}
+
+.organization-page .payroll-profile-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+/* ---------- Salary Rules ---------- */
+
+.organization-page .salary-rule-form {
+  padding: 18px !important;
+}
+
+.organization-page .salary-rule-basic-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.organization-page .salary-category-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.organization-page .salary-category-option {
+  min-height: 62px !important;
+  height: auto !important;
+  padding: 10px 12px !important;
+  gap: 9px !important;
+  border-radius: 10px !important;
+}
+
+.organization-page .salary-category-option strong,
+.organization-page .deduction-category-chip strong {
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  font-weight: 700 !important;
+}
+
+.organization-page .salary-category-option small,
+.organization-page .deduction-category-chip small {
+  margin-top: 3px !important;
+  font-size: 9px !important;
+  line-height: 1.3 !important;
+}
+
+.organization-page .salary-component-table-wrap {
+  width: 100% !important;
+  overflow-x: auto !important;
+  border-radius: 10px !important;
+}
+
+.organization-page .salary-component-table {
+  min-width: 980px !important;
+  width: 100% !important;
+}
+
+.organization-page .salary-component-table th {
+  height: 38px !important;
+  padding: 8px 9px !important;
+  font-size: 9px !important;
+}
+
+.organization-page .salary-component-table td {
+  padding: 8px !important;
+  vertical-align: middle !important;
+}
+
+.organization-page .salary-component-table input,
+.organization-page .salary-component-table select {
+  height: 36px !important;
+  min-height: 36px !important;
+  font-size: 11px !important;
+  padding: 0 8px !important;
+}
+
+.organization-page .salary-component-table input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+}
+
+.organization-page .salary-preview-chips span {
+  font-size: 10px !important;
+}
+
+/* ---------- Statutory Policies ---------- */
+
+.organization-page .statutory-policy-form {
+  padding: 20px !important;
+}
+
+.organization-page .statutory-basic-grid {
+  grid-template-columns: 2fr 1fr 1.2fr !important;
+  gap: 14px !important;
+}
+
+.organization-page .statutory-fields {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.organization-page .statutory-rule-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.organization-page .statutory-rule-title b {
+  font-size: 14px !important;
+  line-height: 1.3 !important;
+  font-weight: 750 !important;
+}
+
+.organization-page .statutory-rule-title small {
+  font-size: 10px !important;
+}
+
+.organization-page .pt-slab-head,
+.organization-page .pt-slab-row {
+  min-height: 40px !important;
+}
+
+.organization-page .pt-slab-head {
+  font-size: 9px !important;
+}
+
+.organization-page .pt-slab-row input {
+  height: 36px !important;
+  min-height: 36px !important;
+}
+
+/* ---------- Deduction Policies ---------- */
+
+.organization-page .deduction-policy-form {
+  gap: 14px !important;
+}
+
+.organization-page .deduction-basic-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  padding: 16px !important;
+}
+
+.organization-page .deduction-category-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.organization-page .deduction-category-chip {
+  min-height: 60px !important;
+  height: auto !important;
+  padding: 10px 11px !important;
+  gap: 9px !important;
+}
+
+.organization-page .deduction-control-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.organization-page .deduction-switch-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.organization-page .deduction-switch-grid .policy-toggle {
+  min-height: 48px !important;
+  height: auto !important;
+}
+
+.organization-page .deduction-rule-list {
+  width: 100% !important;
+  overflow-x: auto !important;
+}
+
+.organization-page .deduction-rule-row {
+  min-width: 1160px !important;
+  min-height: 78px !important;
+  align-items: end !important;
+  padding: 11px !important;
+}
+
+.organization-page .deduction-rule-row input,
+.organization-page .deduction-rule-row select {
+  height: 36px !important;
+  min-height: 36px !important;
+  font-size: 10px !important;
+}
+
+.organization-page .deduction-rule-row .check-field {
+  min-height: 36px !important;
+  padding-bottom: 0 !important;
+  align-items: center !important;
+}
+
+/* ---------- OT Policies ---------- */
+
+.organization-page .ot-policy-form {
+  gap: 14px !important;
+}
+
+.organization-page .ot-policy-info {
+  min-height: 52px !important;
+  align-items: center !important;
+  padding: 12px 14px !important;
+}
+
+.organization-page .ot-policy-info strong {
+  font-size: 11px !important;
+}
+
+.organization-page .ot-policy-info span {
+  font-size: 11px !important;
+}
+
+.organization-page .ot-policy-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.organization-page .ot-policy-grid .policy-toggle {
+  min-height: 40px !important;
+  height: 40px !important;
+  padding: 0 11px !important;
+}
+
+.organization-page .ot-policy-section {
+  padding: 15px !important;
+}
+
+.organization-page .ot-switch-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.organization-page .ot-switch-grid .policy-toggle {
+  min-height: 48px !important;
+  height: auto !important;
+}
+
+/* ---------- Payroll Calendar ---------- */
+
+.organization-page .payroll-calendar-form {
+  padding: 18px !important;
+}
+
+.organization-page .payroll-calendar-grid,
+.organization-page .payroll-calendar-grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.organization-page .payroll-calendar-section {
+  padding: 15px !important;
+  margin-top: 12px !important;
+}
+
+.organization-page .calendar-category-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.organization-page .calendar-category-card {
+  min-height: 62px !important;
+  height: auto !important;
+  padding: 10px 11px !important;
+}
+
+.organization-page .calendar-category-card strong {
+  font-size: 10px !important;
+}
+
+.organization-page .calendar-category-card small {
+  font-size: 9px !important;
+}
+
+.organization-page .calendar-automation-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.organization-page .payroll-calendar-form .policy-toggle {
+  min-height: 48px !important;
+  height: auto !important;
+}
+
+/* ---------- Shift ---------- */
+
+.organization-page .shift-form {
+  padding: 18px !important;
+}
+
+.organization-page .shift-form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.organization-page .shift-form-grid input,
+.organization-page .shift-form-grid select {
+  height: 40px !important;
+  min-height: 40px !important;
+}
+
+.organization-page .shift-break-row input {
+  height: 36px !important;
+  min-height: 36px !important;
+}
+
+.organization-page .shift-calculation-strip span {
+  font-size: 10px !important;
+}
+
+/* ---------- Leave / Comp Off ---------- */
+
+.organization-page .leave-editor-grid,
+.organization-page .leave-editor-grid-4 {
+  gap: 14px !important;
+}
+
+.organization-page .leave-editor-grid input,
+.organization-page .leave-editor-grid select,
+.organization-page .leave-editor-grid textarea,
+.organization-page .leave-type-editor input,
+.organization-page .leave-type-editor select {
+  font-size: 11px !important;
+}
+
+.organization-page .leave-policy-head,
+.organization-page .leave-policy-head-v2,
+.organization-page .leave-policy-row,
+.organization-page .leave-policy-row-v2 {
+  font-size: 11px !important;
+}
+
+.organization-page .leave-add-button,
+.organization-page .secondary-small-btn,
+.organization-page .secondary-small-btn {
+  height: 34px !important;
+  min-height: 34px !important;
+  font-size: 10px !important;
+  font-weight: 750 !important;
+}
+
+/* ---------- Week-Off ---------- */
+
+.organization-page .weekoff-policy-intro {
+  min-height: 62px !important;
+}
+
+.organization-page .weekoff-day-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  gap: 9px !important;
+}
+
+.organization-page .weekoff-day-card {
+  min-height: 74px !important;
+  height: auto !important;
+}
+
+.organization-page .weekoff-day-name {
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+}
+
+.organization-page .weekoff-day-status {
+  font-size: 8px !important;
+}
+
+/* ---------- Common toggle/card alignment ---------- */
+
+.organization-page .policy-toggle,
+.organization-page .policy-switch,
+.organization-page .check-field {
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+}
+
+.organization-page .policy-toggle {
+  justify-content: space-between !important;
+}
+
+.organization-page .policy-switch {
+  justify-content: flex-start !important;
+  min-height: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+}
+
+.organization-page .policy-toggle span,
+.organization-page .policy-switch span,
+.organization-page .check-field span {
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  font-weight: 650 !important;
+}
+
+.organization-page .policy-check-grid {
+  align-items: stretch !important;
+}
+
+.organization-page .policy-check {
+  min-height: 48px !important;
+  height: auto !important;
+  align-items: center !important;
+}
+
+/* ---------- Actions / buttons ---------- */
+
+.organization-page .policy-form-actions,
+.organization-page .leave-editor-actions,
+.organization-page .master-form-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 9px !important;
+}
+
+.organization-page .policy-form-actions button,
+.organization-page .leave-editor-actions button {
+  height: 40px !important;
+  min-height: 40px !important;
+  border-radius: 9px !important;
+  font-size: 11px !important;
+  font-weight: 750 !important;
+}
+
+/* ---------- Table visual rhythm ---------- */
+
+.organization-page .master-table-wrap {
+  width: 100% !important;
+  overflow-x: auto !important;
+  border-color: #e3dfed !important;
+  border-radius: 11px !important;
+}
+
+.organization-page .master-table th,
+.organization-page .master-table td {
+  vertical-align: middle !important;
+}
+
+.organization-page .master-table th {
+  height: 42px !important;
+  padding: 9px 12px !important;
+}
+
+.organization-page .master-table td {
+  min-height: 48px !important;
+  padding: 11px 12px !important;
+}
+
+.organization-page .master-table .row-actions {
+  align-items: center !important;
+  min-height: 32px !important;
+}
+
+.organization-page .action-column {
+  width: 205px !important;
+}
+
+/* ---------- Keep sidebar readable while preserving scroll ---------- */
+
+.organization-page .master-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbc5df transparent;
+}
+
+.organization-page .master-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.organization-page .master-sidebar::-webkit-scrollbar-thumb {
+  background: #cbc5df;
+  border-radius: 99px;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1200px) {
+  .organization-page .payroll-calendar-grid,
+  .organization-page .payroll-calendar-grid-4,
+  .organization-page .workforce-category-grid,
+  .organization-page .salary-rule-basic-grid,
+  .organization-page .deduction-basic-grid,
+  .organization-page .ot-policy-grid,
+  .organization-page .payroll-profile-grid,
+  .organization-page .proration-rule-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .organization-page .statutory-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .organization-page .calendar-category-grid,
+  .organization-page .calendar-automation-grid,
+  .organization-page .workforce-switch-grid,
+  .organization-page .salary-category-grid,
+  .organization-page .deduction-category-grid,
+  .organization-page .ot-switch-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .organization-page .weekoff-day-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 1050px) {
+  .organization-page .organization-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .organization-page .master-sidebar {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: 430px !important;
+  }
+
+  .organization-page .master-sidebar {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+  }
+
+  .organization-page .master-sidebar-title {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .organization-page {
+    padding: 20px 14px 36px !important;
+  }
+
+  .organization-page .organization-heading h1 {
+    font-size: 26px !important;
+  }
+
+  .organization-page .organization-heading,
+  .organization-page .master-content-header {
+    gap: 14px !important;
+  }
+
+  .organization-page .master-form,
+  .organization-page .workforce-category-grid,
+  .organization-page .salary-rule-basic-grid,
+  .organization-page .deduction-basic-grid,
+  .organization-page .deduction-control-grid,
+  .organization-page .ot-policy-grid,
+  .organization-page .payroll-calendar-grid,
+  .organization-page .payroll-calendar-grid-4,
+  .organization-page .payroll-profile-grid,
+  .organization-page .proration-rule-grid,
+  .organization-page .statutory-basic-grid,
+  .organization-page .statutory-fields,
+  .organization-page .salary-category-grid,
+  .organization-page .deduction-category-grid,
+  .organization-page .workforce-switch-grid,
+  .organization-page .calendar-category-grid,
+  .organization-page .calendar-automation-grid,
+  .organization-page .ot-switch-grid,
+  .organization-page .weekoff-day-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .organization-page .master-form {
+    align-items: stretch !important;
+  }
+
+  .organization-page .master-form-actions,
+  .organization-page .policy-form-actions,
+  .organization-page .leave-editor-actions {
+    width: 100% !important;
+    justify-content: stretch !important;
+  }
+
+  .organization-page .master-form-actions > *,
+  .organization-page .policy-form-actions > *,
+  .organization-page .leave-editor-actions > * {
+    flex: 1 1 auto !important;
+  }
+
+  .organization-page .master-sidebar {
+    grid-template-columns: 1fr !important;
+    max-height: 420px !important;
+  }
+
+  .organization-page .master-sidebar-title {
+    grid-column: auto !important;
+  }
+
+  .organization-page .master-content {
+    padding: 18px !important;
+  }
+
+  .organization-page .weekoff-day-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .organization-page .master-content {
+    padding: 15px !important;
+  }
+
+  .organization-page .organization-heading h1 {
+    font-size: 23px !important;
+  }
+
+  .organization-page .master-content-header h2 {
+    font-size: 19px !important;
+  }
+
+  .organization-page .primary-action,
+  .organization-page .secondary-action,
+  .organization-page .cancel-action {
+    width: 100% !important;
+  }
+}
+
+/* ==========================================================================
+   END FINAL UI CONSISTENCY SYSTEM
+   ========================================================================== */
+
+/* =====================================================================
+   HRSYNC ORGANIZATION — FINAL ALIGNMENT / OVERFLOW FIX
+   Purpose: correct the final cascade that was forcing form labels into
+   horizontal rows and causing controls, checkboxes and actions to touch
+   or overflow their containers.
+   ===================================================================== */
+
+.organization-page {
+  --ui-font: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --ui-text: #403a55;
+  --ui-muted: #817a91;
+  --ui-label: #625a76;
+  --ui-border: #ddd8ec;
+  --ui-primary: #765cf0;
+  --ui-primary-soft: #f5f2ff;
+  --ui-control-h: 40px;
+  font-family: var(--ui-font) !important;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+
+.organization-page * {
+  font-family: inherit;
+}
+
+/* ---------------- Form labels: ALWAYS label above control ---------------- */
+.organization-page .master-form > div,
+.organization-page .master-form label,
+.organization-page .policy-grid > label,
+.organization-page .shift-form-grid > label,
+.organization-page .workforce-category-grid > label,
+.organization-page .payroll-profile-grid > label,
+.organization-page .payroll-calendar-grid > label,
+.organization-page .payroll-calendar-grid-4 > label,
+.organization-page .proration-rule-grid > label,
+.organization-page .proration-notes-field,
+.organization-page .salary-rule-basic-grid > label,
+.organization-page .deduction-basic-grid > label,
+.organization-page .deduction-control-grid > label,
+.organization-page .statutory-basic-grid > label,
+.organization-page .statutory-fields > label,
+.organization-page .pt-top-fields > label,
+.organization-page .ot-policy-grid > label,
+.organization-page .leave-editor-grid > label,
+.organization-page .leave-editor-grid-4 > label,
+.organization-page .leave-type-editor > label,
+.organization-page .weekoff-policy-form label {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  color: var(--ui-label) !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  font-weight: 700 !important;
+}
+
+/* Keep form controls visually detached from their labels. */
+.organization-page .master-form label > input,
+.organization-page .master-form label > select,
+.organization-page .master-form label > textarea,
+.organization-page .policy-grid label > input,
+.organization-page .policy-grid label > select,
+.organization-page .shift-form-grid label > input,
+.organization-page .shift-form-grid label > select,
+.organization-page .workforce-category-grid label > input,
+.organization-page .workforce-category-grid label > select,
+.organization-page .payroll-profile-grid label > input,
+.organization-page .payroll-profile-grid label > select,
+.organization-page .payroll-calendar-grid label > input,
+.organization-page .payroll-calendar-grid label > select,
+.organization-page .payroll-calendar-grid-4 label > input,
+.organization-page .payroll-calendar-grid-4 label > select,
+.organization-page .proration-rule-grid label > input,
+.organization-page .proration-rule-grid label > select,
+.organization-page .proration-notes-field > textarea,
+.organization-page .salary-rule-basic-grid label > input,
+.organization-page .salary-rule-basic-grid label > select,
+.organization-page .deduction-basic-grid label > input,
+.organization-page .deduction-basic-grid label > select,
+.organization-page .deduction-control-grid label > input,
+.organization-page .deduction-control-grid label > select,
+.organization-page .statutory-basic-grid label > input,
+.organization-page .statutory-basic-grid label > select,
+.organization-page .statutory-fields label > input,
+.organization-page .statutory-fields label > select,
+.organization-page .pt-top-fields label > input,
+.organization-page .pt-top-fields label > select,
+.organization-page .ot-policy-grid label > input,
+.organization-page .ot-policy-grid label > select,
+.organization-page .leave-editor-grid label > input,
+.organization-page .leave-editor-grid label > select,
+.organization-page .leave-editor-grid label > textarea,
+.organization-page .leave-editor-grid-4 label > input,
+.organization-page .leave-editor-grid-4 label > select,
+.organization-page .leave-editor-grid-4 label > textarea {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: var(--ui-control-h) !important;
+  min-height: var(--ui-control-h) !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+}
+
+.organization-page .proration-notes-field > textarea,
+.organization-page .leave-editor-grid label > textarea,
+.organization-page .leave-editor-grid-4 label > textarea {
+  height: auto !important;
+  min-height: 82px !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+/* ---------------- Common control typography ---------------- */
+.organization-page input:not([type="checkbox"]):not([type="radio"]),
+.organization-page select,
+.organization-page textarea {
+  font-family: var(--ui-font) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  color: var(--ui-text) !important;
+  border: 1px solid var(--ui-border) !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  outline: none !important;
+}
+
+.organization-page input:not([type="checkbox"]):not([type="radio"]),
+.organization-page select {
+  padding: 0 11px !important;
+}
+
+.organization-page textarea {
+  padding: 10px 11px !important;
+}
+
+.organization-page input:not([type="checkbox"]):not([type="radio"]):focus,
+.organization-page select:focus,
+.organization-page textarea:focus {
+  border-color: #9b88ee !important;
+  box-shadow: 0 0 0 3px rgba(118, 92, 240, .09) !important;
+}
+
+/* ---------------- Checkbox labels: horizontal and properly spaced ---------------- */
+.organization-page .policy-check,
+.organization-page .check-field,
+.organization-page .policy-switch,
+.organization-page .policy-toggle,
+.organization-page .weekoff-day-check,
+.organization-page .calendar-category-card,
+.organization-page .salary-category-option,
+.organization-page .deduction-category-chip {
+  box-sizing: border-box !important;
+}
+
+.organization-page .policy-check,
+.organization-page .check-field,
+.organization-page .policy-switch {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  white-space: normal !important;
+}
+
+.organization-page .policy-check input,
+.organization-page .check-field input,
+.organization-page .policy-switch input,
+.organization-page .policy-toggle input,
+.organization-page .salary-category-option > input,
+.organization-page .deduction-category-chip > input,
+.organization-page .calendar-category-card > input,
+.organization-page .weekoff-day-check > input {
+  flex: 0 0 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.organization-page .policy-check > span,
+.organization-page .check-field > span,
+.organization-page .policy-switch > span {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  color: #625a76 !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  font-weight: 600 !important;
+}
+
+.organization-page .policy-check-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 9px 14px !important;
+  align-items: stretch !important;
+}
+
+.organization-page .policy-check-grid .policy-check {
+  min-height: 42px !important;
+  padding: 9px 11px !important;
+  border: 1px solid #e6e1f0 !important;
+  border-radius: 9px !important;
+  background: #fcfbff !important;
+}
+
+.organization-page .policy-check-grid .policy-check:hover {
+  border-color: #cfc5ed !important;
+  background: #f8f6ff !important;
+}
+
+/* ---------------- Workforce / category cards ---------------- */
+.organization-page .salary-category-option,
+.organization-page .deduction-category-chip,
+.organization-page .calendar-category-card {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+.organization-page .salary-category-option > span,
+.organization-page .deduction-category-chip > span,
+.organization-page .calendar-category-card > span {
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+}
+
+/* ---------------- Payroll Profile: clean 4-column form ---------------- */
+.organization-page .payroll-profile-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+  align-items: start !important;
+}
+
+.organization-page .payroll-profile-grid > label {
+  min-width: 0 !important;
+}
+
+/* ---------------- Proration: clean 4-column form + separated check rows ---------------- */
+.organization-page .proration-rule-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+  align-items: start !important;
+}
+
+.organization-page .proration-rule-grid > label {
+  min-width: 0 !important;
+}
+
+.organization-page .proration-check-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+/* ---------------- Deduction rules: contained row, no control overflow ---------------- */
+.organization-page .deduction-rule-list {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  padding: 2px 1px 7px !important;
+}
+
+.organization-page .deduction-rule-row {
+  width: 100% !important;
+  min-width: 1080px !important;
+  display: grid !important;
+  grid-template-columns:
+    82px 130px 128px 128px 82px 60px 62px 104px 118px 92px 72px !important;
+  gap: 8px !important;
+  align-items: end !important;
+  padding: 12px !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+.organization-page .deduction-rule-row > label {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  color: #625a76 !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  font-weight: 700 !important;
+}
+
+.organization-page .deduction-rule-row > label > input,
+.organization-page .deduction-rule-row > label > select {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  margin: 0 !important;
+  padding: 0 8px !important;
+  font-size: 10px !important;
+}
+
+.organization-page .deduction-rule-row > .check-field {
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 2px !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  white-space: normal !important;
+}
+
+.organization-page .deduction-rule-row > .check-field input {
+  flex: 0 0 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+}
+
+.organization-page .deduction-rule-row > .check-field {
+  color: #625a76 !important;
+  font-size: 9px !important;
+  font-weight: 650 !important;
+}
+
+.organization-page .deduction-rule-row .deduction-remove {
+  align-self: end !important;
+  justify-self: stretch !important;
+  width: 100% !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  margin: 0 !important;
+  padding: 0 8px !important;
+  border: 1px solid #e5cbd1 !important;
+  border-radius: 8px !important;
+  background: #fff8f9 !important;
+  color: #b35463 !important;
+  font-family: var(--ui-font) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  box-sizing: border-box !important;
+}
+
+.organization-page .deduction-rule-row .deduction-remove:hover:not(:disabled) {
+  background: #fff0f2 !important;
+  border-color: #dfb7c0 !important;
+  color: #a94354 !important;
+}
+
+.organization-page .deduction-rule-row .deduction-remove:disabled {
+  opacity: .45 !important;
+  cursor: not-allowed !important;
+}
+
+/* ---------------- Salary component table: centered checkboxes and stable cells ---------------- */
+.organization-page .salary-component-table th,
+.organization-page .salary-component-table td {
+  vertical-align: middle !important;
+}
+
+.organization-page .salary-component-table td > input[type="checkbox"] {
+  display: block !important;
+  margin: 0 auto !important;
+}
+
+.organization-page .salary-component-table td:last-child {
+  width: 44px !important;
+  text-align: center !important;
+}
+
+/* ---------------- Tables: status/action columns always share one baseline ---------------- */
+.organization-page .master-table th,
+.organization-page .master-table td {
+  vertical-align: middle !important;
+  line-height: 1.3 !important;
+}
+
+.organization-page .master-table th.action-column,
+.organization-page .master-table td:last-child {
+  min-width: 205px !important;
+  width: 205px !important;
+}
+
+.organization-page .master-table .row-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  min-height: 32px !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+}
+
+.organization-page .master-table .row-actions button {
+  flex: 0 0 auto !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  margin: 0 !important;
+  padding: 0 9px !important;
+  border-radius: 8px !important;
+  line-height: 1 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  box-sizing: border-box !important;
+}
+
+.organization-page .status-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 25px !important;
+  min-height: 25px !important;
+  padding: 0 9px !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+  line-height: 1 !important;
+  font-size: 10px !important;
+  font-weight: 750 !important;
+}
+
+/* ---------------- Section titles / helper text ---------------- */
+.organization-page .policy-section-title,
+.organization-page .salary-rule-section-title b,
+.organization-page .deduction-policy-section .salary-rule-section-title b {
+  font-family: var(--ui-font) !important;
+  color: #403653 !important;
+  font-size: 13px !important;
+  line-height: 1.3 !important;
+  font-weight: 750 !important;
+}
+
+.organization-page .policy-section-title + * {
+  margin-top: 10px !important;
+}
+
+.organization-page .policy-section-title small,
+.organization-page .salary-rule-section-title small,
+.organization-page .deduction-policy-section .salary-rule-section-title small {
+  font-size: 10px !important;
+  line-height: 1.45 !important;
+  color: #8a829b !important;
+  font-weight: 500 !important;
+}
+
+/* ---------------- Policy header switches ---------------- */
+.organization-page .policy-form-title,
+.organization-page .statutory-form-header,
+.organization-page .salary-rule-header,
+.organization-page .deduction-form-header {
+  align-items: center !important;
+}
+
+.organization-page .policy-form-title > .policy-switch,
+.organization-page .statutory-form-header > .policy-switch,
+.organization-page .deduction-form-header > .policy-switch {
+  flex: 0 0 auto !important;
+  min-height: 32px !important;
+  height: 32px !important;
+  padding: 0 10px !important;
+  border: 1px solid #e2ddef !important;
+  border-radius: 8px !important;
+  background: #faf9ff !important;
+}
+
+/* ---------------- Buttons: common visual scale ---------------- */
+.organization-page .primary-action,
+.organization-page .secondary-action,
+.organization-page .cancel-action,
+.organization-page .secondary-small-btn,
+.organization-page .delete-break,
+.organization-page .deduction-remove,
+.organization-page .row-actions button {
+  font-family: var(--ui-font) !important;
+}
+
+/* ---------------- Prevent accidental text/control collision ---------------- */
+.organization-page .master-content,
+.organization-page .master-content-header,
+.organization-page .master-form,
+.organization-page .policy-form,
+.organization-page .salary-rule-form,
+.organization-page .deduction-policy-form,
+.organization-page .statutory-policy-form,
+.organization-page .ot-policy-form,
+.organization-page .payroll-calendar-form,
+.organization-page .payroll-profile-form,
+.organization-page .proration-rule-form,
+.organization-page .policy-section,
+.organization-page .salary-rule-section,
+.organization-page .deduction-policy-section,
+.organization-page .statutory-rule-card {
+  min-width: 0 !important;
+}
+
+.organization-page .master-table-wrap,
+.organization-page .salary-component-table-wrap,
+.organization-page .deduction-rule-list {
+  max-width: 100% !important;
+}
+
+/* ---------------- Responsive ---------------- */
+@media (max-width: 1200px) {
+  .organization-page .payroll-profile-grid,
+  .organization-page .proration-rule-grid,
+  .organization-page .policy-check-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .organization-page .payroll-profile-grid,
+  .organization-page .proration-rule-grid,
+  .organization-page .policy-check-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (max-width: 650px) {
+  .organization-page .payroll-profile-grid,
+  .organization-page .proration-rule-grid,
+  .organization-page .policy-check-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .organization-page .deduction-rule-row {
+    min-width: 1080px !important;
+  }
+}
+
+
+/* =====================================================================
+   HRSYNC ORGANIZATION — FINAL CONTROL & ROW ALIGNMENT PATCH
+   Exact-size controls, protected grid columns, no detached actions.
+   ===================================================================== */
+
+.organization-page input[type="checkbox"],
+.organization-page input[type="radio"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  box-sizing: border-box !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+  flex: 0 0 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1.5px solid #cfc9df !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  vertical-align: middle !important;
+  position: relative !important;
+  cursor: pointer !important;
+  transform: none !important;
+  zoom: 1 !important;
+  accent-color: #765cf0 !important;
+}
+
+.organization-page input[type="radio"] {
+  border-radius: 50% !important;
+}
+
+.organization-page input[type="checkbox"]:checked,
+.organization-page input[type="radio"]:checked {
+  border-color: #765cf0 !important;
+  background-color: #765cf0 !important;
+  box-shadow: inset 0 0 0 1px #765cf0 !important;
+}
+
+.organization-page input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.2 7 11l5-6' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 12px 12px !important;
+}
+
+.organization-page input[type="radio"]:checked {
+  background-image: radial-gradient(circle, #fff 0 3px, transparent 3.2px) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+}
+
+.organization-page input[type="checkbox"]:focus-visible,
+.organization-page input[type="radio"]:focus-visible {
+  outline: 2px solid rgba(118,92,240,.22) !important;
+  outline-offset: 2px !important;
+}
+
+/* Header policy switches: fixed, compact controls. */
+.organization-page .policy-switch,
+.organization-page .policy-switch label {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  width: auto !important;
+  min-width: max-content !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  margin: 0 !important;
+  padding: 0 9px !important;
+  box-sizing: border-box !important;
+  white-space: nowrap !important;
+}
+
+.organization-page .policy-switch input[type="checkbox"] {
+  margin: 0 !important;
+  flex: 0 0 16px !important;
+}
+
+/* Statutory cards: never allow the enable checkbox to inherit field sizing. */
+.organization-page .statutory-rule-title {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  min-height: 40px !important;
+  margin: 0 0 16px !important;
+}
+
+.organization-page .statutory-rule-title > div {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+.organization-page .statutory-rule-title > input[type="checkbox"] {
+  display: block !important;
+  position: relative !important;
+  flex: 0 0 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+  margin: 0 2px 0 0 !important;
+}
+
+/* Statutory inline option checks: label is horizontal, control is never 100%. */
+.organization-page .statutory-fields > .check-field,
+.organization-page .statutory-fields label.check-field {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  box-sizing: border-box !important;
+  padding: 0 4px !important;
+  white-space: nowrap !important;
+}
+
+.organization-page .statutory-fields > .check-field input[type="checkbox"],
+.organization-page .statutory-fields label.check-field input[type="checkbox"] {
+  flex: 0 0 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+}
+
+/* Deduction rule area: the row itself owns the horizontal scroll. */
+.organization-page .deduction-rule-list {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  box-sizing: border-box !important;
+  padding: 4px 8px 10px !important;
+  margin: 0 !important;
+  scrollbar-width: thin;
+}
+
+.organization-page .deduction-rule-row {
+  width: max-content !important;
+  min-width: 1180px !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+  display: grid !important;
+  grid-template-columns: 82px 132px 132px 132px 82px 60px 62px 106px 112px 72px 82px !important;
+  gap: 9px !important;
+  align-items: center !important;
+  padding: 12px !important;
+  margin: 0 0 8px !important;
+  border: 1px solid #e4deef !important;
+  border-radius: 11px !important;
+  background: #fbfaff !important;
+  overflow: visible !important;
+}
+
+.organization-page .deduction-rule-row:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Normal deduction fields remain vertical. */
+.organization-page .deduction-rule-row > label:not(.check-field) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  color: #625a76 !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  font-weight: 700 !important;
+}
+
+.organization-page .deduction-rule-row > label:not(.check-field) > input,
+.organization-page .deduction-rule-row > label:not(.check-field) > select {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 8px !important;
+  font-size: 10px !important;
+}
+
+/* Attendance Based / Active: fixed cells, contained text, no overflow. */
+.organization-page .deduction-rule-row > .check-field {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  margin: 0 !important;
+  padding: 0 2px !important;
+  box-sizing: border-box !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+  color: #625a76 !important;
+  font-size: 9px !important;
+  line-height: 1.2 !important;
+  font-weight: 650 !important;
+}
+
+.organization-page .deduction-rule-row > .check-field input[type="checkbox"] {
+  flex: 0 0 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+}
+
+.organization-page .deduction-rule-row > .check-field::first-line {
+  overflow: hidden !important;
+}
+
+/* Remove button is a real grid cell, not an absolutely-positioned action. */
+.organization-page .deduction-rule-row > .deduction-remove {
+  grid-column: 11 !important;
+  grid-row: 1 !important;
+  align-self: center !important;
+  justify-self: stretch !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 8px !important;
+  box-sizing: border-box !important;
+  border: 1px solid #e2c8ce !important;
+  border-radius: 8px !important;
+  background: #fff8f9 !important;
+  color: #b05262 !important;
+  font-family: var(--ui-font) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+}
+
+.organization-page .deduction-rule-row > .deduction-remove:hover:not(:disabled) {
+  background: #fff0f2 !important;
+  border-color: #d9b2bb !important;
+  color: #a84353 !important;
+}
+
+.organization-page .deduction-rule-row > .deduction-remove:disabled {
+  opacity: .5 !important;
+}
+
+/* Table actions: every action button shares one exact baseline. */
+.organization-page .master-table td:last-child,
+.organization-page .master-table th:last-child {
+  vertical-align: middle !important;
+  white-space: nowrap !important;
+}
+
+.organization-page .master-table .row-actions {
+  height: 32px !important;
+  min-height: 32px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
+}
+
+.organization-page .master-table .row-actions button {
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+}
+
+/* Never let a control extend outside a policy card. */
+.organization-page .statutory-rule-card,
+.organization-page .deduction-rule-row,
+.organization-page .policy-check-grid .policy-check,
+.organization-page .salary-category-option,
+.organization-page .deduction-category-chip,
+.organization-page .calendar-category-card {
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 900px) {
+  .organization-page .deduction-rule-list {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+}
+
+
+/* =====================================================================
+   HRSYNC ORGANIZATION — V4 TABLE ACTION ALIGNMENT FIX
+   Keep table cells as table-cells. Only the buttons form an inline flex row.
+   This prevents Edit / Deactivate / Delete from floating to the top of rows.
+   ===================================================================== */
+
+.organization-page .master-table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.organization-page .master-table tbody tr {
+  vertical-align: middle !important;
+}
+
+.organization-page .master-table td,
+.organization-page .master-table th {
+  vertical-align: middle !important;
+}
+
+/* Critical: .row-actions is also used on normal divs elsewhere.
+   Never turn a TABLE CELL into flex; doing so breaks table row alignment. */
+.organization-page .master-table td.row-actions {
+  display: table-cell !important;
+  width: 250px !important;
+  min-width: 250px !important;
+  max-width: 250px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 12px 14px !important;
+  box-sizing: border-box !important;
+  vertical-align: middle !important;
+  text-align: left !important;
+  white-space: nowrap !important;
+  position: static !important;
+  overflow: visible !important;
+}
+
+/* Buttons themselves are the aligned flex items. */
+.organization-page .master-table td.row-actions > button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  width: auto !important;
+  height: 32px !important;
+  min-width: 0 !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  margin: 0 !important;
+  padding: 0 9px !important;
+  box-sizing: border-box !important;
+  border: 1px solid #ddd7ee !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  color: #5e547c !important;
+  font-family: var(--ui-font, Inter, "Segoe UI", sans-serif) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+  transform: none !important;
+}
+
+.organization-page .master-table td.row-actions > button + button {
+  margin-left: 6px !important;
+}
+
+.organization-page .master-table td.row-actions > button:hover {
+  background: #f7f5ff !important;
+  border-color: #cfc6ec !important;
+  color: #6755c8 !important;
+}
+
+.organization-page .master-table td.row-actions > button.delete-button {
+  border-color: #efcfd5 !important;
+  background: #fff9fa !important;
+  color: #b55363 !important;
+}
+
+.organization-page .master-table td.row-actions > button.delete-button:hover {
+  border-color: #e4b9c1 !important;
+  background: #fff1f3 !important;
+  color: #a54354 !important;
+}
+
+/* Action column heading uses the same vertical rhythm as every other header. */
+.organization-page .master-table th.action-column,
+.organization-page .master-table th:last-child {
+  vertical-align: middle !important;
+  height: auto !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+/* Status and action cells share exactly the same vertical center. */
+.organization-page .master-table td:has(.status-pill),
+.organization-page .master-table td.row-actions {
+  vertical-align: middle !important;
+}
+
+/* Do not let the generic .row-actions rules alter table cells. */
+.organization-page .master-table td.row-actions .row-actions,
+.organization-page .master-table td.row-actions > .row-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+@media (max-width: 900px) {
+  .organization-page .master-table td.row-actions {
+    width: 230px !important;
+    min-width: 230px !important;
+    max-width: 230px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}

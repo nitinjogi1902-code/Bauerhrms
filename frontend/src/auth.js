@@ -1,3 +1,5 @@
+import { supabase } from "./supabaseClient";
+
 const ACCOUNT_KEY = "bauerHrmsUserAccounts";
 const OTP_KEY = "hrms_login_otp";
 
@@ -122,36 +124,55 @@ const clearOtpState = () => {
 
 
 // ======================================================
+// SUPABASE EMPLOYEE ACCOUNT HELPERS
+// ======================================================
+
+const EMPLOYEE_ACCOUNT_FUNCTION = "hrsync-employee-account";
+
+const callEmployeeAccountFunction = async (body) => {
+  const { data, error } = await supabase.functions.invoke(
+    EMPLOYEE_ACCOUNT_FUNCTION,
+    { body }
+  );
+
+  if (error) {
+    throw new Error(
+      error.message || "Employee account service failed."
+    );
+  }
+
+  if (!data?.success) {
+    throw new Error(
+      data?.error || "Employee account service failed."
+    );
+  }
+
+  return data;
+};
+
+// ======================================================
 // GET EMPLOYEE ACCOUNT
 // ======================================================
 
-export const getEmployeeAccount = (
+export const getEmployeeAccount = async (
   employeeInternalId
 ) => {
-  if (!employeeInternalId) {
-    return null;
-  }
+  if (!employeeInternalId) return null;
 
-  return (
-    readAccounts()[
-      String(employeeInternalId)
-    ] || null
-  );
+  return callEmployeeAccountFunction({
+    action: "status",
+    employeeId: String(employeeInternalId),
+  });
 };
 
-
 // ======================================================
-// CREATE EMPLOYEE INVITATION
+// CREATE / SEND EMPLOYEE INVITATION
 // ======================================================
 
-export const createEmployeeInvitation = (
+export const createEmployeeInvitation = async (
   employee
 ) => {
-  const accounts = readAccounts();
-
-  const id = String(
-    employee?.id || ""
-  );
+  const id = String(employee?.id || "").trim();
 
   if (!id) {
     throw new Error(
@@ -166,72 +187,113 @@ export const createEmployeeInvitation = (
 
   if (!email) {
     throw new Error(
-      "Official Email is required."
+      "Official Email is required before sending login credentials."
     );
   }
 
-  const mobile = String(
-    employee?.mobile ||
-      employee?.mobileNumber ||
-      employee?.phone ||
-      employee?.contactNumber ||
+  // Resolve the employee's organization from the employee record.
+  // Do not hard-code an organization ID; HRSYNC is multi-tenant.
+  let organizationId = String(
+    employee?.organizationId ||
+      employee?.organization_id ||
       ""
   ).trim();
 
-  if (!mobile) {
+  if (!organizationId) {
+    const { data: employeeRecord, error: employeeLookupError } =
+      await supabase
+        .from("employees")
+        .select("organization_id")
+        .eq("id", id)
+        .maybeSingle();
+
+    if (employeeLookupError) {
+      throw new Error(
+        employeeLookupError.message ||
+          "Unable to determine the employee organization."
+      );
+    }
+
+    organizationId = String(
+      employeeRecord?.organization_id || ""
+    ).trim();
+  }
+
+  if (!organizationId) {
     throw new Error(
-      "Mobile Number is required before sending an activation invitation."
+      "Organization ID is missing for this employee."
     );
   }
 
-  const token =
-    typeof crypto !== "undefined" &&
-    crypto.randomUUID
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2)}`;
+  return callEmployeeAccountFunction({
+    action: "invite",
+    employeeId: id,
+    organizationId,
+    redirectOrigin: window.location.origin,
+  });
+};
 
-  accounts[id] = {
-    ...(accounts[id] || {}),
+// ======================================================
+// RESEND EMPLOYEE ACTIVATION EMAIL
+// ======================================================
 
-    employeeInternalId: id,
+export const resendEmployeeInvitation = async (employee) => {
+  const id = String(employee?.id || "").trim();
 
-    employeeId:
-      employee?.employeeId ||
-      employee?.employeeCode ||
-      "",
+  if (!id) {
+    throw new Error("Employee internal ID is missing.");
+  }
 
-    employeeName:
-      employee?.name || "",
+  const email = normalize(
+    employee?.officialEmail ||
+      employee?.email
+  );
 
-    email,
+  if (!email) {
+    throw new Error(
+      "Official Email is required before resending login credentials."
+    );
+  }
 
-    mobile,
+  let organizationId = String(
+    employee?.organizationId ||
+      employee?.organization_id ||
+      ""
+  ).trim();
 
-    role: "Employee",
+  if (!organizationId) {
+    const {
+      data: employeeRecord,
+      error: employeeLookupError,
+    } = await supabase
+      .from("employees")
+      .select("organization_id")
+      .eq("id", id)
+      .maybeSingle();
 
-    status: "pending",
+    if (employeeLookupError) {
+      throw new Error(
+        employeeLookupError.message ||
+          "Unable to determine the employee organization."
+      );
+    }
 
-    activationToken: token,
+    organizationId = String(
+      employeeRecord?.organization_id || ""
+    ).trim();
+  }
 
-    activationCreatedAt:
-      new Date().toISOString(),
-  };
+  if (!organizationId) {
+    throw new Error(
+      "Organization ID is missing for this employee."
+    );
+  }
 
-  writeAccounts(accounts);
-
-  const activationUrl =
-    `${window.location.origin}` +
-    `${window.location.pathname}` +
-    `#activate=${encodeURIComponent(
-      token
-    )}`;
-
-  return {
-    activationUrl,
-    account: accounts[id],
-  };
+  return callEmployeeAccountFunction({
+    action: "resend",
+    employeeId: id,
+    organizationId,
+  });
 };
 
 
@@ -243,28 +305,125 @@ export const activateEmployeeAccount = async (
   token,
   password
 ) => {
+  if (!password || password.length < 8) {
+    throw new Error(
+      "Password must be at least 8 characters."
+    );
+  }
+
+  /*
+   * New HRSYNC flow:
+   * Supabase Auth creates the invitation session after the
+   * employee opens the invitation email. The browser then
+   * creates the password and activates organization_users.
+   */
+  const {
+    data: sessionData,
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (!sessionError && sessionData?.session?.user) {
+    const authUser = sessionData.session.user;
+    const employeeId =
+      authUser.user_metadata?.employee_internal_id ||
+      authUser.user_metadata?.employeeId ||
+      authUser.user_metadata?.employee_id ||
+      "";
+
+    if (!employeeId && !token) {
+      throw new Error(
+        "The employee invitation is missing its employee reference."
+      );
+    }
+
+    const { error: passwordError } =
+      await supabase.auth.updateUser({
+        password,
+      });
+
+    if (passwordError) {
+      throw passwordError;
+    }
+
+    const resolvedEmployeeId = String(
+      employeeId || token || ""
+    ).trim();
+
+    if (!resolvedEmployeeId) {
+      throw new Error(
+        "The employee invitation is missing its employee reference."
+      );
+    }
+
+    // Resolve organization from the authenticated user's metadata first.
+    // Fall back to the employee record so the Edge Function always receives
+    // the organization context required by the multi-tenant account flow.
+    let organizationId = String(
+      authUser.user_metadata?.organization_id ||
+        authUser.user_metadata?.organizationId ||
+        ""
+    ).trim();
+
+    if (!organizationId) {
+      const { data: employeeRecord, error: employeeLookupError } =
+        await supabase
+          .from("employees")
+          .select("organization_id")
+          .eq("id", resolvedEmployeeId)
+          .maybeSingle();
+
+      if (employeeLookupError) {
+        throw new Error(
+          employeeLookupError.message ||
+            "Unable to determine the employee organization."
+        );
+      }
+
+      organizationId = String(
+        employeeRecord?.organization_id || ""
+      ).trim();
+    }
+
+    if (!organizationId) {
+      throw new Error(
+        "Organization ID is missing for this employee."
+      );
+    }
+
+    const activation = await callEmployeeAccountFunction({
+      action: "activate",
+      employeeId: resolvedEmployeeId,
+      organizationId,
+    });
+
+    const email =
+      authUser.email || "";
+
+    await supabase.auth.signOut();
+
+    return {
+      email,
+      status: activation.status || "Active",
+    };
+  }
+
+  /*
+   * Backward compatibility for old local activation links.
+   * This path is retained only so existing legacy accounts do
+   * not break immediately while the tenant accounts migrate.
+   */
   const accounts = readAccounts();
 
   const entry = Object.values(
     accounts
   ).find(
     (account) =>
-      account?.activationToken ===
-      token
+      account?.activationToken === token
   );
 
   if (!entry) {
     throw new Error(
       "This activation link is invalid or has expired."
-    );
-  }
-
-  if (
-    !password ||
-    password.length < 8
-  ) {
-    throw new Error(
-      "Password must be at least 8 characters."
     );
   }
 
@@ -277,13 +436,9 @@ export const activateEmployeeAccount = async (
 
   accounts[id] = {
     ...entry,
-
     passwordHash,
-
     status: "active",
-
     activationToken: "",
-
     activatedAt:
       new Date().toISOString(),
   };
@@ -293,13 +448,11 @@ export const activateEmployeeAccount = async (
   return accounts[id];
 };
 
-
 // ======================================================
 // AUTHENTICATE EMPLOYEE
 //
-// IMPORTANT:
-// This only verifies EMAIL + PASSWORD.
-// Login is NOT completed until OTP is verified.
+// Supabase Auth is the primary authentication mechanism.
+// The localStorage path remains only for legacy accounts.
 // ======================================================
 
 export const authenticateEmployee = async (
@@ -308,6 +461,12 @@ export const authenticateEmployee = async (
 ) => {
   const wanted = normalize(email);
 
+  /*
+   * Legacy localStorage authentication only.
+   *
+   * New HRSYNC company users authenticate through the
+   * Supabase Auth flow implemented in Login.jsx.
+   */
   const accounts = readAccounts();
 
   const entry = Object.values(
@@ -318,9 +477,7 @@ export const authenticateEmployee = async (
       wanted
   );
 
-  if (!entry) {
-    return null;
-  }
+  if (!entry) return null;
 
   if (
     entry.status !== "active" ||
@@ -336,35 +493,21 @@ export const authenticateEmployee = async (
       password || ""
     );
 
-  if (
-    hash !== entry.passwordHash
-  ) {
+  if (hash !== entry.passwordHash) {
     return null;
   }
 
-  // Login OTP is temporarily disabled.
-  // Successful email + password validation logs the employee in directly.
   return {
     otpRequired: false,
-
     employee: {
       id: entry.employeeInternalId,
-
-      employeeId:
-        entry.employeeId,
-
-      name:
-        entry.employeeName,
-
-      email:
-        entry.email,
-
-      role:
-        "Employee",
+      employeeId: entry.employeeId,
+      name: entry.employeeName,
+      email: entry.email,
+      role: "Employee",
     },
   };
 };
-
 
 // ======================================================
 // REQUEST LOGIN OTP

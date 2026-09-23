@@ -1,0 +1,57 @@
+.hrsync-date-field {
+  position: relative;
+  width: 100%;
+}
+
+.hrsync-date-display {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 36px 0 11px;
+  border: 1px solid #ddd9eb;
+  border-radius: 9px;
+  background: #fff;
+  color: #34394b;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hrsync-date-display.is-empty {
+  color: #9aa0ae;
+}
+
+.hrsync-date-display:hover,
+.hrsync-date-display:focus {
+  border-color: #8d80f4;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.10);
+}
+
+.hrsync-native-date-picker {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translateY(-50%);
+  opacity: .01;
+  cursor: pointer;
+}
+
+.hrsync-date-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid #ddd9eb;
+  border-radius: 9px;
+  background: #fff;
+  color: #34394b;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.hrsync-date-input:focus {
+  outline: none;
+  border-color: #8d80f4;
+  box-shadow: 0 0 0 3px rgba(113,92,246,.10);
+}

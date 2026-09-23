@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import JSZip from "jszip";
 import * as XLSX from "xlsx";
 import "./employees.css";
-import { createEmployeeInvitation, getEmployeeAccount } from "./auth";
+import { createEmployeeInvitation, getEmployeeAccount, resendEmployeeInvitation } from "./auth";
+import { supabase } from "./supabaseClient";
 
 const ORGANIZATION_STORAGE_KEY = "bauerHrmsOrganizationMasters";
-const EMPLOYEE_STORAGE_KEY = "bauerHrmsEmployees";
+const EMPLOYEE_STORAGE_KEY = "hrsyncEmployeesLegacy";
 const HOD_MAPPING_STORAGE_KEY = "hrms_hod_mappings";
 const DOCUMENT_DB_NAME = "bauerHrmsEmployeeDocuments";
 const DOCUMENT_STORE = "documents";
@@ -101,12 +102,112 @@ function readMasters() {
 }
 
 function readEmployees() {
+  // Employee master is now stored in Supabase and isolated by organization_id.
+  // Keep this helper only for backwards compatibility with old browser data.
   try {
     const saved = localStorage.getItem(EMPLOYEE_STORAGE_KEY);
     return saved ? JSON.parse(saved) : [];
   } catch {
     return [];
   }
+}
+
+function employeeFromDb(row) {
+  const metadata =
+    row?.metadata && typeof row.metadata === "object"
+      ? row.metadata
+      : {};
+
+  return {
+    ...EMPTY_FORM,
+    ...metadata,
+    id: row?.id,
+    organizationId: row?.organization_id || "",
+    employeeId: row?.employee_id || metadata.employeeId || "",
+    name: row?.employee_name || metadata.name || "",
+    officialEmail: row?.email || metadata.officialEmail || "",
+    personalEmail: row?.personal_email || metadata.personalEmail || "",
+    mobile: row?.mobile || metadata.mobile || "",
+    gender: row?.gender || metadata.gender || "Male",
+    dob: row?.date_of_birth || metadata.dob || "",
+    doj: row?.date_of_joining || metadata.doj || "",
+    department: row?.department || metadata.department || "",
+    designation: row?.designation || metadata.designation || "",
+    location: row?.location || metadata.location || "",
+    employmentType: row?.employment_type || metadata.employmentType || "",
+    status: row?.status || metadata.status || "Active",
+    pan: row?.pan || metadata.pan || "",
+    aadhaar: row?.aadhaar_last4 || metadata.aadhaar || "",
+    bankAccountName: row?.bank_account_name || metadata.bankAccountName || "",
+    bankAccountNumber:
+      row?.bank_account_number || metadata.bankAccountNumber || "",
+    bankIfsc: row?.bank_ifsc || metadata.bankIfsc || "",
+    bankName: row?.bank_name || metadata.bankName || "",
+    bankBranch: row?.bank_branch || metadata.bankBranch || "",
+  };
+}
+
+function employeeToDbRow(employee, organizationId) {
+  const {
+    id,
+    organizationId: ignoredOrganizationId,
+    employeeId,
+    name,
+    officialEmail,
+    personalEmail,
+    mobile,
+    gender,
+    dob,
+    doj,
+    department,
+    designation,
+    location,
+    employmentType,
+    status,
+    ...rest
+  } = employee || {};
+
+  /*
+   * Keep the INSERT/UPDATE payload limited to columns that are part of the
+   * current HRSYNC employees schema. Optional Employee Master fields are
+   * stored in metadata so a missing optional database column can never block
+   * saving the employee.
+   */
+  return {
+    ...(id ? { id } : {}),
+    organization_id: organizationId,
+    employee_id: String(employeeId || "").trim(),
+    employee_name: String(name || "").trim(),
+    email: String(officialEmail || "").trim() || null,
+    personal_email: String(personalEmail || "").trim() || null,
+    mobile: String(mobile || "").trim() || null,
+    gender: String(gender || "").trim() || null,
+    date_of_birth: dob || null,
+    date_of_joining: doj || null,
+    department: String(department || "").trim() || null,
+    designation: String(designation || "").trim() || null,
+    location: String(location || "").trim() || null,
+    employment_type: String(employmentType || "").trim() || null,
+    // The current Supabase employees table does not expose a status column.
+    // Keep status inside metadata so the Employee Master can still retain it
+    // without causing a PostgREST schema-cache error.
+    metadata: {
+      ...rest,
+      employeeId,
+      name,
+      officialEmail,
+      personalEmail,
+      mobile,
+      gender,
+      dob,
+      doj,
+      department,
+      designation,
+      location,
+      employmentType,
+      status,
+    },
+  };
 }
 
 function readHodMappings() {
@@ -135,7 +236,7 @@ function downloadHodMappingTemplate() {
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "HOD Mapping");
-  XLSX.writeFile(workbook, "BAUER_HOD_Mapping_Template.xlsx");
+  XLSX.writeFile(workbook, "HRSYNC_HOD_Mapping_Template.xlsx");
 }
 
 async function importHodMappingsFromExcel(file, employees, existingMappings) {
@@ -334,28 +435,49 @@ function calculateGratuity(form) {
     amount,
   };
 }
-function calculateEmployeeQuality(employee) {
+function hasQualityValue(value) {
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
+function calculateEmployeeQuality(employee, employeeDocuments = []) {
   const checks = [];
 
-  const addCheck = (name, fields) => {
+  const addFieldCheck = (name, fields) => {
     const total = fields.length;
-
-    const completed = fields.filter(
-      (field) =>
-        employee[field] !== undefined &&
-        employee[field] !== null &&
-        String(employee[field]).trim() !== ""
-    ).length;
+    const completed = fields.filter((field) => hasQualityValue(employee?.[field])).length;
 
     checks.push({
       name,
       completed,
       total,
       complete: completed === total,
+      type: "data",
     });
   };
 
-  addCheck("Personal Details", [
+  const addDocumentCheck = (name, requiredTypes) => {
+    const documents = Array.isArray(employeeDocuments) ? employeeDocuments : [];
+    const uploadedTypes = new Set(
+      documents
+        .map((doc) => String(doc?.type || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    const completed = requiredTypes.filter((type) =>
+      uploadedTypes.has(String(type).trim().toLowerCase())
+    ).length;
+
+    checks.push({
+      name,
+      completed,
+      total: requiredTypes.length,
+      complete: completed === requiredTypes.length,
+      type: "document",
+    });
+  };
+
+  // Employee Master data checks. These remain independent from document uploads.
+  addFieldCheck("Personal Details", [
     "employeeId",
     "name",
     "fatherName",
@@ -365,7 +487,7 @@ function calculateEmployeeQuality(employee) {
     "officialEmail",
   ]);
 
-  addCheck("Employment Details", [
+  addFieldCheck("Employment Details", [
     "doj",
     "location",
     "employeeGroup",
@@ -374,7 +496,7 @@ function calculateEmployeeQuality(employee) {
     "department",
   ]);
 
-  addCheck("Bank Details", [
+  addFieldCheck("Bank Details", [
     "bankAccountName",
     "bankAccountNumber",
     "bankIfsc",
@@ -382,31 +504,41 @@ function calculateEmployeeQuality(employee) {
     "bankBranch",
   ]);
 
-  addCheck("Statutory Details", [
+  // Statutory master data checks. A PAN document is intentionally NOT treated
+  // as a PAN number; both are separate quality controls.
+  addFieldCheck("Statutory Details", [
     "pan",
     "aadhaar",
     "uan",
     "esic",
   ]);
 
-  const totalFields = checks.reduce(
-    (sum, item) => sum + item.total,
-    0
-  );
+  // Document checks use the actual cloud document metadata returned from
+  // Supabase employee_documents. Uploading PAN Card therefore updates this
+  // section immediately after the preview is opened/refreshed.
+  addDocumentCheck("Employment Documents", [
+    "Appointment / Joining Letter",
+    "Offer Letter",
+    "Educational Certificate",
+    "Experience / Relieving Letter",
+    "Address Proof",
+    "Medical / Fitness Certificate",
+  ]);
 
-  const completedFields = checks.reduce(
-    (sum, item) => sum + item.completed,
-    0
-  );
+  addDocumentCheck("Identity Documents", [
+    "Aadhaar Card",
+    "PAN Card",
+  ]);
 
-  const score = totalFields
-    ? Math.round((completedFields / totalFields) * 100)
-    : 0;
+  addDocumentCheck("Bank Documents", [
+    "Bank Proof / Cancelled Cheque",
+  ]);
 
-  return {
-    score,
-    checks,
-  };
+  const totalFields = checks.reduce((sum, item) => sum + item.total, 0);
+  const completedFields = checks.reduce((sum, item) => sum + item.completed, 0);
+  const score = totalFields ? Math.round((completedFields / totalFields) * 100) : 0;
+
+  return { score, checks };
 }
 function formatINR(value) {
   return `₹${Math.round(value || 0).toLocaleString("en-IN")}`;
@@ -419,75 +551,7 @@ function maskAccount(value) {
   return `${"•".repeat(Math.max(0, s.length - 4))}${s.slice(-4)}`;
 }
 
-function openDocumentDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DOCUMENT_DB_NAME, 1);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(DOCUMENT_STORE)) {
-        const store = db.createObjectStore(DOCUMENT_STORE, { keyPath: "id" });
-        store.createIndex("employeeId", "employeeId", { unique: false });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function saveDocumentBlob(documentRecord) {
-  const db = await openDocumentDB();
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(DOCUMENT_STORE, "readwrite");
-    tx.objectStore(DOCUMENT_STORE).put(documentRecord);
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
-  });
-}
-
-async function getEmployeeDocuments(employeeId) {
-  const db = await openDocumentDB();
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(DOCUMENT_STORE, "readonly");
-    const index = tx.objectStore(DOCUMENT_STORE).index("employeeId");
-    const request = index.getAll(employeeId);
-
-    request.onsuccess = () => {
-      db.close();
-      resolve(request.result || []);
-    };
-    request.onerror = () => {
-      db.close();
-      reject(request.error);
-    };
-  });
-}
-
-async function deleteDocumentBlob(documentId) {
-  const db = await openDocumentDB();
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(DOCUMENT_STORE, "readwrite");
-    tx.objectStore(DOCUMENT_STORE).delete(documentId);
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
-  });
-}
+const EMPLOYEE_DOCUMENT_BUCKET = "employee-documents";
 
 function safeFilePart(value) {
   return String(value || "")
@@ -514,16 +578,133 @@ function documentExtension(record) {
   return mimeMap[record.mimeType] || "";
 }
 
-async function downloadBlob(record, employeeCode, employeeName) {
-  const url = URL.createObjectURL(record.blob);
+function mapDocumentRow(row) {
+  return {
+    id: row?.id,
+    employeeId: row?.employee_id || "",
+    organizationId: row?.organization_id || "",
+    type: row?.document_type || "Other",
+    name: row?.document_name || "Document",
+    mimeType: row?.mime_type || "application/octet-stream",
+    size: Number(row?.file_size || 0),
+    uploadedAt: row?.uploaded_at || "",
+    storageBucket: row?.storage_bucket || EMPLOYEE_DOCUMENT_BUCKET,
+    storagePath: row?.storage_path || row?.file_path || "",
+  };
+}
 
+async function getEmployeeDocuments(employeeId, organizationId) {
+  if (!employeeId || !organizationId) return [];
+
+  const { data, error } = await supabase
+    .from("employee_documents")
+    .select(
+      "id, employee_id, organization_id, document_type, document_name, file_size, mime_type, storage_bucket, storage_path, file_path, uploaded_at"
+    )
+    .eq("employee_id", employeeId)
+    .eq("organization_id", organizationId)
+    .order("uploaded_at", { ascending: false });
+
+  if (error) throw error;
+  return (data || []).map(mapDocumentRow);
+}
+
+async function uploadEmployeeDocument(file, employeeId, organizationId, documentType) {
+  if (!file || !employeeId || !organizationId) {
+    throw new Error("Employee and company context are required for document upload.");
+  }
+
+  const extension = documentExtension({ name: file.name, mimeType: file.type });
+  const originalBase = safeFilePart(String(file.name || "Document").replace(/\.[^/.]+$/, "")) || "Document";
+  const typePart = safeFilePart(documentType) || "Other";
+  const unique = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const storagePath = `${organizationId}/${employeeId}/${typePart}/${unique}_${originalBase}${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(EMPLOYEE_DOCUMENT_BUCKET)
+    .upload(storagePath, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || "application/octet-stream",
+    });
+
+  if (uploadError) throw uploadError;
+
+  try {
+    const { data, error } = await supabase
+      .from("employee_documents")
+      .insert({
+        employee_id: employeeId,
+        organization_id: organizationId,
+        document_type: documentType || "Other",
+        document_name: file.name,
+        file_path: storagePath,
+        storage_bucket: EMPLOYEE_DOCUMENT_BUCKET,
+        storage_path: storagePath,
+        file_size: file.size,
+        mime_type: file.type || "application/octet-stream",
+        uploaded_at: new Date().toISOString(),
+      })
+      .select(
+        "id, employee_id, organization_id, document_type, document_name, file_size, mime_type, storage_bucket, storage_path, file_path, uploaded_at"
+      )
+      .single();
+
+    if (error) throw error;
+    return mapDocumentRow(data);
+  } catch (error) {
+    await supabase.storage.from(EMPLOYEE_DOCUMENT_BUCKET).remove([storagePath]);
+    throw error;
+  }
+}
+
+async function deleteDocumentBlob(documentId, organizationId) {
+  if (!documentId || !organizationId) return;
+
+  const { data: row, error: readError } = await supabase
+    .from("employee_documents")
+    .select("id, storage_bucket, storage_path, file_path")
+    .eq("id", documentId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (readError) throw readError;
+  if (!row) return;
+
+  const bucket = row.storage_bucket || EMPLOYEE_DOCUMENT_BUCKET;
+  const path = row.storage_path || row.file_path;
+
+  if (path) {
+    const { error: storageError } = await supabase.storage.from(bucket).remove([path]);
+    if (storageError) throw storageError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from("employee_documents")
+    .delete()
+    .eq("id", documentId)
+    .eq("organization_id", organizationId);
+
+  if (deleteError) throw deleteError;
+}
+
+async function downloadBlob(record, employeeCode, employeeName) {
+  let blob = record?.blob || null;
+
+  if (!blob && record?.storagePath) {
+    const bucket = record.storageBucket || EMPLOYEE_DOCUMENT_BUCKET;
+    const { data, error } = await supabase.storage.from(bucket).download(record.storagePath);
+    if (error) throw error;
+    blob = data;
+  }
+
+  if (!blob) throw new Error("Document file is not available.");
+
+  const url = URL.createObjectURL(blob);
   const code = safeFilePart(employeeCode) || "EMPLOYEE";
   const name = safeFilePart(employeeName) || "Employee";
   const type = safeFilePart(record.type) || "Document";
   const extension = documentExtension(record);
-
-  // Example:
-  // BAU001_Rahul_Kumar_PAN_Card.png
   const downloadName = `${code}_${name}_${type}${extension}`;
 
   const a = document.createElement("a");
@@ -532,12 +713,11 @@ async function downloadBlob(record, employeeCode, employeeName) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-
   setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
-async function downloadAllEmployeeDocuments(employeeId, employeeCode, employeeName) {
-  const docs = await getEmployeeDocuments(employeeId);
+async function downloadAllEmployeeDocuments(employeeId, employeeCode, employeeName, organizationId) {
+  const docs = await getEmployeeDocuments(employeeId, organizationId);
 
   if (!docs.length) {
     window.alert(`No documents attached for ${employeeName}.`);
@@ -547,14 +727,19 @@ async function downloadAllEmployeeDocuments(employeeId, employeeCode, employeeNa
   const zip = new JSZip();
 
   for (const doc of docs) {
-    const code = safeFilePart(employeeCode) || "EMPLOYEE";
-    const name = safeFilePart(employeeName) || "Employee";
+    let blob = doc.blob || null;
+    if (!blob && doc.storagePath) {
+      const bucket = doc.storageBucket || EMPLOYEE_DOCUMENT_BUCKET;
+      const { data, error } = await supabase.storage.from(bucket).download(doc.storagePath);
+      if (error) throw error;
+      blob = data;
+    }
+    if (!blob) continue;
+
     const type = safeFilePart(doc.type) || "Document";
     const extension = documentExtension(doc);
-
     const fileName = `${type}${extension}`;
     const existingNames = Object.keys(zip.files);
-
     let finalName = fileName;
     let counter = 2;
 
@@ -563,11 +748,10 @@ async function downloadAllEmployeeDocuments(employeeId, employeeCode, employeeNa
       counter += 1;
     }
 
-    zip.file(finalName, doc.blob);
+    zip.file(finalName, blob);
   }
 
   const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-
   const zipUrl = URL.createObjectURL(zipBlob);
   const a = document.createElement("a");
   a.href = zipUrl;
@@ -575,10 +759,8 @@ async function downloadAllEmployeeDocuments(employeeId, employeeCode, employeeNa
   document.body.appendChild(a);
   a.click();
   a.remove();
-
   setTimeout(() => URL.revokeObjectURL(zipUrl), 1000);
 }
-
 
 const EMPLOYEE_EXPORT_COLUMNS = [
   ["Employee ID", "employeeId"],
@@ -742,7 +924,7 @@ function exportEmployeesToExcel(employees) {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Employee Master");
 
-  XLSX.writeFile(workbook, `BAUER_Employee_Master_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.writeFile(workbook, `HRSYNC_Employee_Master_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 function downloadEmployeeImportTemplate() {
@@ -758,7 +940,7 @@ function downloadEmployeeImportTemplate() {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Employee Import");
 
-  XLSX.writeFile(workbook, "BAUER_Employee_Import_Template.xlsx");
+  XLSX.writeFile(workbook, "HRSYNC_Employee_Import_Template.xlsx");
 }
 
 function normalizeImportedEmployee(row) {
@@ -884,14 +1066,17 @@ async function importEmployeesFromExcel(file, employees, saveEmployees) {
     }
   });
 
-  saveEmployees(next);
+  await saveEmployees(next);
 
   return { added, updated, errors };
 }
 
 export default function Employees() {
   const [masters, setMasters] = useState(readMasters);
-  const [employees, setEmployees] = useState(readEmployees);
+  const [employees, setEmployees] = useState([]);
+  const [organizationId, setOrganizationId] = useState("");
+  const [employeeLoading, setEmployeeLoading] = useState(true);
+  const [employeeError, setEmployeeError] = useState("");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [importing, setImporting] = useState(false);
@@ -900,7 +1085,9 @@ export default function Employees() {
   const [previewEmployee, setPreviewEmployee] = useState(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [accessEmployee, setAccessEmployee] = useState(null);
+  const [accessAccount, setAccessAccount] = useState(null);
   const [accessMessage, setAccessMessage] = useState("");
+  const [accessLoading, setAccessLoading] = useState(false);
   const [hodMappings, setHodMappings] = useState(readHodMappings);
   const [showHodMappingModal, setShowHodMappingModal] = useState(false);
   const [hodMappingImporting, setHodMappingImporting] = useState(false);
@@ -915,33 +1102,132 @@ const [transferForm, setTransferForm] = useState({
   const [form, setForm] = useState(EMPTY_FORM);
 
   const [documents, setDocuments] = useState([]);
+  const [previewDocuments, setPreviewDocuments] = useState([]);
   const [documentType, setDocumentType] = useState("Other");
   const [documentUploading, setDocumentUploading] = useState(false);
 
   useEffect(() => {
     const refreshMasters = () => setMasters(readMasters());
-    const refreshEmployees = () => setEmployees(readEmployees());
     const refreshHodMappings = () => setHodMappings(readHodMappings());
 
     window.addEventListener("bauerHrmsMastersUpdated", refreshMasters);
-    window.addEventListener("bauerHrmsEmployeesUpdated", refreshEmployees);
     window.addEventListener("bauerHrmsHodMappingsUpdated", refreshHodMappings);
     window.addEventListener("storage", refreshMasters);
-    window.addEventListener("storage", refreshEmployees);
+
+    let cancelled = false;
+
+    const loadTenantEmployees = async () => {
+      setEmployeeLoading(true);
+      setEmployeeError("");
+
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError) throw authError;
+        if (!user?.id) throw new Error("Your HRSYNC session has expired. Please log in again.");
+
+        const { data: membership, error: membershipError } = await supabase
+          .from("organization_users")
+          .select("id, organization_id, employee_id, status")
+          .eq("user_id", user.id)
+          .eq("status", "Active")
+          .maybeSingle();
+
+        if (membershipError) throw membershipError;
+        if (!membership?.organization_id) {
+          throw new Error(
+            "No active company is linked to your HRSYNC account."
+          );
+        }
+
+        const { data: rows, error: employeeQueryError } = await supabase
+          .from("employees")
+          .select("*")
+          .eq("organization_id", membership.organization_id)
+          .order("employee_name", { ascending: true });
+
+        if (employeeQueryError) throw employeeQueryError;
+
+        if (!cancelled) {
+          setOrganizationId(membership.organization_id);
+          setEmployees((rows || []).map(employeeFromDb));
+        }
+      } catch (error) {
+        console.error("Unable to load tenant employees:", error);
+        if (!cancelled) {
+          setEmployees([]);
+          setOrganizationId("");
+          setEmployeeError(
+            error?.message || "Unable to load employee records."
+          );
+        }
+      } finally {
+        if (!cancelled) setEmployeeLoading(false);
+      }
+    };
+
+    loadTenantEmployees();
 
     return () => {
+      cancelled = true;
       window.removeEventListener("bauerHrmsMastersUpdated", refreshMasters);
-      window.removeEventListener("bauerHrmsEmployeesUpdated", refreshEmployees);
-    window.removeEventListener("bauerHrmsHodMappingsUpdated", refreshHodMappings);
+      window.removeEventListener("bauerHrmsHodMappingsUpdated", refreshHodMappings);
       window.removeEventListener("storage", refreshMasters);
-      window.removeEventListener("storage", refreshEmployees);
     };
   }, []);
 
-  const saveEmployees = (next) => {
-    setEmployees(next);
-    localStorage.setItem(EMPLOYEE_STORAGE_KEY, JSON.stringify(next));
-    window.dispatchEvent(new Event("bauerHrmsEmployeesUpdated"));
+  const saveEmployees = async (next) => {
+    if (!organizationId) {
+      throw new Error("Company context is not available. Please sign in again.");
+    }
+
+    const previousById = new Map(
+      employees.filter((item) => item?.id).map((item) => [item.id, item])
+    );
+
+    const rowsToSave = next.filter((item) => item?.employeeId);
+
+    try {
+      for (const employee of rowsToSave) {
+        const dbRow = employeeToDbRow(employee, organizationId);
+
+        if (previousById.has(employee.id)) {
+          const { error } = await supabase
+            .from("employees")
+            .update(dbRow)
+            .eq("id", employee.id)
+            .eq("organization_id", organizationId);
+
+          if (error) throw error;
+        } else {
+          delete dbRow.id;
+          const { data, error } = await supabase
+            .from("employees")
+            .insert(dbRow)
+            .select("*")
+            .single();
+
+          if (error) throw error;
+
+          employee.id = data.id;
+        }
+      }
+
+      const refreshed = rowsToSave.map((item) => ({
+        ...item,
+        organizationId,
+      }));
+
+      setEmployees(refreshed);
+      window.dispatchEvent(new Event("bauerHrmsEmployeesUpdated"));
+      return refreshed;
+    } catch (error) {
+      console.error("Unable to save employees:", error);
+      throw error;
+    }
   };
 
   const updateForm = (key, value) => {
@@ -966,7 +1252,7 @@ const [transferForm, setTransferForm] = useState({
       return next;
     });
   };
-  const transferEmployee = (employee, toLocation, transferDate, reason, remarks = "") => {
+  const transferEmployee = async (employee, toLocation, transferDate, reason, remarks = "") => {
   if (!employee) return;
 
   const fromLocation = employee.location || "";
@@ -1036,7 +1322,7 @@ const transferRecord = {
     };
   });
 
-  saveEmployees(nextEmployees);
+  await saveEmployees(nextEmployees);
 
   setPreviewEmployee({
     ...employee,
@@ -1124,33 +1410,106 @@ const transferRecord = {
     }
   };
 
-  const openLoginAccess = (employee) => {
+  const openLoginAccess = async (employee) => {
     setAccessEmployee(employee);
-    const account = getEmployeeAccount(employee.id);
-    setAccessMessage(
-      account?.status === "active"
-        ? "Login is already active. You can resend the activation link if required."
-        : "No login has been activated for this employee yet."
-    );
+    setAccessAccount(null);
+    setAccessMessage("");
+    setAccessLoading(true);
+
+    try {
+      const account = await getEmployeeAccount(employee.id);
+      setAccessAccount(account);
+      setAccessMessage(
+        String(account?.status || "").toLowerCase() === "active"
+          ? "This employee already has an active HRSYNC login account."
+          : String(account?.status || "").toLowerCase() === "invited"
+            ? "An invitation has already been created for this employee."
+            : "No HRSYNC login has been created for this employee yet."
+      );
+    } catch (error) {
+      setAccessMessage(
+        error?.message || "Unable to load employee login status."
+      );
+    } finally {
+      setAccessLoading(false);
+    }
   };
 
-  const sendLoginCredentials = () => {
+  const sendLoginCredentials = async () => {
     if (!accessEmployee) return;
+
     const email = String(accessEmployee.officialEmail || "").trim();
+
     if (!email) {
-      setAccessMessage("Official Email is required before sending login credentials.");
+      setAccessMessage(
+        "Official Email is required before sending login credentials."
+      );
       return;
     }
 
-    const invitation = createEmployeeInvitation(accessEmployee);
-    const subject = encodeURIComponent("BAUER HRMS - Employee Account Activation");
-    const body = encodeURIComponent(
-      `Dear ${accessEmployee.name || "Employee"},\n\nYour BAUER HRMS Employee Self Service account has been created.\n\nEmployee ID: ${accessEmployee.employeeId || ""}\nUsername: ${email}\n\nPlease open the link below to create your password and activate your account:\n${invitation.activationUrl}\n\nRegards,\nBAUER HRMS`
-    );
+    setAccessLoading(true);
+    setAccessMessage("");
 
-    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
-    setAccessMessage("Activation email is prepared in your email application. Send it to the employee.");
+    try {
+      const result = await createEmployeeInvitation(accessEmployee);
+      setAccessAccount({
+        employeeInternalId: accessEmployee.id,
+        status: result?.status || "Invited",
+        linked: Boolean(result?.authUserId),
+      });
+      setAccessMessage(
+        result?.message ||
+          `Login invitation sent to ${email}.`
+      );
+    } catch (error) {
+      setAccessMessage(
+        error?.message ||
+          "Unable to create the employee login account."
+      );
+    } finally {
+      setAccessLoading(false);
+    }
   };
+
+  const resendLoginCredentials = async () => {
+    if (!accessEmployee) return;
+
+    const email = String(accessEmployee.officialEmail || "").trim();
+
+    if (!email) {
+      setAccessMessage(
+        "Official Email is required before resending login credentials."
+      );
+      return;
+    }
+
+    setAccessLoading(true);
+    setAccessMessage("");
+
+    try {
+      const result = await resendEmployeeInvitation(accessEmployee);
+
+      setAccessAccount((current) => ({
+        ...(current || {}),
+        employeeInternalId: accessEmployee.id,
+        status: "Invited",
+        linked: true,
+      }));
+
+      setAccessMessage(
+        result?.message ||
+          `A new activation link has been sent to ${email}.`
+      );
+    } catch (error) {
+      setAccessMessage(
+        error?.message ||
+          "Unable to resend the employee activation email."
+      );
+    } finally {
+      setAccessLoading(false);
+    }
+  };
+
 
   const openAdd = () => {
     setEditingId(null);
@@ -1159,8 +1518,17 @@ const transferRecord = {
     setDocumentType("Other");
     setShowModal(true);
   };
-  const openPreview = (employee) => {
-  setPreviewEmployee(employee);
+  const openPreview = async (employee) => {
+    setPreviewEmployee(employee);
+    setPreviewDocuments([]);
+
+    try {
+      const docs = await getEmployeeDocuments(employee.id, organizationId);
+      setPreviewDocuments(docs);
+    } catch (error) {
+      console.error("Unable to load employee documents for quality check:", error);
+      setPreviewDocuments([]);
+    }
   };
 
   const openEdit = async (employee) => {
@@ -1168,7 +1536,7 @@ const transferRecord = {
     setForm({ ...EMPTY_FORM, ...employee });
     setDocumentType("Other");
     try {
-      setDocuments(await getEmployeeDocuments(employee.id));
+      setDocuments(await getEmployeeDocuments(employee.id, organizationId));
     } catch {
       setDocuments([]);
     }
@@ -1190,19 +1558,12 @@ const transferRecord = {
 
     setDocumentUploading(true);
     try {
-      const record = {
-        id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${file.name}`,
-        employeeId: editingId,
-        type: documentType,
-        name: file.name,
-        mimeType: file.type || "application/octet-stream",
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-        blob: file,
-      };
+      if (!organizationId) {
+        throw new Error("Company context is not available. Please sign in again.");
+      }
 
-      await saveDocumentBlob(record);
-      const next = await getEmployeeDocuments(editingId);
+      await uploadEmployeeDocument(file, editingId, organizationId, documentType);
+      const next = await getEmployeeDocuments(editingId, organizationId);
       setDocuments(next);
     } finally {
       setDocumentUploading(false);
@@ -1211,7 +1572,7 @@ const transferRecord = {
 
   const removeDocument = async (id) => {
     if (!window.confirm("Delete this document permanently?")) return;
-    await deleteDocumentBlob(id);
+    await deleteDocumentBlob(id, organizationId);
     setDocuments((prev) => prev.filter((item) => item.id !== id));
   };
 
@@ -1262,21 +1623,26 @@ const transferRecord = {
       editingId ||
       (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`);
 
-    if (editingId) {
-      saveEmployees(
-        employees.map((item) =>
-          item.id === editingId ? { ...finalForm, id: editingId } : item
-        )
-      );
-    } else {
-      saveEmployees([...employees, { ...finalForm, id: employeeId }]);
-      setEditingId(employeeId);
+    try {
+      if (editingId) {
+        await saveEmployees(
+          employees.map((item) =>
+            item.id === editingId ? { ...finalForm, id: editingId } : item
+          )
+        );
+      } else {
+        await saveEmployees([...employees, { ...finalForm, id: employeeId }]);
+        setEditingId(employeeId);
+      }
+    } catch (error) {
+      window.alert(error?.message || "Unable to save employee data.");
+      return;
     }
 
     // Save is complete. Keep document handling separate so an IndexedDB/document
     // error cannot block the employee save/update action.
     try {
-      const savedDocs = await getEmployeeDocuments(employeeId);
+      const savedDocs = await getEmployeeDocuments(employeeId, organizationId);
       setDocuments(savedDocs);
     } catch {
       // Employee data has already been saved; document retrieval failure should
@@ -1296,17 +1662,21 @@ const transferRecord = {
     setDocuments([]);
   };
 
-  const toggleStatus = (id) => {
-    saveEmployees(
-      employees.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: item.status === "Active" ? "Inactive" : "Active",
-            }
-          : item
-      )
-    );
+  const toggleStatus = async (id) => {
+    try {
+      await saveEmployees(
+        employees.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: item.status === "Active" ? "Inactive" : "Active",
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      window.alert(error?.message || "Unable to update employee status.");
+    }
   };
 
   const deleteEmployee = async (id) => {
@@ -1315,12 +1685,30 @@ const transferRecord = {
 
     if (!window.confirm(`Delete ${employee.name}? This will also remove attached documents.`)) return;
 
-    const docs = await getEmployeeDocuments(id);
-    for (const doc of docs) {
-      await deleteDocumentBlob(doc.id);
+    if (!organizationId) {
+      window.alert("Company context is not available. Please sign in again.");
+      return;
     }
 
-    saveEmployees(employees.filter((item) => item.id !== id));
+    try {
+      const docs = await getEmployeeDocuments(id, organizationId);
+      for (const doc of docs) {
+        await deleteDocumentBlob(doc.id, organizationId);
+      }
+
+      const { error } = await supabase
+        .from("employees")
+        .delete()
+        .eq("id", id)
+        .eq("organization_id", organizationId);
+
+      if (error) throw error;
+
+      setEmployees((current) => current.filter((item) => item.id !== id));
+      window.dispatchEvent(new Event("bauerHrmsEmployeesUpdated"));
+    } catch (error) {
+      window.alert(error?.message || "Unable to delete employee.");
+    }
   };
 
   const filtered = useMemo(() => {
@@ -1362,6 +1750,51 @@ const transferRecord = {
   ];
 
   const gratuityPreview = calculateGratuity(form);
+
+  if (employeeLoading) {
+    return (
+      <section className="employees-page">
+        <div className="employees-head">
+          <div>
+            <div className="eyebrow">WORKFORCE MANAGEMENT</div>
+            <h1>Employee Master</h1>
+            <p>Loading employee records for your company...</p>
+          </div>
+        </div>
+        <div className="empty-state">
+          <div className="empty-icon">◌</div>
+          <h3>Loading employee records</h3>
+          <p>Connecting to your HRSYNC company workspace.</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (employeeError) {
+    return (
+      <section className="employees-page">
+        <div className="employees-head">
+          <div>
+            <div className="eyebrow">WORKFORCE MANAGEMENT</div>
+            <h1>Employee Master</h1>
+            <p>Employee records are securely separated by company.</p>
+          </div>
+        </div>
+        <div className="empty-state">
+          <div className="empty-icon">!</div>
+          <h3>Unable to load Employee Master</h3>
+          <p>{employeeError}</p>
+          <button
+            className="primary-btn"
+            type="button"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="employees-page">
@@ -1532,7 +1965,7 @@ const transferRecord = {
                           <button className="access-button" onClick={() => openLoginAccess(item)}>Login Access</button>
                           <button
                             className="docs-button"
-                            onClick={() => downloadAllEmployeeDocuments(item.id, item.employeeId, item.name)}
+                            onClick={() => downloadAllEmployeeDocuments(item.id, item.employeeId, item.name, organizationId)}
                           >
                             ⇩ Docs
                           </button>
@@ -1955,7 +2388,14 @@ const transferRecord = {
                 <div><span>Official Email</span><strong>{accessEmployee.officialEmail || "Not added"}</strong></div>
                 <div><span>Employee ID</span><strong>{accessEmployee.employeeId || "—"}</strong></div>
                 <div><span>Access</span><strong>Employee Self Service</strong></div>
-                <div><span>Login Status</span><strong>{getEmployeeAccount(accessEmployee.id)?.status === "active" ? "Active" : "Not Activated"}</strong></div>
+                <div>
+                  <span>Login Status</span>
+                  <strong>
+                    {accessLoading
+                      ? "Checking…"
+                      : accessAccount?.status || "Not Activated"}
+                  </strong>
+                </div>
               </div>
               <div className="modal-note" style={{marginBottom: "14px"}}>
                 The employee will receive an activation link and create their own password. Passwords are not shown to HR in this screen.
@@ -1963,8 +2403,26 @@ const transferRecord = {
               {accessMessage && <div className="modal-note" style={{marginBottom: "14px"}}>{accessMessage}</div>}
               <div className="modal-actions">
                 <button type="button" className="secondary-btn" onClick={() => setAccessEmployee(null)}>Close</button>
-                <button type="button" className="primary-btn" onClick={sendLoginCredentials}>
-                  {getEmployeeAccount(accessEmployee.id)?.status === "active" ? "Resend Activation Link" : "Send Login Credentials"}
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={
+  ["invited", "active"].includes(
+    String(accessAccount?.status || "").toLowerCase()
+  )
+    ? resendLoginCredentials
+    : sendLoginCredentials
+}
+                  disabled={accessLoading}
+                >
+                  {accessLoading
+  ? "Please wait…"
+  : ["invited", "active"].includes(
+      String(accessAccount?.status || "").toLowerCase()
+    )
+    ? "Resend Activation Email"
+    : "Send Login Credentials"
+}
                 </button>
               </div>
             </div>
@@ -2174,7 +2632,7 @@ const transferRecord = {
 {/* ================= HR DATA QUALITY CHECK ================= */}
 
 {previewEmployee && (() => {
-  const quality = calculateEmployeeQuality(previewEmployee);
+  const quality = calculateEmployeeQuality(previewEmployee, previewDocuments);
 
   return (
     <div className="employee-profile-section quality-check-section">
@@ -2453,10 +2911,11 @@ const transferRecord = {
       {/* Transfer Form */}
       <form
         className="transfer-form"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
 
-          const success = transferEmployee(
+          try {
+            const success = await transferEmployee(
             previewEmployee,
             transferForm.toLocation,
             transferForm.transferDate,
@@ -2464,8 +2923,11 @@ const transferRecord = {
             transferForm.remarks
           );
 
-          if (success) {
-            setShowTransferModal(false);
+            if (success) {
+              setShowTransferModal(false);
+            }
+          } catch (error) {
+            window.alert(error?.message || "Unable to save the employee transfer.");
           }
         }}
       >
@@ -2812,7 +3274,7 @@ const transferRecord = {
 
       {/* DATA QUALITY CHECK */}
 {previewEmployee && (() => {
-  const quality = calculateEmployeeQuality(previewEmployee);
+  const quality = calculateEmployeeQuality(previewEmployee, previewDocuments);
 
   return (
     <div className="employee-profile-section quality-check-section">

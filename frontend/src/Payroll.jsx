@@ -182,6 +182,158 @@ const calculateProfessionalTax = ({ settings = {}, monthlyWage = 0, gender = "Ma
   return { amount, applicable: Boolean(rule.applicable && amount > 0), mode, reason: amount > 0 ? rule.label : rule.label };
 };
 
+
+/* =========================================================
+   ORGANIZATION -> PAYROLL CONFIGURATION BRIDGE
+   Payroll calculations read active masters from Organization.
+   Legacy Payroll settings remain only as a safe fallback.
+   ========================================================= */
+const loadOrganizationPayrollMasters = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ORGANIZATION_STORAGE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const normalizeText = (value) => String(value || "").trim().toLowerCase();
+
+const resolveWorkforceCategory = (employee, masters) => {
+  const categories = Array.isArray(masters?.workforceCategories) ? masters.workforceCategories : [];
+  const explicitId = employee?.workforceCategoryId || employee?.workforceCategoryID;
+  const explicitName = employee?.workforceCategory || employee?.workforceCategoryName;
+  let category = explicitId ? categories.find((x) => x.id === explicitId) : null;
+  if (!category && explicitName) category = categories.find((x) => normalizeText(x.name) === normalizeText(explicitName) || normalizeText(x.code) === normalizeText(explicitName));
+  if (!category) {
+    const type = normalizeText(employee?.type || employee?.employmentType);
+    category = categories.find((x) => {
+      const name = normalizeText(x.name);
+      const ct = normalizeText(x.categoryType);
+      return (type === "third party" && (ct === "third_party" || name === "third party")) ||
+             ((type === "on-roll" || type === "on roll" || type === "company roll") && (ct === "company_roll" || name === "company roll")) ||
+             (type === "expatriate" && (ct === "expatriate" || name === "expatriate")) ||
+             (type === "consultant" && (ct === "consultant" || name === "consultant"));
+    });
+  }
+  return category || categories.find((x) => x.active !== false && x.payrollApplicable !== false) || null;
+};
+
+const resolvePayrollProfile = (employee, masters, category) => {
+  const profiles = Array.isArray(masters?.payrollProfiles) ? masters.payrollProfiles.filter((x) => x.active !== false) : [];
+  const directId = employee?.payrollProfileId;
+  if (directId) {
+    const direct = profiles.find((x) => x.id === directId);
+    if (direct) return direct;
+  }
+  if (category?.payrollProfile) {
+    const byName = profiles.find((x) => normalizeText(x.name) === normalizeText(category.payrollProfile) || normalizeText(x.code) === normalizeText(category.payrollProfile));
+    if (byName) return byName;
+  }
+  return profiles.find((x) => Array.isArray(x.workforceCategories) && category && x.workforceCategories.includes(category.id)) || null;
+};
+
+const resolvePolicy = (collection, ids, categoryId, effectiveDate) => {
+  const items = Array.isArray(collection) ? collection.filter((x) => x.active !== false) : [];
+  const list = Array.isArray(ids) ? ids : [];
+  const byId = list.map((id) => items.find((x) => x.id === id)).filter(Boolean);
+  const date = String(effectiveDate || "9999-12-31");
+  const eligible = items.filter((x) => {
+    const from = String(x.effectiveFrom || "0000-01-01");
+    const to = String(x.effectiveTo || "9999-12-31");
+    const catOk = !categoryId || !Array.isArray(x.workforceCategories) || x.workforceCategories.length === 0 || x.workforceCategories.includes(categoryId);
+    return from <= date && date <= to && catOk;
+  });
+  return byId[0] || eligible.sort((a,b) => String(b.effectiveFrom || "").localeCompare(String(a.effectiveFrom || "")))[0] || null;
+};
+
+const adaptOrganizationStatutoryPolicy = (policy, fallback) => {
+  if (!policy) return fallback;
+  return {
+    ...(fallback || {}),
+    ruleVersion: policy.ruleVersion || fallback?.ruleVersion || STATUTORY_RULE_VERSION,
+    effectiveFrom: policy.effectiveFrom || fallback?.effectiveFrom || "",
+    companyRuleName: policy.companyRuleName || fallback?.companyRuleName || "Current Company / Establishment",
+    pf: { ...(fallback?.pf || {}), ...(policy.pf || {}), enabled: policy.pf?.enabled !== false, employeeRate: String(policy.pf?.employeeRate ?? 12), employerRate: String(policy.pf?.employerRate ?? 12), wageCeiling: String(policy.pf?.wageCeiling ?? 15000), wageBasis: policy.pf?.wageBasis || fallback?.pf?.wageBasis || "Basic + DA + Special Allowance", higherWageContribution: policy.pf?.higherWageContribution ?? false },
+    esi: { ...(fallback?.esi || {}), ...(policy.esi || {}), enabled: policy.esi?.enabled === true, employeeRate: String(policy.esi?.employeeRate ?? 0.75), employerRate: String(policy.esi?.employerRate ?? 3.25), wageCeiling: String(policy.esi?.wageCeiling ?? 21000), contributionBasis: policy.esi?.contributionBasis || fallback?.esi?.contributionBasis || "Basic + DA + Special Allowance" },
+    pt: { ...(fallback?.pt || {}), ...(policy.pt || {}), enabled: policy.pt?.enabled === true, state: policy.pt?.state || fallback?.pt?.state || "Haryana", mode: "State-wise Automatic" },
+    lwf: { ...(fallback?.lwf || {}), ...(policy.lwf || {}), enabled: policy.lwf?.enabled === true, employeeAmount: String(policy.lwf?.employeeAmount ?? 0), employerAmount: String(policy.lwf?.employerAmount ?? 0), frequency: policy.lwf?.frequency || "MONTHLY" },
+  };
+};
+
+const getSalaryStructureFromOrganizationRule = (employee, existing, salaryRule) => {
+  const gross = Number(existing?.gross ?? employee?.gross ?? 0);
+  if (!salaryRule) return { ...(existing || {}), gross };
+  const components = Array.isArray(salaryRule.components) ? salaryRule.components.filter((x) => x.active !== false) : [];
+  let basicDA = 0;
+  let hra = 0;
+  let specialAllowance = 0;
+  const componentAmounts = {};
+  components.forEach((component) => {
+    const type = normalizeText(component.calculationType);
+    const basis = normalizeText(component.amountBasis);
+    let amount = 0;
+    if (type === "percentage_of_gross") amount = gross * Number(component.value || 0) / 100;
+    else if (type === "percentage_of_basic_da") amount = basicDA * Number(component.value || 0) / 100;
+    else if (type === "percentage_of_basic") amount = basicDA * Number(component.value || 0) / 100;
+    else if (type === "balance") amount = Math.max(0, gross - Object.values(componentAmounts).reduce((s,v) => s + Number(v || 0), 0));
+    else if (type === "fixed") amount = Math.max(0, Number(component.value || 0));
+    componentAmounts[component.code || component.id || component.name] = amount;
+    const code = normalizeText(component.code || component.name);
+    if (code === "basic" || code === "basic + da" || basis === "basic_da" && !basicDA) basicDA = amount;
+    if (code === "hra") hra = amount;
+    if (code === "special" || code === "special allowance") specialAllowance = amount;
+  });
+  if (!basicDA) basicDA = gross * 0.5;
+  if (!hra) hra = basicDA * 0.5;
+  if (!specialAllowance) specialAllowance = Math.max(0, gross - basicDA - hra);
+  return {
+    ...(existing || {}), gross, basicDA, hra, specialAllowance,
+    componentAmounts,
+  };
+};
+
+const calculateOrganizationProration = ({ gross, attendance, employee, payrollMonth, profile, rule }) => {
+  const value = Number(gross || 0);
+  const [year, month] = String(payrollMonth || "").split("-").map(Number);
+  const calendarDays = year && month ? new Date(year, month, 0).getDate() : 0;
+  const workingDays = Math.max(0, Number(attendance?.present || 0) + Number(attendance?.halfDay || 0) * 0.5 + Number(attendance?.paidLeave || 0));
+  const denomBasis = rule?.denominatorBasis || profile?.workingDaysBasis || "CALENDAR_DAYS";
+  const denominator = denomBasis === "FIXED_26" ? 26 : denomBasis === "FIXED_30" ? 30 : denomBasis === "WORKING_DAYS" ? Math.max(1, workingDays) : Math.max(1, calendarDays);
+  let paidDays = Number(attendance?.paidDays || 0);
+  if (rule) {
+
+  paidDays =
+    Number(attendance?.present || 0) +
+    Number(attendance?.halfDay || 0) * 0.5 +
+    Number(attendance?.paidLeave || 0) +
+    Number(attendance?.forceLeavePaidDays || 0) +
+    (rule.weeklyOffIncluded ? Number(attendance?.weeklyOff || 0) : 0) +
+    (rule.holidayIncluded ? Number(attendance?.holiday || 0) : 0) +
+    Number(attendance?.compOff || 0);
+
+}
+  const method = rule?.salaryProration || profile?.prorationMethod || "PAID_DAYS";
+  let ratio = 1;
+  if (method !== "NO_PRORATION") {
+    if (method === "WORKING_DAYS") ratio = paidDays / Math.max(1, workingDays);
+    else if (method === "CALENDAR_DAYS" || method === "PAID_DAYS") ratio = paidDays / denominator;
+  }
+  const doj = String(employee?.doj || employee?.dateOfJoining || "");
+  const doe = String(employee?.doe || employee?.dateOfExit || "");
+  if (rule?.joiningProration && doj && doj.startsWith(String(payrollMonth))) {
+    const day = Number(doj.slice(8,10));
+    if (day > 1 && denomBasis !== "WORKING_DAYS") ratio *= Math.max(0, (calendarDays - day + 1) / Math.max(1, calendarDays));
+  }
+  if (rule?.exitProration && doe && doe.startsWith(String(payrollMonth))) {
+    const day = Number(doe.slice(8,10));
+    if (day > 0 && denomBasis !== "WORKING_DAYS") ratio *= Math.max(0, day / Math.max(1, calendarDays));
+  }
+  if (rule?.minimumPayableDays && paidDays < Number(rule.minimumPayableDays)) ratio = 0;
+  const raw = value * Math.max(0, Math.min(1, ratio));
+  return { payableGross: raw, paidDays, denominator, ratio };
+};
+
 function Payroll() {
   const [payrollEmployees, setPayrollEmployees] = useState(
   loadPayrollEmployees);
@@ -242,6 +394,8 @@ const getLeaveSalaryTreatment = (status) => {
 
 const calculateMonthlyAttendance = (employeeId, month) => {
   const records = getMonthlyAttendance(employeeId, month);
+  const forceLeaveRecords = loadForceLeaveRecordsForPayroll();
+  const employee = employees.find((item) => String(item?.id) === String(employeeId));
 
   let present = 0;
   let halfDay = 0;
@@ -255,8 +409,62 @@ const calculateMonthlyAttendance = (employeeId, month) => {
   let weekdayOtHours = 0;
   let sundayOtHours = 0;
 
-  Object.values(records).forEach((record) => {
-    const status = record?.status;
+  let forceLeaveDays = 0;
+  let forceLeavePaidDays = 0;
+  let salaryHoldDays = 0;
+  let forceLeaveConflictDays = 0;
+  let forceLeaveAttendanceWins = 0;
+  let forceLeaveForceLeaveWins = 0;
+  const forceLeaveConflictDates = [];
+
+  const [year, monthNumber] = String(month).split("-").map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const dateKey = `${String(year).padStart(4, "0")}-${String(monthNumber).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const attendanceRecord = records?.[dateKey] || null;
+    const forceLeaveRecord = getForceLeaveRecordForDate(employee, dateKey, forceLeaveRecords);
+    const forceLeaveTreatment = getForceLeavePayrollTreatment(employee, forceLeaveRecord);
+    const decision = getForceLeaveAttendanceDecision(attendanceRecord);
+
+    let effectiveRecord = attendanceRecord;
+
+    if (forceLeaveRecord) {
+      const actualAttendanceExists = Boolean(attendanceRecord?.status);
+
+      if (actualAttendanceExists && String(attendanceRecord.status).toUpperCase() !== "FL") {
+        forceLeaveConflictDays += 1;
+        forceLeaveConflictDates.push(dateKey);
+
+        if (decision === "FORCE_LEAVE") {
+          forceLeaveForceLeaveWins += 1;
+          effectiveRecord = {
+            ...(attendanceRecord || {}),
+            status: "FL",
+            otHours: 0,
+            ot: 0,
+          };
+        } else {
+          // No decision or Keep Attendance: never overwrite actual attendance.
+          forceLeaveAttendanceWins += 1;
+        }
+      } else if (!actualAttendanceExists) {
+        // No attendance during the active FL period: Force Leave applies.
+        effectiveRecord = { status: "FL", otHours: 0, ot: 0 };
+      }
+    }
+
+    const status = String(effectiveRecord?.status || "").toUpperCase();
+
+    if (forceLeaveRecord && status === "FL") {
+      forceLeaveDays += 1;
+      if (forceLeaveTreatment.paidDay) {
+        forceLeavePaidDays += 1;
+      }
+      if (forceLeaveTreatment.salaryHold) {
+        salaryHoldDays += 1;
+      }
+    }
 
     switch (status) {
       case "P":
@@ -273,7 +481,9 @@ const calculateMonthlyAttendance = (employeeId, month) => {
       case "CL":
       case "SL":
       case "FL": {
-        const treatment = getLeaveSalaryTreatment(status);
+        const treatment = forceLeaveRecord && status === "FL"
+          ? { countAsPaidDay: forceLeaveTreatment.paidDay, lop: false }
+          : getLeaveSalaryTreatment(status);
         if (treatment.countAsPaidDay) paidLeave += 1;
         if (!treatment.countAsPaidDay || treatment.lop) lop += 1;
         break;
@@ -303,17 +513,16 @@ const calculateMonthlyAttendance = (employeeId, month) => {
         break;
     }
 
-    const hours = Number(record?.otHours || record?.ot || 0);
-
+    const hours = Number(effectiveRecord?.otHours || effectiveRecord?.ot || 0);
     if (Number.isFinite(hours)) {
       otHours += hours;
-       if (record?.status === "WO") {
-     sundayOtHours += hours;
-     } else {
-     weekdayOtHours += hours;
-     }
-     }
-     });
+      if (status === "WO") {
+        sundayOtHours += hours;
+      } else {
+        weekdayOtHours += hours;
+      }
+    }
+  }
 
   const paidDays =
     present +
@@ -336,6 +545,14 @@ const calculateMonthlyAttendance = (employeeId, month) => {
     otHours,
     weekdayOtHours,
     sundayOtHours,
+    forceLeaveDays,
+    forceLeavePaidDays,
+    salaryHoldDays,
+    forceLeaveConflictDays,
+    forceLeaveAttendanceWins,
+    forceLeaveForceLeaveWins,
+    forceLeaveConflictDates,
+    forceLeaveSalaryTreatment: salaryHoldDays > 0 ? "Salary Hold" : (forceLeavePaidDays > 0 ? "Paid" : ""),
   };
 };
   useEffect(() => {
@@ -352,7 +569,50 @@ const calculateMonthlyAttendance = (employeeId, month) => {
   };
 }, []);
   const [activeSection, setActiveSection] = useState("dashboard");
-  const [payrollMonth, setPayrollMonth] = useState("2026-08");
+  const getCurrentPayrollMonth = () => {
+  const today = new Date();
+
+  return `${today.getFullYear()}-${String(
+    today.getMonth() + 1
+  ).padStart(2, "0")}`;
+};
+
+const [payrollMonth, setPayrollMonth] = useState(
+  getCurrentPayrollMonth()
+);
+  const payrollMonthOptions = useMemo(() => {
+  const START_YEAR = 2026;
+  const START_MONTH = 1;
+
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+
+  const options = [];
+
+  for (
+    let year = START_YEAR, month = START_MONTH;
+    year < currentYear || (year === currentYear && month <= currentMonth);
+    month += 1
+  ) {
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+
+    const value = `${year}-${String(month).padStart(2, "0")}`;
+
+    options.push({
+      value,
+      label: new Date(year, month - 1, 1).toLocaleString("en-IN", {
+        month: "long",
+        year: "numeric",
+      }),
+    });
+  }
+
+  return options;
+}, []);
   const [employeeType, setEmployeeType] = useState("All Types");
   const [site, setSite] = useState("All Sites");
   const [search, setSearch] = useState("");
@@ -375,6 +635,115 @@ const calculateMonthlyAttendance = (employeeId, month) => {
   const [salaryEmployeeId, setSalaryEmployeeId] = useState("");
   const [salaryGross, setSalaryGross] = useState("");
   const [salaryInsurance, setSalaryInsurance] = useState("");
+  // =========================================================
+  // FORCE LEAVE - PAYROLL BRIDGE
+  // =========================================================
+
+  const FORCE_LEAVE_STORAGE_KEY = "bauerHrmsForceLeaveRecords";
+
+  const loadForceLeaveRecordsForPayroll = () => {
+    try {
+      const saved = localStorage.getItem(FORCE_LEAVE_STORAGE_KEY);
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error("Unable to load Force Leave records for Payroll:", error);
+      return [];
+    }
+  };
+
+  const isThirdPartyEmployee = (employee) => {
+    const type = String(
+      employee?.type ||
+      employee?.employeeType ||
+      employee?.employmentType ||
+      employee?.employeeGroup ||
+      ""
+    ).trim().toLowerCase();
+
+    return (
+      type.includes("third party") ||
+      type.includes("third-party") ||
+      type.includes("thirdparty") ||
+      type.includes("contract")
+    );
+  };
+
+  const isDateWithinForceLeave = (dateKey, forceLeaveRecord) => {
+    if (!dateKey || !forceLeaveRecord) return false;
+    const start = String(forceLeaveRecord.flStartDate || "");
+    if (!start) return false;
+
+    const actualRejoining = String(forceLeaveRecord.actualRejoiningDate || "");
+    const end = actualRejoining
+      ? actualRejoining
+      : String(forceLeaveRecord.tentativeRejoiningDate || "");
+
+    if (!end) return false;
+    return dateKey >= start && dateKey < end;
+  };
+
+  const getForceLeaveRecordForDate = (employee, dateKey, forceLeaveRecords) => {
+    if (!employee || !dateKey) return null;
+
+    const employeeKeys = new Set(
+      [employee?.id, employee?.employeeId, employee?.employeeCode, employee?.empCode]
+        .filter(Boolean)
+        .map((value) => String(value).trim())
+    );
+
+    return (
+      forceLeaveRecords.find((record) => {
+        // Rejoined records remain valid for historical payroll dates before
+        // the actual rejoining date. Cancelled records do not apply.
+        if (record?.status === "Cancelled") return false;
+        const recordEmployeeId = String(record?.employeeId || "").trim();
+        if (!employeeKeys.has(recordEmployeeId)) return false;
+        return isDateWithinForceLeave(dateKey, record);
+      }) || null
+    );
+  };
+
+  const getForceLeaveAttendanceDecision = (record) => {
+    if (!record) return "";
+
+    const raw =
+      record?.forceLeaveResolution ||
+      record?.conflictResolution ||
+      record?.attendanceConflictResolution ||
+      record?.forceLeaveDecision ||
+      record?.attendanceDecision ||
+      "";
+
+    const value = String(raw).trim().toLowerCase();
+
+    if (value === "keep attendance" || value === "attendance" || value === "attendance wins") {
+      return "ATTENDANCE";
+    }
+
+    if (value === "keep force leave" || value === "force leave" || value === "force_leave" || value === "fl") {
+      return "FORCE_LEAVE";
+    }
+
+    return "";
+  };
+
+  const getForceLeavePayrollTreatment = (employee, forceLeaveRecord) => {
+    if (!forceLeaveRecord) {
+      return { isForceLeave: false, salaryTreatment: "", salaryHold: false, paidDay: false };
+    }
+
+    const thirdParty = isThirdPartyEmployee(employee);
+
+    return {
+      isForceLeave: true,
+      salaryTreatment: thirdParty ? "Salary Hold" : "Paid",
+      salaryHold: thirdParty,
+      paidDay: !thirdParty,
+    };
+  };
+
   const PAYROLL_RESULT_KEY = "bauerHrmsProcessedPayroll";
 const PAYROLL_RESULT_MONTH_KEY = "bauerHrmsProcessedPayrollMonth";
 const PAYROLL_STATUS_KEY = "bauerHrmsPayrollProcessingStatus";
@@ -464,11 +833,13 @@ useEffect(() => {
   const defaultStatutorySettings = {
     ruleVersion: STATUTORY_RULE_VERSION,
     effectiveFrom: "2026-05-08",
+    companyRuleName: "Current Company / Establishment",
     pf: {
       enabled: true,
       employeeRate: "12",
       employerRate: "12",
       wageCeiling: "15000",
+      wageBasis: "Basic + DA + Special Allowance",
       higherWageContribution: false,
       applicable: true,
     },
@@ -512,7 +883,7 @@ useEffect(() => {
             esi: {
               ...defaultStatutorySettings.esi,
               ...(stored.esi || {}),
-              contributionBasis: "Basic + DA + Special Allowance",
+              contributionBasis: stored?.esi?.contributionBasis || defaultStatutorySettings.esi.contributionBasis,
             },
             pt: { ...defaultStatutorySettings.pt, ...(stored.pt || {}) },
             lwf: { ...defaultStatutorySettings.lwf, ...(stored.lwf || {}) },
@@ -596,7 +967,35 @@ useEffect(() => {
     const next = { ...statutorySettings, ruleVersion: STATUTORY_RULE_VERSION };
     setStatutorySettings(next);
     localStorage.setItem(STATUTORY_KEY, JSON.stringify(next));
-    window.alert("Statutory configuration saved successfully.");
+
+    // Keep the same manual statutory rule in Organization Masters so
+    // Payroll Processing uses exactly what HR saved here.
+    try {
+      const masters = loadOrganizationPayrollMasters();
+      const policy = {
+        id: "STATUTORY-MANUAL-001",
+        name: next.companyRuleName || "Manual Statutory Rule",
+        code: "MANUAL-STATUTORY",
+        active: true,
+        effectiveFrom: next.effectiveFrom || "2026-05-08",
+        ruleVersion: next.ruleVersion,
+        companyRuleName: next.companyRuleName || "Current Company / Establishment",
+        pf: { ...next.pf },
+        esi: { ...next.esi },
+        pt: { ...next.pt },
+        lwf: { ...next.lwf },
+        wageDefinition: { ...next.wageDefinition },
+      };
+      const existingPolicies = Array.isArray(masters.statutoryPolicies) ? masters.statutoryPolicies : [];
+      const otherPolicies = existingPolicies.filter((item) => item?.id !== policy.id && item?.code !== policy.code);
+      const nextMasters = { ...masters, statutoryPolicies: [policy, ...otherPolicies] };
+      localStorage.setItem(ORGANIZATION_STORAGE_KEY, JSON.stringify(nextMasters));
+      window.dispatchEvent(new Event("bauerHrmsOrganizationMastersUpdated"));
+    } catch (error) {
+      console.error("Unable to sync statutory rule to Organization Masters:", error);
+    }
+
+    window.alert("Statutory configuration saved successfully and linked to Payroll Processing.");
   };
 
   // Bulk salary upload — kept separate from the single-employee salary form
@@ -2736,10 +3135,13 @@ useEffect(() => {
           const daysInMonth =
             year && month ? new Date(year, month, 0).getDate() : 0;
 
-          const payableGross =
-            daysInMonth > 0
-              ? (gross * Number(attendance.paidDays || 0)) / daysInMonth
-              : 0;
+          const reviewPaidDays =
+  Number(attendance.paidDays || 0);
+
+const payableGross =
+  daysInMonth > 0
+    ? (gross * reviewPaidDays) / daysInMonth
+    : 0;
 
           const statutory = getStatutoryCalculation({
             employee,
@@ -3086,6 +3488,8 @@ useEffect(() => {
                 employee.id,
                 payrollMonth
                 );
+                const reviewPaidDays =
+                Number(attendance.paidDays || 0);
                 const structure = salaryStructures[employee.id];
                 const hourlyRate = getHourlyRate(employee);
 
@@ -3117,7 +3521,7 @@ useEffect(() => {
 
               const payableGross =
               daysInMonth > 0
-              ? (grossSalary * attendance.paidDays) / daysInMonth
+              ? (grossSalary * reviewPaidDays) / daysInMonth
               : 0;
 
               const pfAmount = Number(statutory.pf?.employee ?? 0);
@@ -3157,7 +3561,7 @@ useEffect(() => {
                 <td>{money(statutory.pf?.employee ?? 0)}</td>
                 <td>{money(statutory.esi?.employee ?? 0)}</td>
                 <td>{money(statutory.pt?.amount ?? 0)}</td>
-                <td>{attendance.paidDays}</td>
+                <td>{reviewPaidDays}</td>
                 <td>{attendance.lop}</td>
                 <td>{attendance.otHours}</td>
                 <td className={employee.lop ? "lop-value" : ""}>{employee.lop}</td>
@@ -3184,156 +3588,123 @@ useEffect(() => {
   );
 
   const processCurrentPayroll = () => {
-  const rows = employees.map((employee) => {
-    const attendance = calculateMonthlyAttendance(
-      employee.id,
-      payrollMonth
-    );
+    const masters = loadOrganizationPayrollMasters();
+    const organizationStatutoryFallback = statutorySettings;
+    const errors = [];
 
-    const structure = salaryStructures[employee.id] || {};
+    const rows = employees.map((employee) => {
+      const category = resolveWorkforceCategory(employee, masters);
+      const profile = resolvePayrollProfile(employee, masters, category);
+      const effectiveDate = `${payrollMonth}-01`;
+      const salaryRule = resolvePolicy(masters.salaryRules, profile?.salaryRuleIds, category?.id, effectiveDate);
+      const prorationRule = resolvePolicy(masters.prorationRules, profile?.prorationRuleIds, category?.id, effectiveDate) ||
+        (Array.isArray(masters.prorationRules) ? masters.prorationRules.find((x) => x.active !== false && (!x.workforceCategories?.length || x.workforceCategories.includes(category?.id))) : null);
+      const statutoryPolicy = resolvePolicy(masters.statutoryPolicies, profile?.statutoryPolicyIds, category?.id, effectiveDate);
+      const deductionPolicy = resolvePolicy(masters.deductionPolicies, profile?.deductionPolicyIds, category?.id, effectiveDate);
+      const otPolicy = resolvePolicy(masters.otPolicies, profile?.otPolicyIds, category?.id, effectiveDate);
 
-    const statutory = getStatutoryCalculation({
-      employee,
-      structure,
-      settings: statutorySettings,
-      payrollMonth,
+      const attendance = calculateMonthlyAttendance(employee.id, payrollMonth);
+      const existingStructure = salaryStructures[employee.id] || {};
+      const structure = getSalaryStructureFromOrganizationRule(employee, existingStructure, salaryRule);
+      const grossSalary = Number(structure?.gross ?? employee?.gross ?? 0);
+      if (!(grossSalary > 0)) {
+        errors.push(`${getEmployeeCode(employee) || employee.name}: Gross salary is missing.`);
+      }
+
+      const proration = calculateOrganizationProration({ gross: grossSalary, attendance, employee, payrollMonth, profile, rule: prorationRule });
+      const payableGross = Math.max(0, proration.payableGross);
+
+      const policySettings = adaptOrganizationStatutoryPolicy(statutoryPolicy, organizationStatutoryFallback);
+      const statutory = getStatutoryCalculation({ employee, structure, settings: policySettings, payrollMonth });
+      const pfAmount = Number(statutory?.pf?.employee ?? 0);
+      const esiAmount = Number(statutory?.esi?.employee ?? 0);
+      const ptAmount = Number(statutory?.pt?.amount ?? 0);
+      const lwfEmployee = Number(statutory?.lwf?.employee ?? 0);
+
+      const otApplicable = otPolicy ? otPolicy.otApplicable !== false : true;
+      const otBasis = normalizeText(otPolicy?.calculationBasis || "BASIC");
+      const otWage = otBasis === "GROSS" ? grossSalary : Number(structure?.basicDA || grossSalary * 0.5);
+      const hoursPerDay = Math.max(1, Number(otPolicy?.workingHoursPerDay || otHoursPerDay || 8));
+      const dayBasis = Math.max(1, Number(otDayBasis || (profile?.workingDaysBasis === "CALENDAR_DAYS" ? new Date(Number(payrollMonth.slice(0,4)), Number(payrollMonth.slice(5,7)), 0).getDate() : 26)));
+      const hourlyRate = otApplicable ? otWage / dayBasis / hoursPerDay : 0;
+      const weekdayMultiplier = Number(otPolicy?.weekdayMultiplier ?? otMultiplier ?? 1.5);
+      const weeklyOffMultiplier = Number(otPolicy?.weeklyOffMultiplier ?? otMultiplier2 ?? 2);
+      const holidayMultiplier = Number(otPolicy?.holidayMultiplier ?? weeklyOffMultiplier);
+      const weekdayOT = hourlyRate * weekdayMultiplier * Number(attendance.weekdayOtHours || 0);
+      const sundayOT = hourlyRate * weeklyOffMultiplier * Number(attendance.sundayOtHours || 0);
+      const otAmount = otApplicable ? weekdayOT + sundayOT : 0;
+
+      const monthlyDeductions = deductions.filter((item) => item.status === "Active" && item.employeeId === employee.id && (!item.month || item.month === payrollMonth));
+      let loanDeduction = 0, foodDeduction = 0, recoveryDeduction = 0, otherDeduction = 0;
+      monthlyDeductions.forEach((item) => {
+        if (item.type === "Loan / Advance") {
+          const start = String(item.startMonth || "0000-00");
+          if (start <= payrollMonth && Number(item.remainingAmount ?? item.totalAmount ?? 0) > 0) loanDeduction += Math.min(Number(item.emiAmount || 0), Number(item.remainingAmount ?? item.totalAmount ?? 0));
+        } else if (item.type === "Food Deduction") foodDeduction += Number(item.totalAmount || 0);
+        else if (item.type === "Recovery") recoveryDeduction += Number(item.totalAmount || 0);
+        else if (item.type === "Other Deduction") otherDeduction += Number(item.totalAmount || 0);
+      });
+      const configuredMaxPercent = Number(deductionPolicy?.maximumDeductionPercent ?? 50);
+      const maxDeduction = Math.max(0, payableGross * configuredMaxPercent / 100);
+      const configuredDeductionTotal = loanDeduction + foodDeduction + recoveryDeduction + otherDeduction;
+      const cappedOtherDeductions = Math.min(configuredDeductionTotal, maxDeduction);
+
+      const arrears = arrearEntries.filter((item) => item.employeeId === employee.id && item.payrollMonth === payrollMonth);
+      const arrearAddition = arrears.reduce((sum, item) => sum + (item.type === "Adjustment" && item.adjustmentMode === "Reduction" ? 0 : Number(item.amount || 0)), 0);
+      const adjustmentReduction = arrears.reduce((sum, item) => sum + (item.type === "Adjustment" && item.adjustmentMode === "Reduction" ? Number(item.amount || 0) : 0), 0);
+
+      const totalEmployeeDeductions = pfAmount + esiAmount + ptAmount + lwfEmployee + cappedOtherDeductions;
+      const finalNetPayable = Math.max(0, payableGross + otAmount + arrearAddition - adjustmentReduction - totalEmployeeDeductions);
+      const forceLeaveSalaryHoldApplied = Number(attendance.salaryHoldDays || 0) > 0;
+      const employerPF = Number(statutory?.pf?.employer ?? 0);
+      const employerESI = Number(statutory?.esi?.employer ?? 0);
+      const lwfEmployer = Number(statutory?.lwf?.employer ?? 0);
+      const insurance = Number(structure?.insurance ?? employee?.insurance ?? 0);
+      const finalCTC = payableGross + otAmount + arrearAddition - adjustmentReduction + employerPF + employerESI + lwfEmployer + insurance;
+
+      return {
+        payrollMonth, employeeId: employee.id, employeeCode: getEmployeeCode(employee), employeeName: employee.name,
+        employeeType: employee.type || "", workforceCategoryId: category?.id || "", workforceCategory: category?.name || employee?.type || "",
+        payrollProfileId: profile?.id || "", payrollProfile: profile?.name || "", salaryRuleId: salaryRule?.id || "", prorationRuleId: prorationRule?.id || "",
+        statutoryPolicyId: statutoryPolicy?.id || "", deductionPolicyId: deductionPolicy?.id || "", otPolicyId: otPolicy?.id || "", payrollCalendarId: profile?.payrollCalendarId || "",
+        department: employee.department || "", designation: employee.designation || "", site: employee.site || "", vendor: employee.vendor || "",
+        doj: employee.doj || employee.dateOfJoining || "", gender: employee.gender || "", pan: employee.pan || employee.panNumber || "",
+        uan: employee.uan || employee.pfNumber || employee.pfAccountNumber || "", esiNumber: employee.esiNumber || employee.esicNumber || employee.esiNo || "",
+        bankName: employee.bankName || "", bankAccount: employee.bankAccount || employee.bankAccountNumber || employee.accountNumber || "", ifsc: employee.ifsc || employee.ifscCode || "", paymentMode: employee.paymentMode || "Bank Transfer",
+        gross: grossSalary, payableGross: Math.round(payableGross * 100) / 100, lopAmount: Math.max(0, grossSalary - payableGross),
+        basicDA: Number(structure.basicDA || 0), hra: Number(structure.hra || 0), specialAllowance: Number(structure.specialAllowance || 0),
+        pf: pfAmount, pfWage: Number(statutory?.pf?.base ?? 0), esi: esiAmount, esiWage: Number(statutory?.esi?.wage ?? 0), esiCovered: Boolean(statutory?.esi?.covered),
+        labourCodeWage: Number(statutory?.labourCodeWage ?? 0), pt: ptAmount, lwfEmployee, lwfEmployer,
+        paidDays: proration.paidDays, denominatorDays: proration.denominator, prorationRatio: proration.ratio, lopDays: attendance.lop,
+        forceLeaveDays: attendance.forceLeaveDays, forceLeavePaidDays: attendance.forceLeavePaidDays,
+        salaryHoldDays: attendance.salaryHoldDays,
+        salaryHoldAmount: Math.round((grossSalary / Math.max(1, proration.denominator)) * attendance.salaryHoldDays * 100) / 100,
+        forceLeaveSalaryHoldApplied, forceLeavePaymentStatus: forceLeaveSalaryHoldApplied ? "Salary Hold" : "Normal Payroll",
+        forceLeaveConflictDays: attendance.forceLeaveConflictDays,
+        forceLeaveAttendanceWins: attendance.forceLeaveAttendanceWins,
+        forceLeaveForceLeaveWins: attendance.forceLeaveForceLeaveWins,
+        forceLeaveConflictDates: attendance.forceLeaveConflictDates,
+        forceLeaveSalaryTreatment: attendance.forceLeaveSalaryTreatment,
+        presentDays: attendance.present, halfDays: attendance.halfDay, paidLeaveDays: attendance.paidLeave, weeklyOffDays: attendance.weeklyOff, holidayDays: attendance.holiday, compOffDays: attendance.compOff,
+        otHours: attendance.otHours, weekdayOtHours: attendance.weekdayOtHours, sundayHolidayOtHours: attendance.sundayOtHours, hourlyRate, weekdayOT, sundayOT, holidayMultiplier, otAmount,
+        loanDeduction, foodDeduction, recoveryDeduction, otherDeduction, otherDeductionsCapped: Math.max(0, configuredDeductionTotal - cappedOtherDeductions),
+        deductionPolicyCap: maxDeduction, totalOtherDeductions: cappedOtherDeductions, arrearAddition, adjustmentReduction,
+        totalEmployeeDeductions, netPayable: finalNetPayable, employerPF, employerESI, insurance, finalCTC, status: "Processed",
+        processedAt: new Date().toISOString(),
+      };
     });
 
-    const grossSalary = Number(
-      structure?.gross ?? employee?.gross ?? 0
-    );
+    if (errors.length) {
+      window.alert(errors.join("\n"));
+      return;
+    }
 
-    const daysInMonth = new Date(
-      Number(payrollMonth.split("-")[0]),
-      Number(payrollMonth.split("-")[1]),
-      0
-    ).getDate();
-
-    const payableGross =
-      daysInMonth > 0
-        ? (grossSalary * attendance.paidDays) / daysInMonth
-        : 0;
-
-    const pfAmount = Number(
-      statutory.pf?.employee ?? 0
-    );
-
-    const esiAmount = Number(
-      statutory.esi?.employee ?? 0
-    );
-
-    const ptAmount = Number(
-      statutory.pt?.amount ?? 0
-    );
-
-    const netPayable =
-      payableGross -
-      pfAmount -
-      esiAmount -
-      ptAmount;
-
-    const hourlyRate = getHourlyRate(employee);
-
-    const weekdayOT =
-      hourlyRate *
-      Number(otMultiplier || 1.5) *
-      Number(attendance.weekdayOtHours || 0);
-
-    const sundayOT =
-      hourlyRate *
-      Number(otMultiplier2 || 2) *
-      Number(attendance.sundayOtHours || 0);
-
-    const otAmount = weekdayOT + sundayOT;
-
-    const finalNetPayable =
-      netPayable + otAmount;
-
-    const employerPF = Number(
-      statutory.pf?.employer ?? 0
-    );
-
-    const employerESI = Number(
-      statutory.esi?.employer ?? 0
-    );
-
-    const insurance = Number(
-      structure?.insurance ??
-      employee?.insurance ??
-      0
-    );
-
-    const finalCTC =
-      payableGross +
-      employerPF +
-      employerESI +
-      insurance;
-
-    const lopAmount = Math.max(
-      0,
-      grossSalary - payableGross
-    );
-
-    return {
-      payrollMonth,
-      employeeId: employee.id,
-      employeeCode: getEmployeeCode(employee),
-      employeeName: employee.name,
-      employeeType: employee.type || "",
-      department: employee.department || "",
-      designation: employee.designation || "",
-      site: employee.site || "",
-      vendor: employee.vendor || "",
-      doj: employee.doj || employee.dateOfJoining || "",
-      gender: employee.gender || "",
-      pan: employee.pan || employee.panNumber || "",
-      uan: employee.uan || employee.pfNumber || employee.pfAccountNumber || "",
-      esiNumber: employee.esiNumber || employee.esicNumber || employee.esiNo || "",
-      bankName: employee.bankName || "",
-      bankAccount: employee.bankAccount || employee.bankAccountNumber || employee.accountNumber || "",
-      ifsc: employee.ifsc || employee.ifscCode || "",
-      paymentMode: employee.paymentMode || "Bank Transfer",
-      gross: grossSalary,
-      payableGross,
-      lopAmount,
-      pf: pfAmount,
-      pfWage: Number(statutory.pf?.base ?? 0),
-      esi: esiAmount,
-      esiWage: Number(statutory.esi?.wage ?? 0),
-      esiCovered: Boolean(statutory.esi?.covered),
-      labourCodeWage: Number(statutory.labourCodeWage ?? 0),
-      pt: ptAmount,
-      paidDays: attendance.paidDays,
-      lopDays: attendance.lop,
-      otHours: attendance.otHours,
-      otAmount,
-      netPayable: finalNetPayable,
-      employerPF,
-      employerESI,
-      insurance,
-      finalCTC,
-    };
-  });
-
-setProcessedPayroll(rows);
-setPayrollProcessingStatus("Processed");
-
-localStorage.setItem(
-  PAYROLL_RESULT_KEY,
-  JSON.stringify(rows)
-);
-
-localStorage.setItem(
-  PAYROLL_RESULT_MONTH_KEY,
-  payrollMonth
-);
-
-localStorage.setItem(
-  PAYROLL_STATUS_KEY,
-  "Processed"
-);
-
-};
+    setProcessedPayroll(rows);
+    setPayrollProcessingStatus("Processed");
+    localStorage.setItem(PAYROLL_RESULT_KEY, JSON.stringify(rows));
+    localStorage.setItem(PAYROLL_RESULT_MONTH_KEY, payrollMonth);
+    localStorage.setItem(PAYROLL_STATUS_KEY, "Processed");
+  };
 
 const finalizeCurrentPayroll = () => {
   if (!processedPayroll.length) {
@@ -3356,7 +3727,7 @@ const renderProcessing = () => {
     employees.length > 0 &&
     employees.every((employee) => {
       const structure = salaryStructures[employee.id];
-      return structure && Number(structure.gross || 0) > 0;
+      return Number(structure?.gross ?? employee?.gross ?? 0) > 0;
     });
 
   const statutoryReady =
@@ -6712,6 +7083,7 @@ const renderProcessing = () => {
             ["employerRate", "Employer Contribution %", "number", "%"],
             ["wageCeiling", "PF Wage Ceiling", "number", "₹"],
           ],
+          wageBasisOptions: ["Basic + DA", "Basic + DA + Special Allowance", "Gross"],
         },
         {
           key: "esi", title: "ESI", short: "ESI", description: "Employee & employer ESIC", className: "statutory-esi",
@@ -6721,6 +7093,7 @@ const renderProcessing = () => {
             ["wageCeiling", "ESI Wage Ceiling", "number", "₹"],
             ["disabledEmployeeWageCeiling", "PwD Wage Ceiling", "number", "₹"],
           ],
+          wageBasisOptions: ["Basic + DA", "Basic + DA + Special Allowance", "Gross"],
         },
         { key: "pt", title: "Professional Tax", short: "PT", description: "State-wise professional tax", className: "statutory-pt", fields: [] },
         {
@@ -6835,6 +7208,120 @@ const renderProcessing = () => {
             </div>
           </div>
 
+          <div style={{ margin: "16px 0", padding: "18px", border: "1px solid #e6e1f2", borderRadius: "14px", background: "linear-gradient(180deg,#ffffff 0%,#faf9ff 100%)", boxShadow: "0 6px 18px rgba(48,43,88,.04)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", marginBottom: "16px" }}>
+              <div style={{ minWidth: 0 }}>
+                <small className="payroll-eyebrow">MANUAL COMPANY RULE</small>
+                <strong style={{ display: "block", marginTop: "3px", color: "var(--pay-ink,#3d3a54)", fontSize: "15px" }}>Company / Establishment Statutory Profile</strong>
+                <span style={{ display: "block", marginTop: "4px", color: "#7b7890", fontSize: "11px" }}>Set the exact PF and ESI rate, ceiling and wage basis used by this payroll.</span>
+              </div>
+              <span style={{ flexShrink: 0, padding: "7px 11px", borderRadius: "999px", background: "#f0eeff", color: "#6655b6", fontSize: "10px", fontWeight: 800 }}>Manual Rule</span>
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1.65fr) minmax(220px, 0.75fr)",
+                gap: "16px",
+                alignItems: "end",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "7px",
+                  minWidth: 0,
+                  margin: 0,
+                }}
+              >
+                <span
+                  style={{
+                    display: "block",
+                    color: "#6f6882",
+                    fontSize: "10px",
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                    letterSpacing: ".02em",
+                  }}
+                >
+                  Company / Establishment Name
+                </span>
+                <input
+                  type="text"
+                  value={statutorySettings.companyRuleName || ""}
+                  placeholder="e.g. Bauer Engineering India Pvt. Ltd."
+                  onChange={(e) =>
+                    setStatutorySettings((previous) => ({
+                      ...previous,
+                      companyRuleName: e.target.value,
+                    }))
+                  }
+                  style={{
+                    width: "100%",
+                    minWidth: 0,
+                    height: "40px",
+                    boxSizing: "border-box",
+                    padding: "0 12px",
+                    border: "1px solid #dcd6eb",
+                    borderRadius: "9px",
+                    background: "#ffffff",
+                    color: "#37314f",
+                    fontSize: "12px",
+                    lineHeight: 1.2,
+                    outline: "none",
+                  }}
+                />
+              </label>
+
+              <label
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "7px",
+                  minWidth: 0,
+                  margin: 0,
+                }}
+              >
+                <span
+                  style={{
+                    display: "block",
+                    color: "#6f6882",
+                    fontSize: "10px",
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                    letterSpacing: ".02em",
+                  }}
+                >
+                  Effective From
+                </span>
+                <input
+                  type="date"
+                  value={statutorySettings.effectiveFrom || ""}
+                  onChange={(e) =>
+                    setStatutorySettings((previous) => ({
+                      ...previous,
+                      effectiveFrom: e.target.value,
+                    }))
+                  }
+                  style={{
+                    width: "100%",
+                    minWidth: 0,
+                    height: "40px",
+                    boxSizing: "border-box",
+                    padding: "0 10px",
+                    border: "1px solid #dcd6eb",
+                    borderRadius: "9px",
+                    background: "#ffffff",
+                    color: "#37314f",
+                    fontSize: "12px",
+                    lineHeight: 1.2,
+                    outline: "none",
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
           <div className="statutory-grid">
             {statutoryCards.map((card) => {
               const config = statutorySettings[card.key];
@@ -6862,12 +7349,14 @@ const renderProcessing = () => {
                       {card.fields.map(([field, label, type, prefix]) => (
                         <label key={field}><span>{label}</span><div className="statutory-input-wrap"><input type={type} min="0" step="0.01" value={config[field]} placeholder="Enter" onChange={(e) => updateStatutory(card.key, field, e.target.value)} /><em>{prefix}</em></div></label>
                       ))}
+                      {(card.key === "pf" || card.key === "esi") && <label><span>Contribution Wage Basis</span><select value={card.key === "pf" ? (config.wageBasis || "Basic + DA + Special Allowance") : (config.contributionBasis || "Basic + DA + Special Allowance")} onChange={(e) => updateStatutory(card.key, card.key === "pf" ? "wageBasis" : "contributionBasis", e.target.value)}><option>Basic + DA</option><option>Basic + DA + Special Allowance</option><option>Gross</option></select></label>}
                       {card.key === "lwf" && <label><span>Contribution Frequency</span><select value={config.frequency} onChange={(e) => updateStatutory("lwf", "frequency", e.target.value)}><option>Monthly</option><option>Quarterly</option><option>Half-Yearly</option><option>Yearly</option></select></label>}
                     </div>
                   )}
 
-                  {card.key === "pf" && <div className="statutory-inline-options"><label><input type="checkbox" checked={Boolean(config.higherWageContribution)} onChange={(e) => updateStatutory("pf", "higherWageContribution", e.target.checked)} /> Higher wage contribution</label></div>}
-                  {card.key === "esi" && <div className="statutory-rule-note"><span>ESI Calculation Basis</span><strong>Basic + DA + Special Allowance</strong><small>ESI is applicable only when this wage is ≤ ₹{Number(config.wageCeiling || 21000).toLocaleString("en-IN")}.</small></div>}
+                  {card.key === "pf" && <div className="statutory-inline-options"><label><input type="checkbox" checked={Boolean(config.higherWageContribution)} onChange={(e) => updateStatutory("pf", "higherWageContribution", e.target.checked)} /> Calculate above the configured ceiling</label></div>}
+                  {card.key === "pf" && <div className="statutory-rule-note"><span>PF Calculation Basis</span><strong>{config.wageBasis || "Basic + DA + Special Allowance"}</strong><small>{config.higherWageContribution ? "Ceiling is informational; contribution continues on the selected wage basis." : `Contribution base is capped at ₹${Number(config.wageCeiling || 15000).toLocaleString("en-IN")}.`}</small></div>}
+                  {card.key === "esi" && <div className="statutory-rule-note"><span>ESI Calculation Basis</span><strong>{config.contributionBasis || "Basic + DA + Special Allowance"}</strong><small>ESI coverage is checked against the manually configured ceiling of ₹{Number(config.wageCeiling || 21000).toLocaleString("en-IN")}.</small></div>}
                   {card.key === "lwf" && <div className="statutory-rule-note"><span>LWF Contribution</span><strong>Configured Employee + Employer Amount</strong><small>Contribution is applied according to the selected frequency.</small></div>}
                   {card.key === "pt" && <div className="statutory-rule-note"><span>PT Calculation</span><strong>{config.mode === "Manual" ? "Manual Amount" : "State-wise Automatic"}</strong><small>{config.mode === "Manual" ? `₹${Number(config.manualAmount || 0).toLocaleString("en-IN")} per payroll month` : `${config.state}: ${PROFESSIONAL_TAX_RULES[config.state]?.label || "State rule not configured"}`}</small></div>}
 
@@ -6895,9 +7384,9 @@ const renderProcessing = () => {
             </div>
             <div className="statutory-result-grid" style={{rowGap: "18px"}}>
               <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>Labour Code Wage</span><strong>{money(statutoryPreview.labourCodeWage)}</strong></div>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>PF Employee</span><strong>{money(statutoryPreview.pf.employee)}</strong><small>Base {money(statutoryPreview.pf.base)}</small></div>
+              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>PF Employee</span><strong>{money(statutoryPreview.pf.employee)}</strong><small>Base {money(statutoryPreview.pf.base)} · {statutorySettings.pf.wageBasis || "Basic + DA + Special Allowance"}</small></div>
               <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>PF Employer</span><strong>{money(statutoryPreview.pf.employer)}</strong></div>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#1766a5", fontSize: "7px", fontWeight: 800}}>ESI Wage</span><strong>{money(statutoryPreview.esi.wage)}</strong><small>Basic + DA + Special Allowance</small></div>
+              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#1766a5", fontSize: "7px", fontWeight: 800}}>ESI Wage</span><strong>{money(statutoryPreview.esi.wage)}</strong><small>{statutorySettings.esi.contributionBasis || "Basic + DA + Special Allowance"}</small></div>
               <div
   className={statutoryPreview.esi.covered ? "result-success" : "result-muted"}
   style={{
@@ -7251,16 +7740,12 @@ const renderProcessing = () => {
                             </button>
 
                             <button
-                              type="button"
-                              className="payroll-link-btn"
-                              onClick={() =>
-                                toggleDeductionStatus(item.id)
-                              }
-                            >
-                              {item.status === "Active"
-                                ? "Disable"
-                                : "Enable"}
-                            </button>
+  type="button"
+  className="payroll-link-btn"
+  onClick={() => toggleDeductionStatus(item.id)}
+>
+  {item.status === "Active" ? "Disable" : "Enable"}
+</button>
 
                             <button
                               type="button"
@@ -10338,7 +10823,16 @@ const renderProcessing = () => {
               <p>Manage salary processing, statutory deductions, third-party costing and payroll reports.</p>
             </div>
             <div className="payroll-head-actions">
-              <label>Payroll Month<select value={payrollMonth} onChange={(e) => setPayrollMonth(e.target.value)}><option value="2026-08">August 2026</option><option value="2026-07">July 2026</option><option value="2026-06">June 2026</option></select></label>
+              <select
+  value={payrollMonth}
+  onChange={(e) => setPayrollMonth(e.target.value)}
+>
+{payrollMonthOptions.map((month) => (
+  <option key={month.value} value={month.value}>
+    {month.label}
+  </option>
+))}
+</select>
               <button className="payroll-export-btn">⇩ Export</button>
             </div>
           </div>

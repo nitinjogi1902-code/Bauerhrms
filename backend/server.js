@@ -4,6 +4,7 @@ import express from "express";
 import cors from "cors";
 
 import { askHrsyncAI } from "./services/aiEngine.js";
+import { supabase } from "./services/supabase.js";
 
 const app = express();
 
@@ -23,12 +24,32 @@ app.use(express.json({ limit: "1mb" }));
    HEALTH CHECK
 ========================================= */
 
-app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true,
-    service: "HRSYNC AI Backend",
-    timestamp: new Date().toISOString(),
-  });
+app.get("/api/health", async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from("hrms_app_metadata")
+      .select("id")
+      .limit(1);
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      ok: true,
+      service: "HRSYNC Backend",
+      database: "connected",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("DATABASE HEALTH ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      service: "HRSYNC Backend",
+      database: "disconnected",
+    });
+  }
 });
 
 

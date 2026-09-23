@@ -2,13 +2,12 @@ import { useEffect, useState } from "react";
 import "./Login.css";
 import {
   activateEmployeeAccount,
-  authenticateAdmin,
   authenticateEmployee,
-  requestAdminPasswordResetOtp,
   verifyAdminPasswordResetOtp,
 } from "./auth";
+import { supabase } from "./supabaseClient";
 
-const ADMIN_EMAIL = "admin@bauer.com";
+
 
 const UserIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -74,27 +73,110 @@ export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const hash = window.location.hash || "";
+  let mounted = true;
 
+  const checkAuthCallback = async () => {
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+
+    // --------------------------------------------------
+    // 1. Legacy activation link
+    // --------------------------------------------------
     if (hash.startsWith("#activate=")) {
+      if (!mounted) return;
+
       setActivationToken(
         decodeURIComponent(hash.slice("#activate=".length))
       );
       setActivationMode(true);
+      return;
     }
-  }, []);
+
+    // --------------------------------------------------
+    // 2. Check whether this was a Supabase invite
+    // --------------------------------------------------
+    const hashParams = new URLSearchParams(
+      hash.replace(/^#/, "")
+    );
+
+    const searchParams = new URLSearchParams(search);
+
+    const isSupabaseInvite =
+      hashParams.get("type") === "invite" ||
+      hashParams.has("access_token") ||
+      searchParams.has("code");
+
+    // --------------------------------------------------
+    // 3. Get Supabase session
+    // --------------------------------------------------
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!mounted) return;
+
+    const user = session?.user;
+
+    // --------------------------------------------------
+    // 4. Employee invitation session
+    // --------------------------------------------------
+    const employeeId =
+      user?.user_metadata?.employee_internal_id ||
+      user?.user_metadata?.employeeId ||
+      user?.user_metadata?.employee_id ||
+      "";
+
+    if (isSupabaseInvite || employeeId) {
+      setActivationToken("");
+      setActivationMode(true);
+      return;
+    }
+  };
+
+  checkAuthCallback();
+
+  // --------------------------------------------------
+  // 5. IMPORTANT:
+  // Supabase may process the invitation AFTER the page
+  // has already loaded. Listen for that event.
+  // --------------------------------------------------
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange(
+    (event, session) => {
+      if (!mounted) return;
+
+      const user = session?.user;
+
+      const employeeId =
+        user?.user_metadata?.employee_internal_id ||
+        user?.user_metadata?.employeeId ||
+        user?.user_metadata?.employee_id ||
+        "";
+
+      if (
+        (event === "SIGNED_IN" || event === "INITIAL_SESSION") &&
+        employeeId
+      ) {
+        setActivationToken("");
+        setActivationMode(true);
+      }
+    }
+  );
+
+  return () => {
+    mounted = false;
+    subscription.unsubscribe();
+  };
+}, []);
 
   useEffect(() => {
     if (resendSeconds <= 0) return undefined;
-    const timer = window.setInterval(() => setResendSeconds(v => Math.max(0, v - 1)), 1000);
-    return () => window.clearInterval(timer);
-  }, [resendSeconds]);
 
-  useEffect(() => {
-    if (resendSeconds <= 0) return undefined;
     const timer = window.setInterval(() => {
       setResendSeconds((value) => Math.max(0, value - 1));
     }, 1000);
+
     return () => window.clearInterval(timer);
   }, [resendSeconds]);
 
@@ -160,21 +242,444 @@ export default function Login({ onLogin }) {
     setLoading(true);
 
     try {
-      if (username.trim().toLowerCase() === ADMIN_EMAIL) {
-        const adminResult = await authenticateAdmin(username, password);
+      const email = username.trim().toLowerCase();
 
-        if (!adminResult) {
-          setError("Invalid email or password.");
+      /*
+       * HRSYNC authentication flow
+       *
+       * 1. Authenticate the person with Supabase Auth.
+       * 2. Check whether the authenticated user is a Platform Super Admin.
+       * 3. If not, check company/tenant membership in organization_users.
+       * 4. Resolve the user's company role and permissions.
+       * 5. Only fall back to the legacy employee activation/login flow when
+       *    there is no Supabase Auth account for this email.
+       *
+       * IMPORTANT:
+       * A company user must NOT be inserted into platform_users just to log in.
+       */
+
+      const { data: authData, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+      if (!authError && authData?.user) {
+        const authUser = authData.user;
+
+        /* ---------------------------------------------------------------
+         * PATH 1: HRSYNC PLATFORM SUPER ADMIN
+         * ------------------------------------------------------------- */
+        const {
+          data: platformUser,
+          error: platformError,
+        } = await supabase
+          .from("platform_users")
+          .select("id, user_id, is_super_admin, status")
+          .eq("user_id", authUser.id)
+          .maybeSingle();
+
+        if (platformError) {
+          await supabase.auth.signOut();
+          throw new Error(
+            platformError.message ||
+              "Unable to verify HRSYNC platform access."
+          );
+        }
+
+        if (
+          platformUser?.is_super_admin === true &&
+          String(platformUser.status || "").toLowerCase() === "active"
+        ) {
+          const platformAdmin = {
+            id: authUser.id,
+            userId: authUser.id,
+            email: authUser.email || email,
+            name:
+              authUser.user_metadata?.full_name ||
+              authUser.user_metadata?.name ||
+              "HRSYNC Platform Super Admin",
+            role: "Super Admin",
+            roleCode: "PLATFORM_SUPER_ADMIN",
+            isPlatformSuperAdmin: true,
+            accessType: "platform",
+            platformUserId: platformUser.id,
+            status: platformUser.status,
+          };
+
+          onLogin(rememberMe, platformAdmin);
           return;
         }
-        onLogin(rememberMe, adminResult.admin);
-return;
+
+        /* ---------------------------------------------------------------
+         * PATH 2: COMPANY / TENANT USER
+         * ------------------------------------------------------------- */
+
+        const {
+          data: organizationUser,
+          error: organizationUserError,
+        } = await supabase
+          .from("organization_users")
+          .select(
+            "id, organization_id, user_id, employee_id, status, created_at"
+          )
+          .eq("user_id", authUser.id)
+          .maybeSingle();
+
+        if (organizationUserError) {
+          await supabase.auth.signOut();
+          throw new Error(
+            organizationUserError.message ||
+              "Unable to verify company access."
+          );
+        }
+
+        if (organizationUser) {
+          if (
+            String(organizationUser.status || "").toLowerCase() !== "active"
+          ) {
+            await supabase.auth.signOut();
+            setError(
+              "Your company account is inactive. Please contact your HR administrator."
+            );
+            return;
+          }
+
+          if (!organizationUser.organization_id) {
+            await supabase.auth.signOut();
+            setError(
+              "Your account is not linked to a company. Please contact your HR administrator."
+            );
+            return;
+          }
+
+          /*
+           * Resolve the tenant role.
+           */
+          const {
+            data: roleLink,
+            error: roleLinkError,
+          } = await supabase
+            .from("organization_user_roles")
+            .select("id, organization_user_id, role_id")
+            .eq("organization_user_id", organizationUser.id)
+            .limit(1)
+            .maybeSingle();
+
+          if (roleLinkError) {
+            await supabase.auth.signOut();
+            throw new Error(
+              roleLinkError.message ||
+                "Unable to verify your company role."
+            );
+          }
+
+          if (!roleLink?.role_id) {
+            await supabase.auth.signOut();
+            setError(
+              "No company role has been assigned to your account. Please contact your HR administrator."
+            );
+            return;
+          }
+
+          const {
+            data: role,
+            error: roleError,
+          } = await supabase
+            .from("roles")
+            .select(
+              "id, organization_id, role_code, role_name, description, is_system_role, is_active"
+            )
+            .eq("id", roleLink.role_id)
+            .eq("organization_id", organizationUser.organization_id)
+            .maybeSingle();
+
+          if (roleError) {
+            await supabase.auth.signOut();
+            throw new Error(
+              roleError.message ||
+                "Unable to load your company role."
+            );
+          }
+
+          if (!role || role.is_active === false) {
+            await supabase.auth.signOut();
+            setError(
+              "Your assigned company role is inactive. Please contact your HR administrator."
+            );
+            return;
+          }
+
+          /*
+           * Resolve role permissions.
+           *
+           * Permission format:
+           *   module.action
+           * Example:
+           *   employees.view
+           *   payroll.process
+           */
+          const {
+            data: rolePermissionRows,
+            error: permissionError,
+          } = await supabase
+            .from("role_permissions")
+            .select("permission_id")
+            .eq("role_id", role.id);
+
+          if (permissionError) {
+            await supabase.auth.signOut();
+            throw new Error(
+              permissionError.message ||
+                "Unable to load your permissions."
+            );
+          }
+
+          const permissionIds = (rolePermissionRows || [])
+            .map((item) => item.permission_id)
+            .filter(Boolean);
+
+          let permissions = [];
+
+          if (permissionIds.length) {
+            const {
+              data: permissionRows,
+              error: permissionsError,
+            } = await supabase
+              .from("permissions")
+              .select(
+                "id, permission_code, action, description"
+              )
+              .in("id", permissionIds);
+
+            if (permissionsError) {
+              await supabase.auth.signOut();
+              throw new Error(
+                permissionsError.message ||
+                  "Unable to load your permissions."
+              );
+            }
+
+            permissions = permissionRows || [];
+          }
+
+          /*
+           * Company module access is a second access boundary.
+           * A role permission is effective only when the corresponding
+           * module has also been enabled for this organization by the
+           * HRSYNC Platform Super Admin.
+           */
+          const {
+            data: organizationModules,
+            error: organizationModulesError,
+          } = await supabase
+            .from("organization_modules")
+            .select("module_id")
+            .eq("organization_id", organizationUser.organization_id);
+
+          if (organizationModulesError) {
+            await supabase.auth.signOut();
+            throw new Error(
+              organizationModulesError.message ||
+                "Unable to verify company module access."
+            );
+          }
+
+          const enabledModuleIds = Array.from(
+            new Set(
+              (organizationModules || [])
+                .map((item) => item?.module_id)
+                .filter(Boolean)
+            )
+          );
+
+          let enabledModuleCodes = new Set();
+
+          if (enabledModuleIds.length) {
+            const {
+              data: enabledModules,
+              error: enabledModulesError,
+            } = await supabase
+              .from("platform_modules")
+              .select("id, module_code")
+              .in("id", enabledModuleIds)
+              .eq("is_active", true);
+
+            if (enabledModulesError) {
+              await supabase.auth.signOut();
+              throw new Error(
+                enabledModulesError.message ||
+                  "Unable to load company modules."
+              );
+            }
+
+            enabledModuleCodes = new Set(
+              (enabledModules || [])
+                .map((item) => String(item?.module_code || "").trim().toLowerCase())
+                .filter(Boolean)
+            );
+          }
+
+          permissions = permissions.filter((permission) => {
+            const permissionCode = String(permission?.permission_code || "")
+              .trim()
+              .toLowerCase();
+            const moduleCode = permissionCode.split(".")[0];
+            return moduleCode && enabledModuleCodes.has(moduleCode);
+          });
+
+          /*
+           * Resolve company information.
+           */
+          const {
+            data: organization,
+            error: organizationError,
+          } = await supabase
+            .from("organizations")
+            .select(
+              "id, name, legal_name, code, email, phone, address, city, state, country, pincode, logo_url, currency_code, currency_symbol, timezone, date_format, financial_year_start_month, status, subscription_status, settings"
+            )
+            .eq("id", organizationUser.organization_id)
+            .maybeSingle();
+
+          if (organizationError) {
+            await supabase.auth.signOut();
+            throw new Error(
+              organizationError.message ||
+                "Unable to load company information."
+            );
+          }
+
+          if (!organization) {
+            await supabase.auth.signOut();
+            setError(
+              "The company linked to your account could not be found. Please contact your HR administrator."
+            );
+            return;
+          }
+
+          if (
+            organization.status &&
+            String(organization.status).toLowerCase() !== "active"
+          ) {
+            await supabase.auth.signOut();
+            setError(
+              "This company account is inactive. Please contact HRSYNC support."
+            );
+            return;
+          }
+
+          /*
+           * Resolve the employee profile when the company user is linked
+           * to an employee record.
+           */
+          let employee = null;
+
+          if (organizationUser.employee_id) {
+            const {
+              data: employeeRow,
+              error: employeeError,
+            } = await supabase
+              .from("employees")
+              .select(
+                "id, employee_id, employee_name, email, personal_email, mobile, department, designation, employment_type, organization_id"
+              )
+              .eq("id", organizationUser.employee_id)
+              .eq(
+                "organization_id",
+                organizationUser.organization_id
+              )
+              .maybeSingle();
+
+            if (employeeError) {
+              await supabase.auth.signOut();
+              throw new Error(
+                employeeError.message ||
+                  "Unable to load your employee profile."
+              );
+            }
+
+            employee = employeeRow || null;
+          }
+
+          /*
+           * Build the session user object consumed by App.jsx / Dashboard.
+           */
+          const companyUser = {
+            id: authUser.id,
+            userId: authUser.id,
+            email: authUser.email || email,
+
+            name:
+              authUser.user_metadata?.full_name ||
+              authUser.user_metadata?.name ||
+              employee?.employee_name ||
+              email.split("@")[0],
+
+            role: role.role_name,
+            roleCode: role.role_code,
+
+            isPlatformSuperAdmin: false,
+            accessType: "company",
+
+            organizationId: organizationUser.organization_id,
+            organizationUserId: organizationUser.id,
+            employeeId: organizationUser.employee_id || null,
+
+            status: organizationUser.status,
+
+            organization,
+            employee,
+
+            roleId: role.id,
+            permissions,
+
+            permissionCodes: permissions
+              .map((permission) => {
+                const moduleKey = String(permission.permission_code || "").split(".")[0]
+                  .trim()
+                  .toLowerCase();
+                const action = String(permission.action || "")
+                  .trim()
+                  .toLowerCase();
+                return moduleKey && action
+                  ? `${moduleKey}.${action}`
+                  : "";
+              })
+              .filter(Boolean),
+
+            authUserMetadata: authUser.user_metadata || {},
+          };
+
+          onLogin(rememberMe, companyUser);
+          return;
+        }
+
+        /*
+         * The password was correct and Supabase Auth account exists, but
+         * the account is neither a Platform Super Admin nor a company user.
+         */
+        await supabase.auth.signOut();
+        setError(
+          "Your HRSYNC account is not linked to any company. Please contact your HR administrator."
+        );
+        return;
       }
 
+      /*
+       * Supabase Auth did not authenticate the email/password.
+       *
+       * Keep the existing employee authentication flow for legacy/activation
+       * accounts that have not yet been migrated to Supabase Auth.
+       */
       const result = await authenticateEmployee(username, password);
 
       if (!result) {
-        setError("Invalid email or password.");
+        setError(
+          authError?.message
+            ? "Invalid email or password."
+            : "Invalid email or password."
+        );
         return;
       }
 
@@ -184,9 +689,10 @@ return;
         );
         return;
       }
+
       onLogin(rememberMe, result.employee);
       return;
-} catch (err) {
+    } catch (err) {
       setError(err?.message || "Unable to login.");
     } finally {
       setLoading(false);
@@ -237,17 +743,31 @@ return;
     setLoading(true);
 
     try {
-      if (otpPurpose === "reset" && username.trim().toLowerCase() === ADMIN_EMAIL) {
-        const result = await requestAdminPasswordResetOtp();
-        setOtpMobile(result.mobile);
-        setDevOtp(result.devOtp || "");
-      } else {
-        throw new Error("Login OTP is disabled.");
+      const email = username.trim().toLowerCase();
+
+      if (!email) {
+        throw new Error("Please enter your email address first.");
       }
+
+      const { error: resetError } =
+        await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/`,
+        });
+
+      if (resetError) throw resetError;
+
+      setOtpMode(false);
       setOtp("");
-      setResendSeconds(30);
+      setDevOtp("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setOtpPurpose("login");
+      setResendSeconds(0);
+      setError(
+        "If an account exists for this email, a password reset link has been sent."
+      );
     } catch (err) {
-      setError(err?.message || "Unable to resend OTP.");
+      setError(err?.message || "Unable to send password reset email.");
     } finally {
       setLoading(false);
     }
@@ -522,8 +1042,8 @@ return;
             </div>
 
             <p className="login-help">
-              Your OTP is valid for 5 minutes. For security, only 5 incorrect
-              attempts are allowed.
+              Password recovery is handled securely through your registered
+              email address.
             </p>
           </form>
         ) : (
@@ -595,23 +1115,31 @@ return;
                 className="forgot-password"
                 onClick={async () => {
                   setError("");
-                  if (username.trim().toLowerCase() !== ADMIN_EMAIL) {
-                    setError("Admin password reset is available for the Admin account. Employees should contact HR.");
+
+                  const email = username.trim().toLowerCase();
+
+                  if (!email) {
+                    setError("Please enter your email address first.");
                     return;
                   }
+
                   setLoading(true);
+
                   try {
-                    const result = await requestAdminPasswordResetOtp();
-                    setOtpPurpose("reset");
-                    setOtpMobile(result.mobile);
-                    setDevOtp(result.devOtp || "");
-                    setOtp("");
-                    setNewPassword("");
-                    setConfirmPassword("");
-                    setResendSeconds(30);
-                    setOtpMode(true);
+                    const { error: resetError } =
+                      await supabase.auth.resetPasswordForEmail(email, {
+                        redirectTo: `${window.location.origin}/`,
+                      });
+
+                    if (resetError) throw resetError;
+
+                    setError(
+                      "If an account exists for this email, a password reset link has been sent."
+                    );
                   } catch (err) {
-                    setError(err?.message || "Unable to send password reset OTP.");
+                    setError(
+                      err?.message || "Unable to send password reset email."
+                    );
                   } finally {
                     setLoading(false);
                   }

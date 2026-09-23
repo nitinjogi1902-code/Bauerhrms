@@ -1,0 +1,482 @@
+
+/* ============================================================
+   HRSYNC DESIGN SYSTEM
+   Global visual language for every HRSYNC screen.
+   Inspired by the approved HRSYNC brand:
+   Navy + Indigo + Violet + Blue, white surfaces, soft gradients.
+   ============================================================ */
+
+:root {
+  --hs-primary: #6754e8;
+  --hs-primary-dark: #4d3ac9;
+  --hs-indigo: #4435b8;
+  --hs-blue: #3d73e8;
+  --hs-navy: #102e61;
+  --hs-navy-deep: #092552;
+  --hs-violet-soft: #f1edff;
+  --hs-blue-soft: #edf5ff;
+  --hs-green: #18b985;
+  --hs-orange: #f1a52a;
+  --hs-red: #e95a70;
+  --hs-text: #172453;
+  --hs-text-2: #34436a;
+  --hs-muted: #7b86a4;
+  --hs-muted-2: #9aa3bb;
+  --hs-border: #e4e7f2;
+  --hs-border-strong: #d5d9ea;
+  --hs-surface: #ffffff;
+  --hs-bg: #f7f8fd;
+  --hs-bg-lavender: #f7f5ff;
+  --hs-shadow-sm: 0 4px 16px rgba(31, 37, 82, .05);
+  --hs-shadow-md: 0 12px 32px rgba(42, 40, 105, .08);
+  --hs-radius-sm: 8px;
+  --hs-radius-md: 12px;
+  --hs-radius-lg: 16px;
+  --hs-control-h: 40px;
+  --hs-transition: 160ms ease;
+}
+
+/* Base */
+body {
+  background:
+    radial-gradient(circle at 85% 0%, rgba(125, 94, 235, .055), transparent 28%),
+    var(--hs-bg);
+  color: var(--hs-text);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ============================================================
+   COMPANY WORKSPACE SHELL
+   ============================================================ */
+
+.hrms-app {
+  background:
+    radial-gradient(circle at 88% 0%, rgba(120, 91, 235, .06), transparent 25%),
+    var(--hs-bg);
+}
+
+.hrms-sidebar {
+  background:
+    radial-gradient(circle at 15% 0%, rgba(104, 83, 232, .18), transparent 27%),
+    linear-gradient(180deg, var(--hs-navy) 0%, #0e356e 54%, var(--hs-navy-deep) 100%);
+  box-shadow: 8px 0 30px rgba(10, 35, 78, .10);
+}
+
+.sidebar-brand {
+  height: 78px;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+.sidebar-logo {
+  width: 43px;
+  height: 43px;
+  border-radius: 11px;
+  box-shadow: 0 7px 20px rgba(0,0,0,.10);
+}
+
+.sidebar-logo img {
+  width: 38px;
+  height: 38px;
+}
+
+.sidebar-brand-text strong {
+  font-size: 18px;
+  letter-spacing: -.2px;
+}
+
+.sidebar-brand-text span {
+  color: rgba(255,255,255,.48);
+  font-size: 7px;
+  letter-spacing: 1.2px;
+}
+
+.sidebar-divider {
+  background: rgba(255,255,255,.08);
+}
+
+.sidebar-section-title {
+  color: rgba(255,255,255,.43);
+}
+
+.sidebar-menu-item {
+  height: 44px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: rgba(255,255,255,.67);
+  transition:
+    background var(--hs-transition),
+    color var(--hs-transition),
+    border-color var(--hs-transition),
+    transform var(--hs-transition);
+}
+
+.sidebar-menu-item:hover {
+  background: rgba(255,255,255,.065);
+  color: #fff;
+  border-color: rgba(255,255,255,.06);
+}
+
+.sidebar-menu-item.active {
+  background: linear-gradient(90deg, rgba(117, 91, 238, .95), rgba(92, 101, 231, .86));
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(4, 22, 54, .18);
+}
+
+.sidebar-menu-item.active::before {
+  display: none;
+}
+
+.menu-icon {
+  font-size: 17px;
+}
+
+.menu-label {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.menu-active-dot {
+  width: 5px;
+  height: 5px;
+  background: #fff;
+}
+
+.sidebar-help {
+  background: rgba(255,255,255,.055);
+  border-color: rgba(255,255,255,.09);
+}
+
+.sidebar-logout {
+  height: 40px;
+  border-color: rgba(255,255,255,.14);
+  background: rgba(255,255,255,.045);
+  border-radius: 9px;
+  color: rgba(255,255,255,.76);
+}
+
+.sidebar-logout:hover {
+  background: rgba(255,255,255,.10);
+}
+
+/* Header */
+.hrms-header {
+  height: 68px;
+  padding: 0 25px;
+  background: rgba(255,255,255,.96);
+  border-bottom: 1px solid var(--hs-border);
+  box-shadow: 0 1px 0 rgba(28, 36, 78, .02);
+}
+
+.sidebar-toggle,
+.header-icon-button {
+  border-color: var(--hs-border);
+  background: #fff;
+  color: var(--hs-text-2);
+  border-radius: 9px;
+}
+
+.sidebar-toggle:hover,
+.header-icon-button:hover {
+  border-color: #c9c5ef;
+  color: var(--hs-primary);
+  background: #fbfaff;
+}
+
+.header-title span {
+  color: var(--hs-text);
+}
+
+.header-title small {
+  color: var(--hs-muted-2);
+}
+
+.header-search {
+  height: 38px;
+  border-color: var(--hs-border);
+  background: #fbfbfe;
+  border-radius: 9px;
+}
+
+.header-search:focus-within {
+  border-color: #bdb5ef;
+  box-shadow: 0 0 0 3px rgba(103,84,232,.08);
+}
+
+.header-avatar {
+  background: linear-gradient(145deg, #806cf0, #5c49d3);
+}
+
+/* Main content */
+.hrms-content {
+  padding: 24px 27px 44px;
+}
+
+.page-heading h1,
+.module-heading h1 {
+  color: var(--hs-text);
+}
+
+.page-heading p,
+.module-heading p {
+  color: var(--hs-muted);
+}
+
+.breadcrumb {
+  color: #8b91ad;
+}
+
+/* Buttons */
+.primary-button {
+  background: linear-gradient(135deg, var(--hs-primary), #5b48d7);
+  box-shadow: 0 8px 20px rgba(103,84,232,.20);
+}
+
+.primary-button:hover {
+  background: linear-gradient(135deg, #5d49d4, var(--hs-primary-dark));
+}
+
+.secondary-button,
+.filter-button {
+  border-color: var(--hs-border);
+  background: #fff;
+  color: var(--hs-text-2);
+}
+
+.secondary-button:hover,
+.filter-button:hover {
+  border-color: #c8c2ee;
+  color: var(--hs-primary-dark);
+}
+
+/* Cards / surfaces */
+.dashboard-card,
+.stat-card,
+.module-stat,
+.employee-table-card,
+.employee-toolbar,
+.dashboard-toolbar,
+.empty-module {
+  border-color: var(--hs-border);
+  box-shadow: var(--hs-shadow-sm);
+}
+
+.dashboard-card,
+.stat-card,
+.module-stat,
+.employee-table-card,
+.employee-toolbar,
+.dashboard-toolbar,
+.empty-module {
+  border-radius: var(--hs-radius-md);
+}
+
+.dashboard-card:hover,
+.stat-card:hover {
+  box-shadow: var(--hs-shadow-md);
+}
+
+/* Stat icons */
+.stat-icon,
+.module-stat-icon,
+.quick-action > span,
+.site-icon,
+.empty-module-icon {
+  background: var(--hs-violet-soft);
+  color: var(--hs-primary);
+}
+
+/* Status */
+.online-dot,
+.status-active i {
+  background: var(--hs-green);
+}
+
+/* Tables */
+.table-head,
+.employee-table-header {
+  background: #fafaff;
+  color: #7883a0;
+  border-bottom-color: var(--hs-border);
+}
+
+.table-row,
+.employee-table-row {
+  border-top-color: #edf0f6;
+}
+
+.table-row:hover,
+.employee-table-row:hover {
+  background: #fbfaff;
+}
+
+/* Form controls across modules */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  border-color: var(--hs-border);
+  color: var(--hs-text-2);
+  border-radius: var(--hs-radius-sm);
+  outline: none;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+  border-color: #bdb5ef;
+  box-shadow: 0 0 0 3px rgba(103,84,232,.075);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #a1a9bd;
+}
+
+/* Consistent checkbox/radio */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--hs-primary);
+  width: 16px;
+  height: 16px;
+}
+
+/* Pills */
+.employee-type.onroll {
+  background: var(--hs-blue-soft);
+  color: #2868b4;
+}
+
+.employee-type.thirdparty {
+  background: var(--hs-violet-soft);
+  color: #6548c7;
+}
+
+/* ============================================================
+   GENERIC HRSYNC PAGE ELEMENTS
+   These give older modules the same visual language without
+   requiring every module to be rewritten at once.
+   ============================================================ */
+
+.hrms-app .card,
+.hrms-app .panel,
+.hrms-app .section-card,
+.hrms-app .content-card,
+.hrms-app .table-card,
+.hrms-app .form-card,
+.hrms-app .modal-content {
+  background: #fff;
+  border: 1px solid var(--hs-border);
+  border-radius: var(--hs-radius-md);
+  box-shadow: var(--hs-shadow-sm);
+}
+
+.hrms-app .card-header,
+.hrms-app .panel-header,
+.hrms-app .section-header {
+  border-bottom-color: var(--hs-border);
+}
+
+.hrms-app .badge,
+.hrms-app .status-pill,
+.hrms-app .status-badge {
+  border-radius: 999px;
+}
+
+.hrms-app table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.hrms-app th {
+  background: #fafaff;
+  color: #707c99;
+  font-weight: 700;
+  border-bottom-color: var(--hs-border);
+}
+
+.hrms-app td {
+  color: var(--hs-text-2);
+  border-bottom-color: #edf0f6;
+}
+
+.hrms-app tr:hover td {
+  background: #fcfbff;
+}
+
+/* ============================================================
+   LOGIN / AUTHENTICATION
+   Gives the existing Login screen the same HRSYNC identity.
+   ============================================================ */
+
+body:has(.login-page),
+body:has(.login-container),
+body:has(.auth-page),
+body:has(.auth-container) {
+  background:
+    radial-gradient(circle at 82% 12%, rgba(114, 86, 235, .16), transparent 28%),
+    radial-gradient(circle at 12% 88%, rgba(62, 115, 232, .09), transparent 25%),
+    #f7f8fd;
+}
+
+.login-page,
+.login-container,
+.auth-page,
+.auth-container {
+  color: var(--hs-text);
+}
+
+.login-page button,
+.login-container button,
+.auth-page button,
+.auth-container button {
+  border-radius: 10px;
+}
+
+.login-page input,
+.login-container input,
+.auth-page input,
+.auth-container input {
+  border-color: var(--hs-border);
+  border-radius: 10px;
+  min-height: 42px;
+}
+
+.login-page input:focus,
+.login-container input:focus,
+.auth-page input:focus,
+.auth-container input:focus {
+  border-color: #aaa0ec;
+  box-shadow: 0 0 0 4px rgba(103,84,232,.08);
+}
+
+.login-page .primary-button,
+.login-container .primary-button,
+.auth-page .primary-button,
+.auth-container .primary-button {
+  background: linear-gradient(135deg, var(--hs-primary), #5742d2);
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .hrms-content {
+    padding: 20px 18px 35px;
+  }
+}
+
+@media (max-width: 650px) {
+  .hrms-content {
+    padding: 17px 13px 30px;
+  }
+}

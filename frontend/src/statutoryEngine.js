@@ -1,6 +1,6 @@
 /* =========================================================
    BAUER HRMS — Statutory Calculation Engine
-   PF + ESI + PT + Labour Code Wage
+   PF + ESI + PT + LWF + Labour Code Wage
    Compatible with existing Payroll.jsx
    ========================================================= */
 
@@ -101,26 +101,138 @@ export const calculateLabourCodeWage = (
 
 /* =========================================================
    PF WAGE
-   PF = Basic + DA
+   ---------------------------------------------------------
+   PF wage basis is configurable from Statutory Configuration.
+
+   Supported values:
+     - Basic Only
+     - Basic + DA
+     - Basic + Special Allowance
+     - Basic + DA + Special Allowance
+     - Gross
+
+   The engine does NOT hard-code one company rule. Payroll.jsx
+   should pass settings.pf.wageBasis from the manual statutory
+   configuration.
    ========================================================= */
 
-export const calculatePFWage = (structure = {}) => {
-  return roundMoney(Number(structure.basicDA || 0));
+export const calculatePFWage = (
+  structure = {},
+  settings = {}
+) => {
+  const basic = Number(
+    structure.basic ??
+    structure.basicDA ??
+    0
+  );
+
+  const da = Number(
+    structure.da ??
+    structure.dearnessAllowance ??
+    0
+  );
+
+  const basicDA = Number(
+    structure.basicDA ??
+    (basic + da)
+  );
+
+  const specialAllowance = Number(
+    structure.specialAllowance || 0
+  );
+
+  const gross = Number(structure.gross || 0);
+
+  const basis = String(
+    settings?.wageBasis ||
+    "Basic + DA + Special Allowance"
+  ).trim().toLowerCase();
+
+  if (basis === "basic only" || basis === "basic") {
+    return roundMoney(basic);
+  }
+
+  if (basis.includes("basic + special") && !basis.includes("da")) {
+    return roundMoney(basic + specialAllowance);
+  }
+
+  if (basis.includes("gross")) {
+    return roundMoney(gross);
+  }
+
+  if (basis.includes("special")) {
+    return roundMoney(basicDA + specialAllowance);
+  }
+
+  return roundMoney(basicDA);
 };
 
 
 /* =========================================================
    ESI WAGE
-   ESI = Basic + DA + Special Allowance
+   ---------------------------------------------------------
+   ESI wage basis is configurable from Statutory Configuration.
+
+   Supported values:
+     - Basic Only
+     - Basic + DA
+     - Basic + Special Allowance
+     - Basic + DA + Special Allowance
+     - Gross
+
+   This keeps the statutory engine company-configurable while
+   preserving the existing ESI calculation flow.
    ========================================================= */
 
-export const calculateESIWage = (structure = {}) => {
-  const basicDA = Number(structure.basicDA || 0);
+export const calculateESIWage = (
+  structure = {},
+  settings = {}
+) => {
+  const basic = Number(
+    structure.basic ??
+    structure.basicDA ??
+    0
+  );
+
+  const da = Number(
+    structure.da ??
+    structure.dearnessAllowance ??
+    0
+  );
+
+  const basicDA = Number(
+    structure.basicDA ??
+    (basic + da)
+  );
+
   const specialAllowance = Number(
     structure.specialAllowance || 0
   );
 
-  return roundMoney(basicDA + specialAllowance);
+  const gross = Number(structure.gross || 0);
+
+  const basis = String(
+    settings?.contributionBasis ||
+    "Basic + DA + Special Allowance"
+  ).trim().toLowerCase();
+
+  if (basis === "basic only" || basis === "basic") {
+    return roundMoney(basic);
+  }
+
+  if (basis.includes("basic + special") && !basis.includes("da")) {
+    return roundMoney(basic + specialAllowance);
+  }
+
+  if (basis.includes("gross")) {
+    return roundMoney(gross);
+  }
+
+  if (basis.includes("special")) {
+    return roundMoney(basicDA + specialAllowance);
+  }
+
+  return roundMoney(basicDA);
 };
 
 
@@ -451,7 +563,16 @@ export const getStatutoryCalculation = ({
 
   /* =======================================================
      PF
-     PF Wage = Basic + DA
+     -------------------------------------------------------
+     PF wage basis, employee rate, employer rate, ceiling and
+     higher-wage contribution are all taken from the manual
+     Statutory Configuration.
+
+     higherWageContribution = true
+       -> use full configured PF wage
+
+     higherWageContribution = false
+       -> apply configured PF wage ceiling
      ======================================================= */
 
   const pf = settings?.pf || {};
@@ -461,14 +582,18 @@ export const getStatutoryCalculation = ({
     pf.applicable !== false;
 
   const pfWage =
-    calculatePFWage(structure);
+    calculatePFWage(structure, pf);
+
+  const pfCeiling = Number(
+    pf.wageCeiling ?? 15000
+  );
 
   const pfBase = pfEnabled
-    ? Boolean(pf.higherWageContribution)
+    ? Boolean(pf.higherWageContribution) || pfCeiling <= 0
       ? pfWage
       : Math.min(
           pfWage,
-          Number(pf.wageCeiling || 15000)
+          pfCeiling
         )
     : 0;
 
@@ -501,11 +626,12 @@ export const getStatutoryCalculation = ({
   const esiEnabled =
     Boolean(esi.enabled);
 
-  const esiCeiling =
-    Number(esi.wageCeiling || 21000);
+  const esiCeiling = Number(
+    esi.wageCeiling ?? 21000
+  );
 
   const esiWage =
-    calculateESIWage(structure);
+    calculateESIWage(structure, esi);
 
   const esiCovered =
     Boolean(
@@ -582,6 +708,13 @@ export const getStatutoryCalculation = ({
     pf: {
       enabled: pfEnabled,
       wage: pfWage,
+      wageBasis:
+        pf.wageBasis ||
+        "Basic + DA + Special Allowance",
+      ceiling:
+        pfCeiling,
+      higherWageContribution:
+        Boolean(pf.higherWageContribution),
       base: roundMoney(pfBase),
       employee: pfEmployee,
       employer: pfEmployer,
@@ -590,6 +723,9 @@ export const getStatutoryCalculation = ({
     esi: {
       enabled: esiEnabled,
       wage: esiWage,
+      contributionBasis:
+        esi.contributionBasis ||
+        "Basic + DA + Special Allowance",
       covered: esiCovered,
       base: roundMoney(esiBase),
       employee: esiEmployee,

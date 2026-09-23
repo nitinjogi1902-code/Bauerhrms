@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./attendance.css";
 import * as XLSX from "xlsx-js-style";
+import { supabase } from "./supabaseClient";
 
 const employeesData = [
   {
@@ -151,6 +152,112 @@ const getPolicyAttendanceRecord = (employee, dateKey, attendanceRecords, policie
 };
 
 
+const FORCE_LEAVE_STORAGE_KEY = "bauerHrmsForceLeaveRecords";
+
+const readForceLeaveRecordsForAttendance = () => {
+  try {
+    const saved = localStorage.getItem(FORCE_LEAVE_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Unable to read Force Leave records for attendance:", error);
+    return [];
+  }
+};
+
+const getEmployeeIdentityKeys = (employee) =>
+  new Set(
+    [employee?.id, employee?.employeeId, employee?.employeeCode, employee?.empCode]
+      .filter(Boolean)
+      .map((value) => String(value).trim().toLowerCase())
+  );
+
+const getForceLeaveForDate = (employee, dateKey) => {
+  if (!employee || !dateKey) return null;
+
+  const keys = getEmployeeIdentityKeys(employee);
+  const records = readForceLeaveRecordsForAttendance();
+
+  const matches = records.filter((record) => {
+    const status = String(record?.status || "").trim().toLowerCase();
+    if (status === "cancelled") return false;
+
+    const employeeId = String(record?.employeeId || "").trim().toLowerCase();
+    if (!employeeId || !keys.has(employeeId)) return false;
+
+    const start = String(record?.flStartDate || "").trim();
+    if (!start || dateKey < start) return false;
+
+    const actualRejoiningDate = String(record?.actualRejoiningDate || "").trim();
+    if (actualRejoiningDate && dateKey >= actualRejoiningDate) return false;
+
+    return true;
+  });
+
+  if (!matches.length) return null;
+
+  // If overlapping records ever exist, use the most recently created/updated
+  // record without deleting or changing any historical Force Leave record.
+  return [...matches].sort((a, b) =>
+    String(b.updatedAt || b.createdAt || "").localeCompare(
+      String(a.updatedAt || a.createdAt || "")
+    )
+  )[0];
+};
+
+const getForceLeaveAttendanceInfo = (employee, dateKey, rawRecord = {}) => {
+  const forceLeave = getForceLeaveForDate(employee, dateKey);
+  if (!forceLeave) {
+    return {
+      forceLeave: null,
+      inForceLeavePeriod: false,
+      conflict: false,
+      rawRecord,
+      effectiveRecord: rawRecord,
+    };
+  }
+
+  const rawStatus = String(rawRecord?.status || "").trim().toUpperCase();
+  const hasPunch = Boolean(rawRecord?.inTime || rawRecord?.outTime);
+  const sourceText = String(rawRecord?.source || "").trim().toLowerCase();
+  const hasBiometricEvidence = sourceText.includes("biometric") || sourceText.includes("machine") || sourceText.includes("device");
+  const hasExplicitAttendance = Boolean(
+    (rawStatus && rawStatus !== "-") ||
+    hasPunch ||
+    hasBiometricEvidence
+  );
+  const conflict = hasExplicitAttendance && rawStatus !== "FL";
+  const resolution = String(rawRecord?.flConflictResolution || "").trim();
+
+  let effectiveRecord = rawRecord;
+
+  if (!hasExplicitAttendance) {
+    effectiveRecord = {
+      ...rawRecord,
+      status: "FL",
+      source: rawRecord?.source || "Force Leave",
+      auditReason: rawRecord?.auditReason || `Force Leave: ${forceLeave.forceLeaveId || "FL"}`,
+      forceLeaveId: forceLeave.forceLeaveId || "",
+      forceLeaveDerived: true,
+    };
+  } else if (conflict && resolution === "Keep FL") {
+    effectiveRecord = {
+      ...rawRecord,
+      status: "FL",
+      forceLeaveEffectiveStatus: true,
+    };
+  }
+
+  return {
+    forceLeave,
+    inForceLeavePeriod: true,
+    conflict,
+    resolution,
+    rawRecord,
+    effectiveRecord,
+  };
+};
+
 const ATTENDANCE_STATUS_OPTIONS = [
   { value: "P", label: "Present" },
   { value: "A", label: "Absent" },
@@ -200,42 +307,154 @@ const loadEmployeesFromStorage = () => {
 
     return parsedEmployees;
   } catch (error) {
-    console.error("Unable to load employees:", error);
+    console.error("Unable to load employees from local storage:", error);
     return [];
   }
+};
+
+const employeeFromDbForAttendance = (row) => {
+  const metadata =
+    row?.metadata && typeof row.metadata === "object"
+      ? row.metadata
+      : {};
+
+  const employeeGroup =
+    row?.employee_group ||
+    row?.employeeGroup ||
+    metadata.employeeGroup ||
+    metadata.employeeGroupName ||
+    metadata.group ||
+    "";
+
+  const employmentType =
+    row?.employment_type ||
+    metadata.employmentType ||
+    "";
+
+  const vendor =
+    row?.vendor ||
+    row?.vendor_name ||
+    metadata.vendor ||
+    metadata.vendorName ||
+    "";
+
+  return {
+    ...metadata,
+    id: row?.id || row?.employee_id || "",
+    employeeId: row?.employee_id || metadata.employeeId || "",
+    employeeCode: row?.employee_id || metadata.employeeCode || metadata.employeeId || "",
+    empCode: row?.employee_id || metadata.empCode || metadata.employeeId || "",
+    name: row?.employee_name || metadata.name || "",
+    designation: row?.designation || metadata.designation || "",
+    department: row?.department || metadata.department || "",
+    site: row?.location || metadata.location || metadata.site || "",
+    location: row?.location || metadata.location || metadata.site || "",
+    type: employeeGroup || employmentType || metadata.type || "",
+    employeeGroup,
+    employeeGroupName: employeeGroup,
+    employmentType,
+    vendor,
+    doj: row?.date_of_joining || metadata.doj || metadata.dateOfJoining || "",
+    dateOfJoining: row?.date_of_joining || metadata.dateOfJoining || metadata.doj || "",
+    status: row?.status || metadata.status || "Active",
+    organizationId: row?.organization_id || "",
+  };
 };
 
 function Attendance() {
   const [activeMenu, setActiveMenu] = useState("Dashboard");
 
   const [employees, setEmployees] = useState(loadEmployeesFromStorage);
+  const [employeeLoadError, setEmployeeLoadError] = useState("");
+
   useEffect(() => {
-  const refreshEmployeesFromMaster = () => {
-    setEmployees(loadEmployeesFromStorage());
-  };
+    let cancelled = false;
 
-  window.addEventListener(
-    "bauerHrmsEmployeesUpdated",
-    refreshEmployeesFromMaster
-  );
+    const loadTenantEmployees = async () => {
+      try {
+        setEmployeeLoadError("");
 
-  window.addEventListener(
-    "storage",
-    refreshEmployeesFromMaster
-  );
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
 
-  return () => {
-    window.removeEventListener(
+        if (authError) throw authError;
+        if (!user?.id) {
+          throw new Error("Your HRSYNC session has expired. Please log in again.");
+        }
+
+        const { data: membership, error: membershipError } = await supabase
+          .from("organization_users")
+          .select("id, organization_id, employee_id, status")
+          .eq("user_id", user.id)
+          .eq("status", "Active")
+          .maybeSingle();
+
+        if (membershipError) throw membershipError;
+        if (!membership?.organization_id) {
+          throw new Error("No active company is linked to your HRSYNC account.");
+        }
+
+        const { data: rows, error: employeeQueryError } = await supabase
+          .from("employees")
+          .select("*")
+          .eq("organization_id", membership.organization_id)
+          .order("employee_name", { ascending: true });
+
+        if (employeeQueryError) throw employeeQueryError;
+
+        if (!cancelled) {
+          const mappedEmployees = (rows || [])
+            .map(employeeFromDbForAttendance)
+            .filter((employee) => employee.id && employee.employeeId);
+
+          setEmployees(mappedEmployees);
+          setEmployeeLoadError("");
+        }
+      } catch (error) {
+        console.error("Unable to load tenant employees for attendance:", error);
+
+        if (!cancelled) {
+          const cachedEmployees = loadEmployeesFromStorage();
+          setEmployees(cachedEmployees);
+          setEmployeeLoadError(
+            cachedEmployees.length
+              ? "Live Employee Master could not be loaded. Showing cached employee data."
+              : error?.message || "Unable to load Employee Master records."
+          );
+        }
+      }
+    };
+
+    loadTenantEmployees();
+
+    const refreshEmployeesFromMaster = () => {
+      loadTenantEmployees();
+    };
+
+    window.addEventListener(
       "bauerHrmsEmployeesUpdated",
       refreshEmployeesFromMaster
     );
 
-    window.removeEventListener(
+    window.addEventListener(
       "storage",
       refreshEmployeesFromMaster
     );
-  };
-}, []);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(
+        "bauerHrmsEmployeesUpdated",
+        refreshEmployeesFromMaster
+      );
+      window.removeEventListener(
+        "storage",
+        refreshEmployeesFromMaster
+      );
+    };
+  }, []);
   const weekOffPolicies = loadWeekOffPoliciesFromStorage();
 
   const [search, setSearch] = useState("");
@@ -274,6 +493,7 @@ function Attendance() {
   const [attendanceDepartment, setAttendanceDepartment] = useState("All");
   const [attendanceVendor, setAttendanceVendor] = useState("All");
   const [showAttendanceImport, setShowAttendanceImport] = useState(false);
+  const [flConflictDialog, setFlConflictDialog] = useState(null);
   const [attendanceImportPreview, setAttendanceImportPreview] = useState(null);
   const attendanceImportInputRef = useRef(null);
 
@@ -389,8 +609,87 @@ const [newEmployee, setNewEmployee] = useState({
 
   const todayAttendance = attendanceRecords[attendanceDate] || {};
 
-  const getDisplayedAttendanceRecord = (employee, dateKey = attendanceDate) =>
-    getPolicyAttendanceRecord(employee, dateKey, attendanceRecords, weekOffPolicies);
+  const getDisplayedAttendanceRecord = (employee, dateKey = attendanceDate) => {
+    const rawRecord = attendanceRecords?.[dateKey]?.[employee?.id] || {};
+    const flInfo = getForceLeaveAttendanceInfo(employee, dateKey, rawRecord);
+    const policyRecord = getPolicyAttendanceRecord(
+      employee,
+      dateKey,
+      attendanceRecords,
+      weekOffPolicies
+    );
+
+    // Explicit attendance always wins over the automatic FL display until HR
+    // resolves the conflict. The original attendance record is never replaced.
+    if (flInfo.conflict) {
+      return {
+        ...policyRecord,
+        ...flInfo.effectiveRecord,
+        flConflict: true,
+        flConflictResolution: flInfo.resolution || "Pending",
+        forceLeaveRecord: flInfo.forceLeave,
+      };
+    }
+
+    if (flInfo.inForceLeavePeriod) {
+      return {
+        ...policyRecord,
+        ...flInfo.effectiveRecord,
+        flConflict: false,
+        forceLeaveRecord: flInfo.forceLeave,
+      };
+    }
+
+    return policyRecord;
+  };
+
+  const openForceLeaveConflict = (employee, dateKey = attendanceDate) => {
+    const rawRecord = attendanceRecords?.[dateKey]?.[employee?.id] || {};
+    const info = getForceLeaveAttendanceInfo(employee, dateKey, rawRecord);
+    if (!info.forceLeave || !info.conflict) return;
+
+    setFlConflictDialog({
+      employee,
+      dateKey,
+      rawRecord,
+      forceLeave: info.forceLeave,
+      resolution: info.resolution || "Pending",
+    });
+  };
+
+  const resolveForceLeaveConflict = (decision) => {
+    if (!flConflictDialog) return;
+
+    const { employee, dateKey } = flConflictDialog;
+    const employeeId = employee?.id;
+    if (!employeeId) return;
+
+    setAttendanceRecords((previous) => {
+      const previousRecord = previous?.[dateKey]?.[employeeId] || {};
+      const nextRecord = {
+        ...previousRecord,
+        flConflictResolution: decision,
+        flConflictResolvedAt: new Date().toISOString(),
+        flConflictResolvedBy: "HR/Admin",
+        auditReason:
+          decision === "Keep FL"
+            ? "Force Leave conflict reviewed — Force Leave retained; original attendance preserved."
+            : "Force Leave conflict reviewed — attendance retained; original Force Leave preserved.",
+      };
+
+      return {
+        ...previous,
+        [dateKey]: {
+          ...(previous[dateKey] || {}),
+          [employeeId]: nextRecord,
+        },
+      };
+    });
+
+    setFlConflictDialog((previous) =>
+      previous ? { ...previous, resolution: decision } : previous
+    );
+  };
 
   const updateAttendance = (employeeId, field, value) => {
     setAttendanceRecords((previous) => {
@@ -412,6 +711,20 @@ const [newEmployee, setNewEmployee] = useState({
 
       if (field === "status" && value !== previousRecord.status) {
         nextRecord.auditReason = "Manual attendance update";
+        const flInfo = getForceLeaveAttendanceInfo(
+          employees.find((item) => item.id === employeeId),
+          attendanceDate,
+          previousRecord
+        );
+        if (flInfo.forceLeave && String(value).toUpperCase() !== "FL") {
+          nextRecord.flConflictResolution = "Pending";
+          nextRecord.flConflictResolvedAt = "";
+          nextRecord.flConflictResolvedBy = "";
+        } else {
+          delete nextRecord.flConflictResolution;
+          delete nextRecord.flConflictResolvedAt;
+          delete nextRecord.flConflictResolvedBy;
+        }
       }
 
       return {
@@ -799,7 +1112,9 @@ const [newEmployee, setNewEmployee] = useState({
     }
 
     const rows = monthDays.map((dateKey) => {
-      const record = getPolicyAttendanceRecord(selectedMonthlyEmployee, dateKey, attendanceRecords, weekOffPolicies);
+      const record = getDisplayedAttendanceRecord(selectedMonthlyEmployee, dateKey);
+                            const rawRecord = attendanceRecords?.[dateKey]?.[selectedMonthlyEmployee.id] || {};
+                            const flInfo = getForceLeaveAttendanceInfo(selectedMonthlyEmployee, dateKey, rawRecord);
       const date = new Date(`${dateKey}T00:00:00`);
 
       return {
@@ -1867,6 +2182,7 @@ const [newEmployee, setNewEmployee] = useState({
     if ((isWorkingStatus(record.status)) && (!record.inTime || !record.outTime)) issues.push("Missing Punch");
     if (record.status === "A") issues.push("Absent");
     if (record.status === "HD") issues.push("Half Day");
+    if (record.flConflict) issues.push("FL Conflict");
     return issues.length ? { employee, record, issues } : null;
   }).filter(Boolean), [attendanceDashboardEmployees, attendanceDate, attendanceRecords]);
 
@@ -2199,6 +2515,89 @@ const handleImportExcel = (event) => {
 
   return (
         <>
+          <style>{`
+            .fl-conflict-row > td {
+              background: #fff7ed !important;
+              border-top: 1px solid #fed7aa;
+              border-bottom: 1px solid #fed7aa;
+            }
+            .attendance-status-control,
+            .monthly-status-with-conflict {
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              flex-wrap: wrap;
+            }
+            .fl-conflict-badge {
+              border: 1px solid #fdba74;
+              background: #fff7ed;
+              color: #c2410c;
+              border-radius: 999px;
+              padding: 4px 8px;
+              font-size: 11px;
+              font-weight: 700;
+              cursor: pointer;
+              white-space: nowrap;
+            }
+            .fl-conflict-badge:hover { background: #ffedd5; }
+            .fl-conflict-overlay {
+              position: fixed;
+              inset: 0;
+              z-index: 9999;
+              background: rgba(15, 23, 42, .45);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 20px;
+            }
+            .fl-conflict-modal {
+              width: min(520px, 100%);
+              background: #fff;
+              border-radius: 16px;
+              box-shadow: 0 24px 70px rgba(15, 23, 42, .24);
+              overflow: hidden;
+            }
+            .fl-conflict-modal-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              padding: 20px 22px;
+              border-bottom: 1px solid #e2e8f0;
+            }
+            .fl-conflict-modal-header h3 { margin: 3px 0 4px; color: #0f172a; }
+            .fl-conflict-modal-header p { margin: 0; color: #64748b; font-size: 13px; }
+            .fl-conflict-close {
+              border: 0; background: transparent; font-size: 24px; color: #64748b; cursor: pointer;
+            }
+            .fl-conflict-modal-body { padding: 20px 22px; }
+            .fl-conflict-warning {
+              padding: 12px 14px;
+              background: #fff7ed;
+              border: 1px solid #fed7aa;
+              border-radius: 10px;
+              color: #9a3412;
+              margin-bottom: 16px;
+              font-size: 13px;
+            }
+            .fl-conflict-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 10px;
+              margin-bottom: 18px;
+            }
+            .fl-conflict-item {
+              padding: 11px 12px;
+              border: 1px solid #e2e8f0;
+              border-radius: 10px;
+              background: #f8fafc;
+            }
+            .fl-conflict-item span { display:block; color:#64748b; font-size:11px; margin-bottom:3px; }
+            .fl-conflict-item strong { color:#0f172a; font-size:13px; }
+            .fl-conflict-actions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+            .fl-conflict-actions button { border-radius:9px; padding:9px 13px; cursor:pointer; font-weight:700; }
+            .fl-keep-attendance { border:1px solid #cbd5e1; background:#fff; color:#334155; }
+            .fl-keep-leave { border:1px solid #fb923c; background:#fff7ed; color:#c2410c; }
+          `}</style>
           <input ref={attendanceImportInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleAttendanceImportFile} style={{ display: "none" }} />
         <section className="attendance-module">
           <div className="attendance-page-header attendance-dashboard-header">
@@ -2279,7 +2678,30 @@ const handleImportExcel = (event) => {
             <>
               <div className="attendance-toolbar"><div><strong>{new Date(`${attendanceDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</strong><span>{filteredAttendanceEmployees.length} employees shown</span></div><div className="attendance-toolbar-actions"><button className="secondary-btn" onClick={downloadAttendanceTemplate}>⬇ Template</button><button className="primary-button bulk-import-btn" onClick={() => attendanceImportInputRef.current?.click()}>📥 Import Attendance</button><button className="secondary-btn" onClick={() => markAllAttendance("WO")}>Mark Weekly Off</button><button className="danger-light-btn" onClick={clearAttendanceDay}>Clear Day</button></div></div>
               <div className="attendance-summary-grid">{[["Total Employees",attendanceSummary.P+attendanceSummary.A+attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.FL+attendanceSummary.CO+attendanceSummary.OD+attendanceSummary.WFH+attendanceSummary.WO+attendanceSummary.HO+attendanceSummary.HD+attendanceSummary.Unmarked,"total"],["Present",attendanceSummary.P,"present"],["Absent",attendanceSummary.A,"absent"],["Leave",attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.FL,"leave"],["WFH",attendanceSummary.WFH,"wfh"],["Comp Off",attendanceSummary.CO,"co"],["Unmarked",attendanceSummary.Unmarked,"unmarked"]].map(([label,value,type])=><div className={`attendance-summary-card ${type}`} key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
-              <div className="attendance-table-card"><div className="table-wrapper"><table><thead><tr><th>Employee</th><th>Site</th><th>Type</th><th>Attendance</th><th>In Time</th><th>Out Time</th><th>Working Hrs.</th><th>OT Hrs.</th><th>Source</th><th>Remarks</th><th className="attendance-action-header">Action</th></tr></thead><tbody>{filteredAttendanceEmployees.map(employee=>{const record=todayAttendance[employee.id]||{};return <tr key={employee.id}><td><div className="attendance-employee"><div className="table-avatar">{String(employee.name||"").split(" ").map(n=>n[0]).slice(0,2).join("")}</div><div><strong>{employee.name}</strong><span>{getAttendanceEmployeeCode(employee) || "-"} · {employee.department || "-"}</span></div></div></td><td>{employee.site||"-"}</td><td><span className="type-badge">{employee.type||"-"}</span></td><td><div className="attendance-status-cell"><select title={getStatusLabel(record.status)} className={`attendance-status-select status-${String(record.status||"unmarked").toLowerCase()}`} value={record.status||"-"} onChange={e=>updateAttendance(employee.id,"status",e.target.value)}><option value="-">Select</option>{ATTENDANCE_STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.value} — {item.label}</option>)}</select><small>{getStatusLabel(record.status)}</small></div></td><td><input className="attendance-time-input" type="time" value={record.inTime||""} onChange={e=>updateAttendance(employee.id,"inTime",e.target.value)}/></td><td><input className="attendance-time-input" type="time" value={record.outTime||""} onChange={e=>updateAttendance(employee.id,"outTime",e.target.value)}/></td><td><input className="attendance-small-input" type="number" min="0" max="24" step="0.25" placeholder="0" value={record.workingHours||""} onChange={e=>updateAttendance(employee.id,"workingHours",e.target.value)}/></td><td><input className="attendance-small-input" type="number" min="0" max="24" step="0.25" placeholder="0" value={record.otHours||""} onChange={e=>updateAttendance(employee.id,"otHours",e.target.value)}/></td><td><span className="attendance-source-badge">{record.source || "Manual"}</span></td><td><input className="attendance-remarks-input" type="text" placeholder="Remarks" value={record.remarks||""} onChange={e=>updateAttendance(employee.id,"remarks",e.target.value)}/></td><td className="attendance-action-cell"><button type="button" className="employee-month-btn" title={`View ${employee.name} monthly attendance`} onClick={() => openEmployeeMonthlyAttendance(employee)}><span>📅</span><span>View Month</span></button></td></tr>})}</tbody></table>{filteredAttendanceEmployees.length===0&&<div className="no-attendance">No employees match the selected filters.</div>}</div></div>
+              <div className="attendance-table-card"><div className="table-wrapper"><table><thead><tr><th>Employee</th><th>Site</th><th>Type</th><th>Attendance</th><th>In Time</th><th>Out Time</th><th>Working Hrs.</th><th>OT Hrs.</th><th>Source</th><th>Remarks</th><th className="attendance-action-header">Action</th></tr></thead><tbody>{filteredAttendanceEmployees.map(employee=>{
+                const record = getDisplayedAttendanceRecord(employee, attendanceDate);
+                const rawRecord = todayAttendance[employee.id] || {};
+                const flInfo = getForceLeaveAttendanceInfo(employee, attendanceDate, rawRecord);
+                return <tr key={employee.id} className={flInfo.conflict ? "fl-conflict-row" : ""}>
+                  <td><div className="attendance-employee"><div className="table-avatar">{String(employee.name||"").split(" ").map(n=>n[0]).slice(0,2).join("")}</div><div><strong>{employee.name}</strong><span>{getAttendanceEmployeeCode(employee) || "-"} · {employee.department || "-"}</span></div></div></td>
+                  <td>{employee.site||"-"}</td><td><span className="type-badge">{employee.type||"-"}</span></td>
+                  <td><div className="attendance-status-cell">
+                    <div className="attendance-status-control">
+                      <select title={getStatusLabel(record.status)} className={`attendance-status-select status-${String(record.status||"unmarked").toLowerCase()}`} value={record.status||"-"} onChange={e=>updateAttendance(employee.id,"status",e.target.value)}>
+                        <option value="-">Select</option>{ATTENDANCE_STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.value} — {item.label}</option>)}
+                      </select>
+                      {flInfo.conflict && <button type="button" className="fl-conflict-badge" title="Force Leave conflict — click to review" onClick={() => openForceLeaveConflict(employee, attendanceDate)}>⚠ FL Conflict</button>}
+                    </div>
+                    <small>{getStatusLabel(record.status)}</small>
+                  </div></td>
+                  <td><input className="attendance-time-input" type="time" value={record.inTime||""} onChange={e=>updateAttendance(employee.id,"inTime",e.target.value)}/></td>
+                  <td><input className="attendance-time-input" type="time" value={record.outTime||""} onChange={e=>updateAttendance(employee.id,"outTime",e.target.value)}/></td>
+                  <td><input className="attendance-small-input" type="number" min="0" max="24" step="0.25" placeholder="0" value={record.workingHours||""} onChange={e=>updateAttendance(employee.id,"workingHours",e.target.value)}/></td>
+                  <td><input className="attendance-small-input" type="number" min="0" max="24" step="0.25" placeholder="0" value={record.otHours||""} onChange={e=>updateAttendance(employee.id,"otHours",e.target.value)}/></td>
+                  <td><span className="attendance-source-badge">{record.source || "Manual"}</span></td>
+                  <td><input className="attendance-remarks-input" type="text" placeholder="Remarks" value={record.remarks||""} onChange={e=>updateAttendance(employee.id,"remarks",e.target.value)}/></td>
+                  <td className="attendance-action-cell"><button type="button" className="employee-month-btn" title={`View ${employee.name} monthly attendance`} onClick={() => openEmployeeMonthlyAttendance(employee)}><span>📅</span><span>View Month</span></button></td>
+                </tr>})}</tbody></table>{filteredAttendanceEmployees.length===0&&<div className="no-attendance">No employees match the selected filters.</div>}</div></div>
             </>
           )}
 
@@ -2352,8 +2774,32 @@ const handleImportExcel = (event) => {
           )}
 
           {showEmployeeMonthly && selectedMonthlyEmployee && (
-            <div className="attendance-monthly-overlay" role="dialog" aria-modal="true" aria-label="Employee monthly attendance">
-              <div className="attendance-monthly-modal">
+            <div
+              className="attendance-monthly-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Employee monthly attendance"
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 9999,
+                overflowY: "auto",
+                overflowX: "hidden",
+                padding: "16px",
+                boxSizing: "border-box",
+              }}
+            >
+              <div
+                className="attendance-monthly-modal"
+                style={{
+                  width: "100%",
+                  maxHeight: "calc(100vh - 32px)",
+                  overflowY: "auto",
+                  overflowX: "hidden",
+                  margin: "0 auto",
+                  boxSizing: "border-box",
+                }}
+              >
                 <div className="attendance-monthly-modal-header">
                   <div>
                     <div className="module-eyebrow">EMPLOYEE-WISE ATTENDANCE</div>
@@ -2505,12 +2951,17 @@ const handleImportExcel = (event) => {
                         <tbody>
                           {monthDays.map((dateKey) => {
                             const date = new Date(`${dateKey}T00:00:00`);
-                            const record = getPolicyAttendanceRecord(selectedMonthlyEmployee, dateKey, attendanceRecords, weekOffPolicies);
+                            const rawRecord = attendanceRecords?.[dateKey]?.[selectedMonthlyEmployee.id] || {};
+                            const flInfo = getForceLeaveAttendanceInfo(selectedMonthlyEmployee, dateKey, rawRecord);
+                            const record = getDisplayedAttendanceRecord(selectedMonthlyEmployee, dateKey);
                             const dayName = date.toLocaleDateString("en-IN", { weekday: "short" });
                             const isWeekend = Boolean(getWeekOffPolicyForDate(selectedMonthlyEmployee, dateKey, weekOffPolicies));
 
                             return (
-                              <tr key={dateKey} className={isWeekend ? "weekend-row" : ""}>
+                              <tr
+                                key={dateKey}
+                                className={`${isWeekend ? "weekend-row" : ""}${flInfo.conflict ? " fl-conflict-row" : ""}`}
+                              >
                                 <td className="sticky-date">
                                   <strong>{date.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</strong>
                                   <small>{dateKey}</small>
@@ -2522,18 +2973,30 @@ const handleImportExcel = (event) => {
                                   <span className="shift-chip">{selectedMonthlyEmployee.shift || "General"}</span>
                                 </td>
                                 <td>
-                                  <select
-                                    className={`monthly-status-select status-${String(record.status || "unmarked").toLowerCase()}`}
-                                    value={record.status || "-"}
-                                    onChange={(e) => updateMonthlyAttendance(dateKey, "status", e.target.value)}
-                                  >
+                                  <div className="monthly-status-with-conflict">
+                                    <select
+                                      className={`monthly-status-select status-${String(record.status || "unmarked").toLowerCase()}`}
+                                      value={record.status || "-"}
+                                      onChange={(e) => updateMonthlyAttendance(dateKey, "status", e.target.value)}
+                                    >
                                     <option value="-">Select</option>
                                     {ATTENDANCE_STATUS_OPTIONS.map((item) => (
                                       <option key={item.value} value={item.value}>
                                         {item.value} — {item.label}
                                       </option>
                                     ))}
-                                  </select>
+                                    </select>
+                                    {flInfo.conflict && (
+                                      <button
+                                        type="button"
+                                        className="fl-conflict-badge"
+                                        title="Force Leave conflict — click to review"
+                                        onClick={() => openForceLeaveConflict(selectedMonthlyEmployee, dateKey)}
+                                      >
+                                        ⚠ FL Conflict
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                                 <td>
                                   <input
@@ -2614,6 +3077,44 @@ const handleImportExcel = (event) => {
 
           {attendanceView === "exceptions" && <div className="attendance-panel full-panel"><div className="panel-heading"><div><h3>Attendance Exceptions</h3><p>Late arrivals, missing punches, absences and half days</p></div></div><div className="exception-list exception-list-large">{attendanceExceptions.map(({employee,issues})=><div className="exception-row" key={employee.id}><div className="exception-avatar">{employee.name.split(" ").map(n=>n[0]).slice(0,2).join("")}</div><div><strong>{employee.name}</strong><span>{getAttendanceEmployeeCode(employee) || "-"} · {employee.site||"-"}</span></div><div className="exception-tags">{issues.map(issue=><span key={issue} className={issue.toLowerCase().replace(/ /g,"-")}>{issue}</span>)}</div></div>)}{attendanceExceptions.length===0&&<div className="empty-state">✓ No exceptions found for the selected filters.</div>}</div></div>}
         </section>
+
+        {flConflictDialog && (
+          <div className="fl-conflict-overlay" role="dialog" aria-modal="true" aria-label="Force Leave attendance conflict">
+            <div className="fl-conflict-modal">
+              <div className="fl-conflict-modal-header">
+                <div>
+                  <div className="module-eyebrow">ATTENDANCE CONTROL</div>
+                  <h3>Force Leave Conflict</h3>
+                  <p>{flConflictDialog.employee?.name || "Employee"} · {flConflictDialog.dateKey}</p>
+                </div>
+                <button type="button" className="fl-conflict-close" onClick={() => setFlConflictDialog(null)} aria-label="Close">×</button>
+              </div>
+              <div className="fl-conflict-modal-body">
+                <div className="fl-conflict-warning">
+                  This employee has an active Force Leave period, but attendance is already marked for this date. Nothing has been overwritten.
+                </div>
+                <div className="fl-conflict-grid">
+                  <div className="fl-conflict-item"><span>Force Leave ID</span><strong>{flConflictDialog.forceLeave?.forceLeaveId || "-"}</strong></div>
+                  <div className="fl-conflict-item"><span>FL Period</span><strong>{flConflictDialog.forceLeave?.flStartDate || "-"} → {flConflictDialog.forceLeave?.actualRejoiningDate || "Open"}</strong></div>
+                  <div className="fl-conflict-item"><span>Attendance Status</span><strong>{flConflictDialog.rawRecord?.status || "-"}</strong></div>
+                  <div className="fl-conflict-item"><span>Attendance Source</span><strong>{flConflictDialog.rawRecord?.source || "Manual"}</strong></div>
+                </div>
+                <p style={{ margin: "0 0 14px", color: "#475569", fontSize: 13 }}>
+                  Choose the effective attendance treatment. The original attendance record and Force Leave record will both remain in history.
+                </p>
+                <div className="fl-conflict-actions">
+                  <button type="button" className="fl-keep-attendance" onClick={() => resolveForceLeaveConflict("Keep Attendance")}>Keep Attendance</button>
+                  <button type="button" className="fl-keep-leave" onClick={() => resolveForceLeaveConflict("Keep FL")}>Keep Force Leave</button>
+                </div>
+                {flConflictDialog.resolution && flConflictDialog.resolution !== "Pending" && (
+                  <div style={{ marginTop: 12, color: "#166534", fontSize: 12, fontWeight: 700 }}>
+                    ✓ Resolution saved: {flConflictDialog.resolution}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {showAttendanceImport && attendanceImportPreview && (
           <div
