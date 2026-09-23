@@ -1120,7 +1120,7 @@ function Dashboard({ onLogout, currentUser = null }) {
       <aside className={`hrms-sidebar ${sidebarOpen ? "" : "collapsed"}`}>
         <div className="sidebar-brand">
           <div className="sidebar-logo">
-            <img src="/HR%20SYNC%20Logo.png" alt="HRSYNC" />
+            <img src="/HR SYNC Logo.png" alt="HRSYNC" />
           </div>
 
           {sidebarOpen && (
