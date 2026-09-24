@@ -265,7 +265,9 @@ const ATTENDANCE_STATUS_OPTIONS = [
   { value: "CL", label: "Casual Leave" },
   { value: "SL", label: "Sick Leave" },
   { value: "FL", label: "Floating Leave" },
-  { value: "CO", label: "Comp Off" },
+  { value: "CO", label: "Comp Off (Legacy)" },
+  { value: "CO-E", label: "Comp Off Earned" },
+  { value: "CO-U", label: "Comp Off Utilisation" },
   { value: "OD", label: "On Duty" },
   { value: "WFH", label: "Work From Home" },
   { value: "WO", label: "Weekly Off" },
@@ -289,6 +291,81 @@ const calculateHoursFromPunches = (inTime, outTime) => {
   let minutes = outH * 60 + outM - (inH * 60 + inM);
   if (minutes < 0) minutes += 24 * 60;
   return (minutes / 60).toFixed(2);
+};
+
+
+const isSundayDate = (dateKey) => {
+  if (!dateKey) return false;
+  const day = new Date(`${dateKey}T00:00:00`).getDay();
+  return day === 0;
+};
+
+const isCompOffWorkingStatus = (status) =>
+  ["P", "OD", "WFH", "HD", "CO-E"].includes(String(status || "").trim().toUpperCase());
+
+const getCompOffTransactionForRecord = (record, dateKey) => {
+  const explicit = String(record?.compOffTransaction || "").trim().toUpperCase();
+  if (explicit === "CO-E" || explicit === "CO-U") return explicit;
+
+  const status = String(record?.status || "").trim().toUpperCase();
+  if (status === "CO-E") return "CO-E";
+  if (status === "CO-U" || status === "CO") return "CO-U";
+
+  // Sunday working automatically earns one Comp Off. This does not change
+  // the attendance status (P/OD/WFH/HD), so the Sunday itself is counted only once.
+  if (isSundayDate(dateKey) && isCompOffWorkingStatus(status)) return "CO-E";
+  return "";
+};
+
+const getCompOffLedger = (employeeId, beforeDate, attendanceRecords, pendingUpdates = []) => {
+  const dates = new Set(Object.keys(attendanceRecords || {}));
+  pendingUpdates.forEach((item) => dates.add(item.dateKey));
+
+  let earned = 0;
+  let used = 0;
+  const transactions = [];
+  [...dates].filter((dateKey) => dateKey < beforeDate).sort().forEach((dateKey) => {
+    const baseRecord = attendanceRecords?.[dateKey]?.[employeeId] || {};
+    const pending = pendingUpdates.find((item) => item.dateKey === dateKey && String(item.employeeId) === String(employeeId));
+    const record = pending ? { ...baseRecord, ...pending } : baseRecord;
+    const transaction = getCompOffTransactionForRecord(record, dateKey);
+    if (transaction === "CO-E") {
+      earned += 1;
+      transactions.push({ dateKey, type: "CO-E" });
+    } else if (transaction === "CO-U") {
+      used += 1;
+      transactions.push({ dateKey, type: "CO-U" });
+    }
+  });
+
+  return {
+    earned,
+    used,
+    balance: earned - used,
+    transactions,
+  };
+};
+
+const validateCompOffUpdate = (update, attendanceRecords, pendingUpdates = []) => {
+  const status = String(update?.status || "").trim().toUpperCase();
+  const dateKey = String(update?.dateKey || "");
+  if (!dateKey || !update?.employeeId) return null;
+
+  if (status === "CO-E" && !isSundayDate(dateKey)) {
+    return "CO-E (Comp Off Earned) can only be recorded for Sunday working.";
+  }
+
+  if (status === "CO-U") {
+    if (isSundayDate(dateKey)) {
+      return "CO-U (Comp Off Utilisation) should be used on a weekday, not on Sunday.";
+    }
+    const ledger = getCompOffLedger(update.employeeId, dateKey, attendanceRecords, pendingUpdates);
+    if (ledger.balance <= 0) {
+      return `No earned Comp Off balance is available as of ${dateKey}. Earn CO-E by Sunday working before using CO-U.`;
+    }
+  }
+
+  return null;
 };
 
 const loadEmployeesFromStorage = () => {
@@ -466,6 +543,12 @@ function Attendance() {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   // ================= ATTENDANCE =================
+  const getCurrentMonthKey = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  const [attendanceMonth, setAttendanceMonth] = useState(getCurrentMonthKey);
   const [attendanceDate, setAttendanceDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
@@ -492,6 +575,8 @@ function Attendance() {
 
   const [attendanceDepartment, setAttendanceDepartment] = useState("All");
   const [attendanceVendor, setAttendanceVendor] = useState("All");
+  const [showAttendanceImportChoice, setShowAttendanceImportChoice] = useState(false);
+  const [attendanceImportMode, setAttendanceImportMode] = useState("monthly");
   const [showAttendanceImport, setShowAttendanceImport] = useState(false);
   const [flConflictDialog, setFlConflictDialog] = useState(null);
   const [attendanceImportPreview, setAttendanceImportPreview] = useState(null);
@@ -607,6 +692,51 @@ const [newEmployee, setNewEmployee] = useState({
     ).sort();
   }, [employees]);
 
+  const currentMonthKey = getCurrentMonthKey();
+
+  // Attendance follows the same India financial-year period as Dashboard:
+  // April to the current month. This is fully dynamic and never hard-coded
+  // to July/August/etc. Existing attendance records remain untouched.
+  const attendanceMonthOptions = useMemo(() => {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
+    const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
+    const options = [];
+
+    for (let year = fyStartYear, month = 4; ; month += 1) {
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+
+      const value = `${year}-${String(month).padStart(2, "0")}`;
+      const label = new Date(`${value}-01T00:00:00`).toLocaleDateString("en-IN", {
+        month: "long",
+        year: "numeric",
+      });
+
+      options.push({
+        value,
+        label: value === currentMonthKey ? `Current Month — ${label}` : label,
+      });
+
+      if (year === currentYear && month === currentMonth) break;
+    }
+
+    return options.reverse();
+  }, [currentMonthKey]);
+
+  const getMonthDateRange = (monthKey) => {
+    const [year, month] = String(monthKey).split("-").map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    return {
+      min: `${year}-${String(month).padStart(2, "0")}-01`,
+      max: `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
+    };
+  };
+
+  const selectedMonthRange = getMonthDateRange(attendanceMonth);
   const todayAttendance = attendanceRecords[attendanceDate] || {};
 
   const getDisplayedAttendanceRecord = (employee, dateKey = attendanceDate) => {
@@ -692,6 +822,17 @@ const [newEmployee, setNewEmployee] = useState({
   };
 
   const updateAttendance = (employeeId, field, value) => {
+    if (field === "status") {
+      const validation = validateCompOffUpdate(
+        { employeeId, dateKey: attendanceDate, status: value },
+        attendanceRecords
+      );
+      if (validation) {
+        window.alert(validation);
+        return;
+      }
+    }
+
     setAttendanceRecords((previous) => {
       const previousRecord = previous[attendanceDate]?.[employeeId] || {};
       const nextRecord = {
@@ -702,6 +843,19 @@ const [newEmployee, setNewEmployee] = useState({
         lastUpdatedAt: new Date().toISOString(),
       };
 
+      if (field === "status" && String(value).toUpperCase() === "CO-E") {
+        nextRecord.compOffTransaction = "CO-E";
+        nextRecord.auditReason = "Comp Off Earned — Sunday working";
+      } else if (field === "status" && String(value).toUpperCase() === "CO-U") {
+        nextRecord.compOffTransaction = "CO-U";
+        nextRecord.auditReason = "Comp Off Utilisation";
+      } else if (field === "status" && String(value).toUpperCase() === "P" && isSundayDate(attendanceDate)) {
+        nextRecord.compOffTransaction = "CO-E";
+        nextRecord.auditReason = "Sunday working — Comp Off Earned";
+      } else if (field === "status" && previousRecord.compOffTransaction) {
+        delete nextRecord.compOffTransaction;
+      }
+
       if (field === "inTime" || field === "outTime") {
         const nextIn = field === "inTime" ? value : previousRecord.inTime;
         const nextOut = field === "outTime" ? value : previousRecord.outTime;
@@ -710,7 +864,6 @@ const [newEmployee, setNewEmployee] = useState({
       }
 
       if (field === "status" && value !== previousRecord.status) {
-        nextRecord.auditReason = "Manual attendance update";
         const flInfo = getForceLeaveAttendanceInfo(
           employees.find((item) => item.id === employeeId),
           attendanceDate,
@@ -888,6 +1041,16 @@ const [newEmployee, setNewEmployee] = useState({
 
   const updateMonthlyAttendance = (dateKey, field, value) => {
     const employeeId = selectedMonthlyEmployeeId;
+    if (field === "status") {
+      const validation = validateCompOffUpdate(
+        { employeeId, dateKey, status: value },
+        attendanceRecords
+      );
+      if (validation) {
+        window.alert(validation);
+        return;
+      }
+    }
     setMonthlySaveState("unsaved");
     setMonthlySubmissionState("draft");
     if (!employeeId) return;
@@ -910,7 +1073,20 @@ const [newEmployee, setNewEmployee] = useState({
       }
 
       if (field === "status") {
-        nextRecord.auditReason = "Manual monthly timesheet update";
+        const normalizedStatus = String(value || "").toUpperCase();
+        if (normalizedStatus === "CO-E") {
+          nextRecord.compOffTransaction = "CO-E";
+          nextRecord.auditReason = "Comp Off Earned — Sunday working";
+        } else if (normalizedStatus === "CO-U") {
+          nextRecord.compOffTransaction = "CO-U";
+          nextRecord.auditReason = "Comp Off Utilisation";
+        } else if (normalizedStatus === "P" && isSundayDate(dateKey)) {
+          nextRecord.compOffTransaction = "CO-E";
+          nextRecord.auditReason = "Sunday working — Comp Off Earned";
+        } else {
+          delete nextRecord.compOffTransaction;
+          nextRecord.auditReason = "Manual monthly timesheet update";
+        }
       }
 
       return {
@@ -1002,7 +1178,7 @@ const [newEmployee, setNewEmployee] = useState({
       else if (statusValue === "A") summary.A += 1;
       else if (["EL", "CL", "SL", "FL"].includes(statusValue)) summary.leave += 1;
       else if (statusValue === "WFH") summary.WFH += 1;
-      else if (statusValue === "CO") summary.CO += 1;
+      else if (["CO", "CO-E", "CO-U"].includes(statusValue)) summary.CO += 1;
       else if (statusValue === "OD") summary.OD += 1;
       else if (statusValue === "WO") summary.WO += 1;
       else if (statusValue === "HO") summary.HO += 1;
@@ -1313,7 +1489,7 @@ const [newEmployee, setNewEmployee] = useState({
       ["Purpose", "Use this workbook to upload monthly site attendance into HRMS."],
       ["Step 1", "Do not change Employee ID, Employee Name, Designation, Department, Site, Vendor Name or DOJ."],
       ["Step 2", "Enter attendance only under the applicable date columns."],
-      ["Step 3", "Use only: P, A, EL, CL, SL, FL, CO, OD, WFH, WO, HO."],
+      ["Step 3", "Use only: P, A, EL, CL, SL, FL, CO-E, CO-U, CO, OD, WFH, WO, HO. CO-E = Comp Off Earned; CO-U = Comp Off Utilisation."],
       ["Aliases", "W/O is accepted as WO. HLD or HOLIDAY is accepted as HO."],
       ["Not supported", "HD / Half Day and split values such as P/EL, P/2, EL/P and EL/CL are currently not supported."],
       ["Step 4", "Save the completed workbook and upload it through HRMS → Daily Attendance → Import Attendance."],
@@ -1367,9 +1543,306 @@ const [newEmployee, setNewEmployee] = useState({
     return null;
   };
 
+  const downloadDailyAttendanceTemplate = () => {
+    const dateKey = attendanceDate;
+    const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+
+    const headers = [
+      "Employee ID",
+      "Employee Name",
+      "Designation",
+      "Department",
+      "Site",
+      "Vendor Name",
+      "DOJ",
+      "Date",
+      "Status",
+      "In Time",
+      "Out Time",
+      "Working Hours",
+      "OT Hours",
+      "Remarks",
+    ];
+
+    const rows = employees.map((employee) => [
+      getAttendanceEmployeeCode(employee) || employee.id || "",
+      employee.name || "",
+      employee.designation || "",
+      employee.department || "",
+      employee.site || "",
+      employee.vendor || "",
+      employee.doj || employee.dateOfJoining || "",
+      dateKey,
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ]);
+
+    const aoa = [
+      ["BAUER ENGINEERING INDIA PVT. LTD."],
+      ["HRMS – DAILY ATTENDANCE IMPORT TEMPLATE"],
+      ["Attendance Date", dateLabel],
+      ["Purpose", "Daily site attendance upload — one Excel file for all employees for one attendance date."],
+      ["Instructions", "Do not modify employee master fields. Enter Status / punch / hours data only. Employee ID and Date are validated before import."],
+      ["Status Codes", "P = Present | A = Absent | EL = Earned Leave | CL = Casual Leave | SL = Sick Leave | FL = Force Leave | CO = Comp Off | OD = On Duty | WFH = Work From Home | WO = Weekly Off | HO = Holiday"],
+      headers,
+      ...rows,
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+    worksheet["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
+    ];
+    worksheet["!freeze"] = { xSplit: 7, ySplit: 7 };
+    worksheet["!autofilter"] = { ref: `A7:${XLSX.utils.encode_col(headers.length - 1)}${rows.length + 7}` };
+    worksheet["!cols"] = [
+      { wch: 16 }, { wch: 24 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 },
+      { wch: 15 }, { wch: 14 }, { wch: 13 }, { wch: 12 }, { wch: 12 }, { wch: 15 },
+      { wch: 12 }, { wch: 28 },
+    ];
+
+    for (let c = 0; c < headers.length; c += 1) {
+      const cell = XLSX.utils.encode_cell({ r: 6, c });
+      if (worksheet[cell]) {
+        worksheet[cell].s = {
+          fill: { patternType: "solid", fgColor: { rgb: "EAF2F8" } },
+          font: { bold: true, color: { rgb: "244E73" } },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: {
+            top: { style: "thin", color: { rgb: "D9E2EC" } },
+            bottom: { style: "thin", color: { rgb: "D9E2EC" } },
+            left: { style: "thin", color: { rgb: "D9E2EC" } },
+            right: { style: "thin", color: { rgb: "D9E2EC" } },
+          },
+        };
+      }
+    }
+
+    const instructions = XLSX.utils.aoa_to_sheet([
+      ["BAUER ENGINEERING INDIA PVT. LTD."],
+      ["HRMS — DAILY ATTENDANCE IMPORT GUIDELINES"],
+      ["Step 1", "Use this template when the site sends attendance every day and you want to upload all employees in one go."],
+      ["Step 2", "One Excel file represents one attendance date. The Date column must match the selected attendance date."],
+      ["Step 3", "Do not change Employee ID / Employee Name / Designation / Department / Site / Vendor Name / DOJ."],
+      ["Step 4", "Enter Status and, where available, In Time, Out Time, Working Hours, OT Hours and Remarks."],
+      ["Step 5", "Status may be P, A, EL, CL, SL, FL, CO, OD, WFH, WO or HO. If Status is blank but In Time and Out Time are present, HRMS will treat the row as Present."],
+      ["Important", "Only the selected date is updated. Existing attendance for other dates is never changed."],
+    ]);
+    instructions["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } },
+    ];
+    instructions["!cols"] = [{ wch: 18 }, { wch: 110 }];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Daily Attendance");
+    XLSX.utils.book_append_sheet(workbook, instructions, "Instructions");
+    XLSX.writeFile(workbook, `HRMS_Daily_Attendance_Template_${dateKey}.xlsx`);
+  };
+
+  const openAttendanceImport = (mode) => {
+    setAttendanceImportMode(mode);
+    setShowAttendanceImportChoice(false);
+    window.setTimeout(() => attendanceImportInputRef.current?.click(), 0);
+  };
+
+  const normalizeDailyHeader = (value) =>
+    String(value ?? "").trim().toLowerCase().replace(/[._/()-]+/g, " ").replace(/\s+/g, " ");
+
+  const getDailyImportColumn = (headers, aliases) => {
+    const normalizedAliases = new Set(aliases.map(normalizeDailyHeader));
+    return headers.find((key) => normalizedAliases.has(normalizeDailyHeader(key))) || "";
+  };
+
+  const parseDailyAttendanceDate = (value) => {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const parsed = XLSX.SSF.parse_date_code(value);
+      if (parsed?.y && parsed?.m && parsed?.d) {
+        return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+      }
+    }
+
+    const text = String(value ?? "").trim();
+    if (!text) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+
+    const direct = text.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/);
+    if (direct) {
+      return `${direct[3]}-${String(direct[2]).padStart(2, "0")}-${String(direct[1]).padStart(2, "0")}`;
+    }
+
+    const parsed = new Date(text);
+    if (!Number.isNaN(parsed.getTime())) {
+      return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+    }
+
+    return "";
+  };
+
+  const parseDailyAttendanceImport = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const workbook = XLSX.read(new Uint8Array(e.target.result), { type: "array", cellDates: true });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const matrix = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
+          if (!matrix.length) throw new Error("Excel file is empty.");
+
+          const headerRowIndex = matrix.findIndex((row) => {
+            const headers = row.map(normalizeDailyHeader);
+            return headers.some((item) => ["employee id", "employee code", "emp id", "emp code", "employeeid"].includes(item)) &&
+              headers.some((item) => ["status", "attendance", "attendance status", "in time", "out time"].includes(item));
+          });
+          if (headerRowIndex < 0) throw new Error("Daily attendance headers not found. Use the HRMS Daily Attendance Template.");
+
+          const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "", range: headerRowIndex, raw: true, cellDates: true });
+          const headers = rows.length ? Object.keys(rows[0]) : [];
+          const idKey = getDailyImportColumn(headers, ["Employee ID", "Employee Code", "Emp ID", "Emp Code", "EmployeeID"]);
+          const dateKeyName = getDailyImportColumn(headers, ["Date", "Attendance Date", "AttendanceDate"]);
+          const statusKey = getDailyImportColumn(headers, ["Status", "Attendance", "Attendance Status"]);
+          const inKey = getDailyImportColumn(headers, ["In Time", "InTime", "Punch In", "Check In"]);
+          const outKey = getDailyImportColumn(headers, ["Out Time", "OutTime", "Punch Out", "Check Out"]);
+          const workKey = getDailyImportColumn(headers, ["Working Hours", "Work Hours", "Working Hrs", "Work Hrs"]);
+          const otKey = getDailyImportColumn(headers, ["OT Hours", "Overtime Hours", "OT Hrs"]);
+          const remarksKey = getDailyImportColumn(headers, ["Remarks", "Remark", "Comments"]);
+
+          if (!idKey) throw new Error("Employee ID column not found. Please use Employee ID or Employee Code.");
+
+          const employeeMap = new Map();
+          employees.forEach((employee) => {
+            const internalId = String(employee.id || "").trim().toUpperCase();
+            const employeeCode = String(getAttendanceEmployeeCode(employee) || "").trim().toUpperCase();
+            if (internalId) employeeMap.set(internalId, employee);
+            if (employeeCode) employeeMap.set(employeeCode, employee);
+          });
+
+          const errors = [];
+          const updates = [];
+          let populatedCells = 0;
+          const targetDate = attendanceDate;
+
+          rows.forEach((row, index) => {
+            const excelRow = headerRowIndex + index + 2;
+            const employeeId = String(row[idKey] ?? "").trim();
+            if (!employeeId) {
+              errors.push({ row: excelRow, employeeId: "-", date: targetDate, value: "", message: "Employee ID is blank." });
+              return;
+            }
+
+            const employee = employeeMap.get(employeeId.toUpperCase());
+            if (!employee) {
+              errors.push({ row: excelRow, employeeId, date: targetDate, value: "", message: "Employee ID not found in HRMS master." });
+              return;
+            }
+
+            const rowDate = dateKeyName ? parseDailyAttendanceDate(row[dateKeyName]) : targetDate;
+            if (!rowDate) {
+              errors.push({ row: excelRow, employeeId, date: "-", value: "", message: "Attendance date is blank or invalid." });
+              return;
+            }
+            if (rowDate !== targetDate) {
+              errors.push({ row: excelRow, employeeId, date: rowDate, value: String(row[dateKeyName] ?? ""), message: `Date must match the selected attendance date (${targetDate}).` });
+              return;
+            }
+
+            const rawStatus = statusKey ? String(row[statusKey] ?? "").trim() : "";
+            const inTime = inKey ? String(row[inKey] ?? "").trim() : "";
+            const outTime = outKey ? String(row[outKey] ?? "").trim() : "";
+            const workingHours = workKey ? String(row[workKey] ?? "").trim() : "";
+            const otHours = otKey ? String(row[otKey] ?? "").trim() : "";
+            const remarks = remarksKey ? String(row[remarksKey] ?? "").trim() : "";
+
+            const statusValue = rawStatus ? normalizeImportedAttendanceStatus(rawStatus) : ((inTime || outTime) ? "P" : "");
+            if (!statusValue) {
+              errors.push({ row: excelRow, employeeId, date: rowDate, value: rawStatus || "Blank", message: "Attendance status is required. Use an approved status code, or provide In Time / Out Time so HRMS can mark the row Present." });
+              return;
+            }
+
+            if (inTime && !/^\d{1,2}:\d{2}$/.test(inTime)) {
+              errors.push({ row: excelRow, employeeId, date: rowDate, value: inTime, message: "Invalid In Time. Use HH:MM format." });
+              return;
+            }
+            if (outTime && !/^\d{1,2}:\d{2}$/.test(outTime)) {
+              errors.push({ row: excelRow, employeeId, date: rowDate, value: outTime, message: "Invalid Out Time. Use HH:MM format." });
+              return;
+            }
+
+            populatedCells += 1;
+            updates.push({
+              dateKey: rowDate,
+              employeeId: employee.id,
+              status: statusValue,
+              inTime,
+              outTime,
+              workingHours,
+              otHours,
+              remarks,
+              source: "Daily Excel Import",
+            });
+          });
+
+          const uniqueKeys = new Set();
+          const duplicateUpdates = [];
+          const uniqueUpdates = updates.filter((item) => {
+            const key = `${item.dateKey}__${item.employeeId}`;
+            if (uniqueKeys.has(key)) { duplicateUpdates.push(item); return false; }
+            uniqueKeys.add(key);
+            return true;
+          });
+          duplicateUpdates.forEach((item) => errors.push({ row: "-", employeeId: item.employeeId, date: item.dateKey, value: item.status, message: "Duplicate employee/date entry." }));
+
+          resolve({
+            fileName: file.name,
+            importMode: "daily",
+            updates: uniqueUpdates,
+            errors,
+            rows: rows.length,
+            populatedCells,
+            dateColumns: 1,
+            targetDate,
+          });
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = () => reject(new Error("Unable to read the attendance Excel file."));
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
   const handleAttendanceImportFile = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    if (attendanceImportMode === "daily") {
+      parseDailyAttendanceImport(file)
+        .then((preview) => {
+          setAttendanceImportPreview(preview);
+          setShowAttendanceImport(true);
+        })
+        .catch((error) => {
+          console.error("Unable to import daily attendance:", error);
+          alert(error.message || "Unable to read the daily attendance Excel file.");
+        })
+        .finally(() => {
+          event.target.value = "";
+        });
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -1453,19 +1926,58 @@ const [newEmployee, setNewEmployee] = useState({
 
   const confirmAttendanceImport = () => {
     if (!attendanceImportPreview?.updates?.length) return;
+
+    const orderedUpdates = [...attendanceImportPreview.updates].sort((a, b) =>
+      String(a.dateKey).localeCompare(String(b.dateKey)) || String(a.employeeId).localeCompare(String(b.employeeId))
+    );
+    const compOffErrors = [];
+    const pending = [];
+    orderedUpdates.forEach((update) => {
+      const validation = validateCompOffUpdate(update, attendanceRecords, pending);
+      if (validation) {
+        compOffErrors.push({ ...update, message: validation });
+        return;
+      }
+      pending.push(update);
+    });
+
+    if (compOffErrors.length) {
+      const first = compOffErrors.slice(0, 10).map((item) =>
+        `${item.employeeId} · ${item.dateKey}: ${item.message}`
+      ).join("\n");
+      window.alert(`Comp Off validation failed for ${compOffErrors.length} record(s).\n\n${first}${compOffErrors.length > 10 ? "\n..." : ""}\n\nNo attendance records were imported.`);
+      return;
+    }
+
     setAttendanceRecords((previous) => {
       const next = { ...previous };
-      attendanceImportPreview.updates.forEach(({ dateKey, employeeId, status }) => {
+      attendanceImportPreview.updates.forEach(({ dateKey, employeeId, status, inTime, outTime, workingHours, otHours, remarks }) => {
         const previousRecord = next[dateKey]?.[employeeId] || {};
         next[dateKey] = {
           ...(next[dateKey] || {}),
           [employeeId]: {
             ...previousRecord,
             status,
-            source: "Excel Import",
+            ...(String(status).toUpperCase() === "CO-E" ? { compOffTransaction: "CO-E", auditReason: "Comp Off Earned — Sunday working" } : {}),
+            ...(String(status).toUpperCase() === "CO-U" ? { compOffTransaction: "CO-U", auditReason: "Comp Off Utilisation" } : {}),
+            ...(String(status).toUpperCase() === "P" && isSundayDate(dateKey) ? { compOffTransaction: "CO-E", auditReason: "Sunday working — Comp Off Earned" } : {}),
+            ...(attendanceImportPreview.importMode === "daily" ? {
+              inTime: inTime || "",
+              outTime: outTime || "",
+              workingHours: workingHours || "",
+              otHours: otHours || "",
+              remarks: remarks || "",
+            } : {}),
+            source: attendanceImportPreview.importMode === "daily" ? "Daily Excel Import" : "Excel Import",
             lastUpdatedBy: "HR/Admin",
             lastUpdatedAt: new Date().toISOString(),
-            auditReason: "Bulk attendance Excel import",
+            auditReason: (String(status).toUpperCase() === "CO-E")
+              ? "Comp Off Earned — Sunday working"
+              : (String(status).toUpperCase() === "CO-U")
+                ? "Comp Off Utilisation"
+                : (String(status).toUpperCase() === "P" && isSundayDate(dateKey))
+                  ? "Sunday working — Comp Off Earned"
+                  : (attendanceImportPreview.importMode === "daily" ? "Daily bulk attendance Excel import" : "Bulk attendance Excel import"),
           },
         };
       });
@@ -1504,7 +2016,7 @@ const [newEmployee, setNewEmployee] = useState({
   };
 
   const attendanceReportData = useMemo(() => attendanceReportEmployees.map((employee) => {
-    const counts = { P: 0, A: 0, EL: 0, CL: 0, SL: 0, FL: 0, CO: 0, OD: 0, WFH: 0, WO: 0, HO: 0, HD: 0, LOP: 0, unmarked: 0 };
+    const counts = { P: 0, A: 0, EL: 0, CL: 0, SL: 0, FL: 0, CO: 0, "CO-E": 0, "CO-U": 0, OD: 0, WFH: 0, WO: 0, HO: 0, HD: 0, LOP: 0, unmarked: 0 };
     let workHours = 0;
     let otHours = 0;
     let paidDays = 0;
@@ -1530,7 +2042,7 @@ const [newEmployee, setNewEmployee] = useState({
       // Paid Days:
       // P, paid leaves, CO, OD, WFH, WO and HO are paid.
       // HD contributes 0.5 day. A/LOP/unmarked do not contribute.
-      const paidStatusDays = ["P", "EL", "CL", "SL", "FL", "CO", "OD", "WFH", "WO", "HO"];
+      const paidStatusDays = ["P", "EL", "CL", "SL", "FL", "CO", "CO-E", "CO-U", "OD", "WFH", "WO", "HO"];
       if (paidStatusDays.includes(statusValue)) paidDays += 1;
       else if (statusValue === "HD") paidDays += 0.5;
 
@@ -2621,7 +3133,8 @@ const handleImportExcel = (event) => {
           <div className="attendance-filter-panel">
             <div className="attendance-filter-title"><div><strong>Attendance Filters</strong><span>Apply filters to site, department and manpower type</span></div><button className="filter-reset" onClick={() => { setAttendanceSite("All"); setAttendanceDepartment("All"); setAttendanceVendor("All"); setEmployeeType("All"); setAttendanceStatusFilter("All"); setAttendanceSearch(""); }}>Reset</button></div>
             <div className="attendance-filter-grid">
-              <div><label>Date</label><input type="date" value={attendanceDate} onChange={(e) => setAttendanceDate(e.target.value)} /></div>
+              <div><label>Attendance Month</label><select value={attendanceMonth} onChange={(e) => { const nextMonth = e.target.value; setAttendanceMonth(nextMonth); const range = getMonthDateRange(nextMonth); setAttendanceDate(nextMonth === currentMonthKey ? new Date().toISOString().slice(0, 10) : range.min); }}>{attendanceMonthOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div>
+              <div><label>Date</label><input type="date" min={selectedMonthRange.min} max={selectedMonthRange.max} value={attendanceDate} onChange={(e) => { const nextDate = e.target.value; setAttendanceDate(nextDate); setAttendanceMonth(nextDate.slice(0, 7)); }} /></div>
               <div><label>Site / Project</label><select value={attendanceSite} onChange={(e) => setAttendanceSite(e.target.value)}><option value="All">All Sites</option>{attendanceSites.map((site) => <option key={site}>{site}</option>)}</select></div>
               <div><label>Department</label><select value={attendanceDepartment} onChange={(e) => setAttendanceDepartment(e.target.value)}><option value="All">All Departments</option>{attendanceDepartments.map((item) => <option key={item}>{item}</option>)}</select></div>
               <div><label>Employee Type</label><select value={employeeType} onChange={(e) => setEmployeeType(e.target.value)}><option value="All">All Types</option><option value="On-Roll">On-Roll</option><option value="Third Party">Third Party</option></select></div>
@@ -2676,7 +3189,7 @@ const handleImportExcel = (event) => {
 
           {attendanceView === "daily" && (
             <>
-              <div className="attendance-toolbar"><div><strong>{new Date(`${attendanceDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</strong><span>{filteredAttendanceEmployees.length} employees shown</span></div><div className="attendance-toolbar-actions"><button className="secondary-btn" onClick={downloadAttendanceTemplate}>⬇ Template</button><button className="primary-button bulk-import-btn" onClick={() => attendanceImportInputRef.current?.click()}>📥 Import Attendance</button><button className="secondary-btn" onClick={() => markAllAttendance("WO")}>Mark Weekly Off</button><button className="danger-light-btn" onClick={clearAttendanceDay}>Clear Day</button></div></div>
+              <div className="attendance-toolbar"><div><strong>{new Date(`${attendanceDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</strong><span>{filteredAttendanceEmployees.length} employees shown</span></div><div className="attendance-toolbar-actions"><button className="secondary-btn" onClick={downloadAttendanceTemplate}>⬇ Monthly Template</button><button className="secondary-btn" onClick={downloadDailyAttendanceTemplate}>⬇ Daily Template</button><button className="primary-button bulk-import-btn" onClick={() => openAttendanceImport("monthly")}>📥 Monthly Import</button><button className="primary-button bulk-import-btn" onClick={() => openAttendanceImport("daily")}>📅 Daily Import</button><button className="secondary-btn" onClick={() => markAllAttendance("WO")}>Mark Weekly Off</button><button className="danger-light-btn" onClick={clearAttendanceDay}>Clear Day</button></div></div>
               <div className="attendance-summary-grid">{[["Total Employees",attendanceSummary.P+attendanceSummary.A+attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.FL+attendanceSummary.CO+attendanceSummary.OD+attendanceSummary.WFH+attendanceSummary.WO+attendanceSummary.HO+attendanceSummary.HD+attendanceSummary.Unmarked,"total"],["Present",attendanceSummary.P,"present"],["Absent",attendanceSummary.A,"absent"],["Leave",attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.FL,"leave"],["WFH",attendanceSummary.WFH,"wfh"],["Comp Off",attendanceSummary.CO,"co"],["Unmarked",attendanceSummary.Unmarked,"unmarked"]].map(([label,value,type])=><div className={`attendance-summary-card ${type}`} key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
               <div className="attendance-table-card"><div className="table-wrapper"><table><thead><tr><th>Employee</th><th>Site</th><th>Type</th><th>Attendance</th><th>In Time</th><th>Out Time</th><th>Working Hrs.</th><th>OT Hrs.</th><th>Source</th><th>Remarks</th><th className="attendance-action-header">Action</th></tr></thead><tbody>{filteredAttendanceEmployees.map(employee=>{
                 const record = getDisplayedAttendanceRecord(employee, attendanceDate);
@@ -3116,6 +3629,57 @@ const handleImportExcel = (event) => {
           </div>
         )}
 
+        {showAttendanceImportChoice && (
+          <div
+            className="attendance-import-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose attendance import type"
+          >
+            <div className="attendance-import-modal" style={{ maxWidth: "760px" }}>
+              <div className="attendance-import-header">
+                <div>
+                  <div className="module-eyebrow">BULK ATTENDANCE</div>
+                  <h3>Choose Import Type</h3>
+                  <p>Use monthly upload for the complete month, or daily upload when the site sends one day at a time.</p>
+                </div>
+                <button
+                  type="button"
+                  className="monthly-close-btn"
+                  aria-label="Close import options"
+                  onClick={() => setShowAttendanceImportChoice(false)}
+                >×</button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16, padding: "8px 0 18px" }}>
+                <div style={{ border: "1px solid #dbe4f0", borderRadius: 14, padding: 18, background: "#f8fbff" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: "#5b6b8c", letterSpacing: ".08em", textTransform: "uppercase" }}>Monthly Upload</div>
+                  <h4 style={{ margin: "7px 0 6px", color: "#17213b", fontSize: 17 }}>Full Month Attendance</h4>
+                  <p style={{ margin: "0 0 14px", color: "#64748b", fontSize: 13, lineHeight: 1.5 }}>Upload one Excel containing all employees and all dates of the selected month.</p>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button type="button" className="secondary-btn" onClick={downloadAttendanceTemplate}>⬇ Download Monthly Template</button>
+                    <button type="button" className="primary-button" onClick={() => openAttendanceImport("monthly")}>Upload Monthly Excel</button>
+                  </div>
+                </div>
+
+                <div style={{ border: "1px solid #d8d2ff", borderRadius: 14, padding: 18, background: "#faf9ff" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: "#6957d8", letterSpacing: ".08em", textTransform: "uppercase" }}>Daily Upload</div>
+                  <h4 style={{ margin: "7px 0 6px", color: "#17213b", fontSize: 17 }}>One Day · All Employees</h4>
+                  <p style={{ margin: "0 0 14px", color: "#64748b", fontSize: 13, lineHeight: 1.5 }}>For daily site Excel files. Upload one date for all employees in bulk — no need to mark employees one by one.</p>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button type="button" className="secondary-btn" onClick={downloadDailyAttendanceTemplate}>⬇ Download Daily Template</button>
+                    <button type="button" className="primary-button" onClick={() => openAttendanceImport("daily")}>Upload Daily Excel</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="attendance-import-note" style={{ marginTop: 0 }}>
+                <strong>Daily upload:</strong> Select the attendance date first. Only that date will be updated. Existing attendance for other dates remains unchanged.
+              </div>
+            </div>
+          </div>
+        )}
+
         {showAttendanceImport && attendanceImportPreview && (
           <div
             className="attendance-import-overlay"
@@ -3127,10 +3691,11 @@ const handleImportExcel = (event) => {
               <div className="attendance-import-header">
                 <div>
                   <div className="module-eyebrow">BULK ATTENDANCE</div>
-                  <h3>Import Attendance</h3>
+                  <h3>{attendanceImportPreview.importMode === "daily" ? "Import Daily Attendance" : "Import Monthly Attendance"}</h3>
                   <p>
                     {attendanceImportPreview.fileName} ·{" "}
                     {attendanceImportPreview.populatedCells} attendance entries detected
+                    {attendanceImportPreview.importMode === "daily" && attendanceImportPreview.targetDate ? ` · ${attendanceImportPreview.targetDate}` : ""}
                   </p>
                 </div>
 

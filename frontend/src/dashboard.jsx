@@ -185,49 +185,81 @@ function parseDashboardDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function dashboardAge(dob) {
+function dashboardEmployeeFromDb(row) {
+  const metadata =
+    row?.metadata && typeof row.metadata === "object"
+      ? row.metadata
+      : {};
+
+  return {
+    ...metadata,
+    id: row?.id,
+    organizationId: row?.organization_id || "",
+    employeeId: row?.employee_id || metadata.employeeId || "",
+    name: row?.employee_name || metadata.name || "",
+    officialEmail: row?.email || metadata.officialEmail || "",
+    personalEmail: row?.personal_email || metadata.personalEmail || "",
+    mobile: row?.mobile || metadata.mobile || "",
+    gender: row?.gender || metadata.gender || "Male",
+    dob: row?.date_of_birth || metadata.dob || "",
+    doj: row?.date_of_joining || metadata.doj || "",
+    department: row?.department || metadata.department || "",
+    designation: row?.designation || metadata.designation || "",
+    location: row?.location || metadata.location || "",
+    employmentType: row?.employment_type || metadata.employmentType || "",
+    status: row?.status || metadata.status || "Active",
+  };
+}
+
+function getDashboardSelectedMonthRange(monthValue) {
+  const match = String(monthValue || "").match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const monthNumber = Number(match[2]);
+  if (!year || monthNumber < 1 || monthNumber > 12) return null;
+
+  return {
+    start: new Date(year, monthNumber - 1, 1, 0, 0, 0, 0),
+    end: new Date(year, monthNumber, 0, 23, 59, 59, 999),
+  };
+}
+
+function dashboardAge(dob, asOfDate = new Date()) {
   const birth = parseDashboardDate(dob);
   if (!birth) return null;
 
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
+  const asOf = asOfDate instanceof Date ? asOfDate : new Date(asOfDate);
+  let age = asOf.getFullYear() - birth.getFullYear();
+  const monthDiff = asOf.getMonth() - birth.getMonth();
 
-  if (
-    monthDiff < 0 ||
-    (monthDiff === 0 && today.getDate() < birth.getDate())
-  ) {
+  if (monthDiff < 0 || (monthDiff === 0 && asOf.getDate() < birth.getDate())) {
     age -= 1;
   }
 
   return age >= 0 ? age : null;
 }
 
-function dashboardServiceYears(doj) {
+function dashboardServiceYears(doj, asOfDate = new Date()) {
   const joining = parseDashboardDate(doj);
   if (!joining) return null;
 
-  const today = new Date();
+  const asOf = asOfDate instanceof Date ? asOfDate : new Date(asOfDate);
   const years =
-    today.getFullYear() -
+    asOf.getFullYear() -
     joining.getFullYear() -
-    (
-      today.getMonth() < joining.getMonth() ||
-      (today.getMonth() === joining.getMonth() && today.getDate() < joining.getDate())
-        ? 1
-        : 0
-    );
+    (asOf.getMonth() < joining.getMonth() ||
+    (asOf.getMonth() === joining.getMonth() && asOf.getDate() < joining.getDate())
+      ? 1
+      : 0);
 
   const months =
-    (today.getFullYear() - joining.getFullYear()) * 12 +
-    today.getMonth() -
+    (asOf.getFullYear() - joining.getFullYear()) * 12 +
+    asOf.getMonth() -
     joining.getMonth() -
-    (today.getDate() < joining.getDate() ? 1 : 0);
+    (asOf.getDate() < joining.getDate() ? 1 : 0);
 
-  return {
-    years: Math.max(years, 0),
-    months: Math.max(months, 0),
-  };
+  return { years: Math.max(years, 0), months: Math.max(months, 0) };
 }
 
 function dashboardUpcomingEvents(employeeList) {
@@ -669,7 +701,7 @@ function Dashboard({ onLogout, currentUser = null }) {
     dashboardCurrentMonth,
   ]);
   const [search, setSearch] = useState("");
-  const [employees, setEmployees] = useState(() => readDashboardEmployeeRecords());
+  const [employees, setEmployees] = useState([]);
   const [employeeCount, setEmployeeCount] = useState(0);
   const [employeeCountLoading, setEmployeeCountLoading] = useState(true);
   const [agreements, setAgreements] = useState([]);
@@ -688,14 +720,19 @@ function Dashboard({ onLogout, currentUser = null }) {
     readRecruitmentJSON(RECRUITMENT_OFFER_KEY)
   );
 
-  const loadTenantEmployeeCount = async () => {
+  const loadTenantEmployees = async () => {
     try {
       setEmployeeCountLoading(true);
 
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
       if (authError) throw authError;
 
       if (!user?.id) {
+        setEmployees([]);
         setEmployeeCount(0);
         return;
       }
@@ -710,22 +747,25 @@ function Dashboard({ onLogout, currentUser = null }) {
       if (membershipError) throw membershipError;
 
       if (!membership?.organization_id) {
+        setEmployees([]);
         setEmployeeCount(0);
         return;
       }
 
-      const organizationId = membership.organization_id;
-
-      const { count, error: employeeCountError } = await supabase
+      const { data: rows, error: employeeQueryError } = await supabase
         .from("employees")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId);
+        .select("*")
+        .eq("organization_id", membership.organization_id)
+        .order("employee_name", { ascending: true });
 
-      if (employeeCountError) throw employeeCountError;
+      if (employeeQueryError) throw employeeQueryError;
 
-      setEmployeeCount(Number(count || 0));
+      const employeeRecords = (rows || []).map(dashboardEmployeeFromDb);
+      setEmployees(employeeRecords);
+      setEmployeeCount(employeeRecords.length);
     } catch (error) {
-      console.error("Unable to load tenant employee count:", error);
+      console.error("Unable to load dashboard employees:", error);
+      setEmployees([]);
       setEmployeeCount(0);
     } finally {
       setEmployeeCountLoading(false);
@@ -733,8 +773,8 @@ function Dashboard({ onLogout, currentUser = null }) {
   };
 
   const loadVendorDashboardData = () => {
-    const employeeRecords = readDashboardEmployeeRecords();
-    setEmployees(employeeRecords);
+    // Employee Master is authoritative in Supabase. Do not overwrite the
+    // dashboard employee state with legacy localStorage records.
     setAgreements(readDashboardData(AGREEMENT_STORAGE_KEY));
     setPos(readDashboardData(PO_STORAGE_KEY));
     setOrganization(readDashboardData(ORG_STORAGE_KEY));
@@ -742,11 +782,11 @@ function Dashboard({ onLogout, currentUser = null }) {
 
   useEffect(() => {
     loadVendorDashboardData();
-    loadTenantEmployeeCount();
+    loadTenantEmployees();
 
     const refresh = () => {
       loadVendorDashboardData();
-      loadTenantEmployeeCount();
+      loadTenantEmployees();
       setRecruitmentRequirements(readRecruitmentJSON(RECRUITMENT_REQ_KEY));
       setRecruitmentCandidates(readRecruitmentJSON(RECRUITMENT_CANDIDATE_KEY));
       setRecruitmentInterviews(readRecruitmentJSON(RECRUITMENT_INTERVIEW_KEY));
@@ -798,10 +838,51 @@ function Dashboard({ onLogout, currentUser = null }) {
     if (window.innerWidth < 900) setSidebarOpen(false);
   };
 
-  const activeEmployees = employees.filter(
-    (employee) =>
-      String(employee.status || "Active").toLowerCase() === "active"
+  const exitDateValue = (employee) =>
+    employee.exitDate ||
+    employee.dateOfExit ||
+    employee.lastWorkingDate ||
+    employee.dol ||
+    "";
+
+  const selectedMonthRange = getDashboardSelectedMonthRange(month);
+
+  const isEmployeeActiveOnDate = (employee, asOfDate) => {
+    const status = String(employee.status || "Active").trim().toLowerCase();
+    const doj = parseDashboardDate(employee.dateOfJoining || employee.doj);
+    const exitDate = parseDashboardDate(exitDateValue(employee));
+
+    if (!doj || doj > asOfDate) return false;
+    if (exitDate && exitDate < asOfDate) return false;
+    if (status !== "active" && !exitDate) return false;
+    return true;
+  };
+
+  const monthEndDate = selectedMonthRange?.end || new Date();
+  const previousMonthEndDate = selectedMonthRange
+    ? new Date(
+        selectedMonthRange.start.getFullYear(),
+        selectedMonthRange.start.getMonth(),
+        0,
+        23,
+        59,
+        59,
+        999
+      )
+    : new Date();
+
+  const activeEmployees = employees.filter((employee) =>
+    isEmployeeActiveOnDate(employee, monthEndDate)
   );
+
+  const openingEmployees = selectedMonthRange
+    ? employees.filter((employee) =>
+        isEmployeeActiveOnDate(employee, previousMonthEndDate)
+      )
+    : activeEmployees;
+
+  const openingHeadcount = openingEmployees.length;
+  const closingHeadcount = activeEmployees.length;
 
   const genderCounts = activeEmployees.reduce(
     (result, employee) => {
@@ -823,7 +904,7 @@ function Dashboard({ onLogout, currentUser = null }) {
   ];
 
   activeEmployees.forEach((employee) => {
-    const age = dashboardAge(employee.dateOfBirth || employee.dob);
+    const age = dashboardAge(employee.dateOfBirth || employee.dob, monthEndDate);
     if (age === null) return;
 
     const bucket =
@@ -844,7 +925,7 @@ function Dashboard({ onLogout, currentUser = null }) {
   });
 
   const averageAge = activeEmployees
-    .map((employee) => dashboardAge(employee.dateOfBirth || employee.dob))
+    .map((employee) => dashboardAge(employee.dateOfBirth || employee.dob, monthEndDate))
     .filter((age) => age !== null);
 
   const averageAgeValue = averageAge.length
@@ -856,7 +937,7 @@ function Dashboard({ onLogout, currentUser = null }) {
   const serviceMonths = activeEmployees
     .map(
       (employee) =>
-        dashboardServiceYears(employee.dateOfJoining || employee.doj)?.months
+        dashboardServiceYears(employee.dateOfJoining || employee.doj, monthEndDate)?.months
     )
     .filter((months) => Number.isFinite(months));
 
@@ -868,25 +949,23 @@ function Dashboard({ onLogout, currentUser = null }) {
       ).toFixed(1)
     : "—";
 
-  const ninetyDaysAgo = new Date();
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const recentJoinees = selectedMonthRange
+    ? employees.filter((employee) => {
+        const doj = parseDashboardDate(employee.dateOfJoining || employee.doj);
+        return doj && doj >= selectedMonthRange.start && doj <= selectedMonthRange.end;
+      }).length
+    : activeEmployees.length;
 
-  const recentJoinees = activeEmployees.filter((employee) => {
-    const doj = parseDashboardDate(employee.dateOfJoining || employee.doj);
-    return doj && doj >= ninetyDaysAgo;
-  }).length;
-
-  const exitDateValue = (employee) =>
-    employee.exitDate ||
-    employee.dateOfExit ||
-    employee.lastWorkingDate ||
-    employee.dol ||
-    "";
-
-  const recentExits = employees.filter((employee) => {
-    const exitDate = parseDashboardDate(exitDateValue(employee));
-    return exitDate && exitDate >= ninetyDaysAgo && exitDate <= new Date();
-  }).length;
+  const recentExits = selectedMonthRange
+    ? employees.filter((employee) => {
+        const exitDate = parseDashboardDate(exitDateValue(employee));
+        return (
+          exitDate &&
+          exitDate >= selectedMonthRange.start &&
+          exitDate <= selectedMonthRange.end
+        );
+      }).length
+    : 0;
 
   const totalGenderKnown = genderCounts.male + genderCounts.female;
   const malePercentage = totalGenderKnown
@@ -904,46 +983,64 @@ function Dashboard({ onLogout, currentUser = null }) {
     ? (genderCounts.female / activeEmployees.length) * 100
     : 0;
 
+  const netMovement = recentJoinees - recentExits;
+
   const dashboardStats = [
     {
-      title: "Active employees",
-      value: activeEmployees.length.toLocaleString("en-IN"),
-      change: `${employees.length.toLocaleString("en-IN")} records`,
-      note: "Current active workforce",
+      title: "Opening headcount",
+      value: openingHeadcount.toLocaleString("en-IN"),
+      change: selectedMonthRange ? "Start of month" : "Current",
+      note: "Active at previous month end",
       icon: "users",
       color: "purple",
     },
     {
       title: "New joiners",
       value: recentJoinees.toLocaleString("en-IN"),
-      change: "Last 90 days",
-      note: "Based on joining date",
+      change: month || "Selected month",
+      note: "Joined during selected month",
       icon: "user-plus",
       color: "green",
     },
     {
-      title: "Recent exits",
+      title: "Exits",
       value: recentExits.toLocaleString("en-IN"),
-      change: "Last 90 days",
-      note: "Based on exit date",
+      change: month || "Selected month",
+      note: "Exited during selected month",
       icon: "trend",
       color: "orange",
+    },
+    {
+      title: "Closing headcount",
+      value: closingHeadcount.toLocaleString("en-IN"),
+      change: month || "Selected month",
+      note: "Active at month end",
+      icon: "users",
+      color: "blue",
+    },
+    {
+      title: "Net movement",
+      value: `${netMovement >= 0 ? "+" : ""}${netMovement.toLocaleString("en-IN")}`,
+      change: "Joiners − exits",
+      note: "Movement during selected month",
+      icon: "trend",
+      color: "violet",
     },
     {
       title: "Average age",
       value: averageAgeValue,
       change: "Years",
-      note: "Active employee records",
+      note: "Calculated at month end",
       icon: "user",
-      color: "blue",
+      color: "pink",
     },
     {
       title: "Average service",
       value: averageServiceValue,
       change: "Years",
-      note: "Calculated from DOJ",
+      note: "Calculated at month end",
       icon: "clock",
-      color: "pink",
+      color: "green",
     },
     {
       title: "Gender ratio",
@@ -951,7 +1048,7 @@ function Dashboard({ onLogout, currentUser = null }) {
       change: `${malePercentage}% male`,
       note: "Male : Female",
       icon: "users",
-      color: "violet",
+      color: "purple",
     },
   ];
 
@@ -1311,7 +1408,7 @@ function Dashboard({ onLogout, currentUser = null }) {
           ) : activeMenu === "Vendors" ? (
             <VendorAgreements />
           ) : activeMenu === "Employees" ? (
-            <Employees />
+            <Employees employees={employees} currentUser={currentUser} />
           ) : activeMenu === "Leave" ? (
   <Leave employees={employees} />
 ) : activeMenu === "Force Leave" ? (
@@ -1525,11 +1622,11 @@ function Dashboard({ onLogout, currentUser = null }) {
 
                   <div className="workforce-footer">
                     <div>
-                      <span>90-day joiners</span>
+                      <span>Month joiners</span>
                       <strong>{recentJoinees}</strong>
                     </div>
                     <div>
-                      <span>90-day exits</span>
+                      <span>Month exits</span>
                       <strong>{recentExits}</strong>
                     </div>
                     <div>

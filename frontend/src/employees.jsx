@@ -815,6 +815,161 @@ const EMPLOYEE_IMPORT_FIELDS = new Map(
   EMPLOYEE_EXPORT_COLUMNS.map(([header, key]) => [header.toLowerCase(), key])
 );
 
+// These employee fields are controlled by Organization Masters.
+// The same definitions are used by the manual Employee form, Excel template
+// dropdowns, and import validation so all three entry paths stay aligned.
+const ORGANIZATION_MASTER_FIELDS = [
+  ["location", "Zone / Location", "locations"],
+  ["employeeGroup", "Employee Group", "employeeGroups"],
+  ["shift", "Shift", "shifts"],
+  ["branch", "Branch Name", "branches"],
+  ["designation", "Designation", "designations"],
+  ["employmentType", "Employment Type", "employmentTypes"],
+  ["department", "Department", "departments"],
+  ["vendor", "Vendor / Contractor", "jobRoles"],
+  ["jobType", "Job Type", "jobTypes"],
+];
+
+function masterOptionValues(masters, key) {
+  return getActiveOptions(masters, key);
+}
+
+function canonicalMasterValue(value, options) {
+  const text = excelCellText(value);
+  if (!text) return "";
+  const match = options.find(
+    (option) => String(option).trim().toLowerCase() === text.toLowerCase()
+  );
+  return match || null;
+}
+
+function validateAndCanonicalizeOrganizationFields(employee, masters) {
+  const errors = [];
+
+  ORGANIZATION_MASTER_FIELDS.forEach(([key, label, masterKey]) => {
+    const value = excelCellText(employee[key]);
+    if (!value) return;
+
+    const options = masterOptionValues(masters, masterKey);
+    const canonical = canonicalMasterValue(value, options);
+
+    if (!canonical) {
+      const sample = options.slice(0, 12).join(", ");
+      errors.push({
+        key,
+        label,
+        value,
+        message: `${label} \"${value}\" is not available in Organization Master.${sample ? ` Allowed values: ${sample}${options.length > 12 ? ", ..." : ""}` : " No active master value is configured."}`
+      });
+      return;
+    }
+
+    // Store the exact Organization Master spelling even if Excel used a
+    // different letter case or extra surrounding spaces.
+    employee[key] = canonical;
+  });
+
+  return errors;
+}
+
+function excelColumnLetter(columnNumber) {
+  let n = columnNumber;
+  let result = "";
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    n = Math.floor((n - 1) / 26);
+  }
+  return result;
+}
+
+function xmlEscape(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+async function addOrganizationMasterDropdowns(workbook, masters) {
+  const masterSheetRows = [];
+  const masterColumns = ORGANIZATION_MASTER_FIELDS.map(([key, label, masterKey]) => ({
+    key,
+    label,
+    masterKey,
+    options: masterOptionValues(masters, masterKey),
+  }));
+
+  const maxRows = Math.max(
+    1,
+    ...masterColumns.map((column) => column.options.length)
+  );
+
+  masterSheetRows.push(masterColumns.map((column) => column.label));
+  for (let rowIndex = 0; rowIndex < maxRows; rowIndex += 1) {
+    masterSheetRows.push(
+      masterColumns.map((column) => column.options[rowIndex] || "")
+    );
+  }
+
+  const masterSheet = XLSX.utils.aoa_to_sheet(masterSheetRows);
+  masterSheet["!cols"] = masterColumns.map((column) => ({
+    wch: Math.max(18, Math.min(40, column.label.length + 6)),
+  }));
+
+  XLSX.utils.book_append_sheet(workbook, masterSheet, "Master Lists");
+  workbook.Workbook = workbook.Workbook || {};
+  workbook.Workbook.Sheets = workbook.Workbook.Sheets || [];
+  workbook.Workbook.Sheets[0] = { name: "Employee Import", Hidden: 0 };
+  workbook.Workbook.Sheets[1] = { name: "Master Lists", Hidden: 1 };
+  workbook.Workbook.Names = workbook.Workbook.Names || [];
+
+  masterColumns.forEach((column, index) => {
+    const colLetter = excelColumnLetter(index + 1);
+    const name = `HRSYNC_${column.key}_List`;
+    workbook.Workbook.Names.push({
+      Name: name,
+      Ref: `\'Master Lists\'!$${colLetter}$2:$${colLetter}$${Math.max(2, column.options.length + 1)}`,
+    });
+  });
+
+  // SheetJS CE does not consistently emit Excel list validation rules, so
+  // inject the small OOXML dataValidations block after the sheet is written.
+  const arrayBuffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const sheetXmlFile = zip.file("xl/worksheets/sheet1.xml");
+  if (!sheetXmlFile) return arrayBuffer;
+
+  let sheetXml = await sheetXmlFile.async("string");
+  const validations = [];
+
+  masterColumns.forEach((column, index) => {
+    if (!column.options.length) return;
+    const headerIndex = EMPLOYEE_EXPORT_COLUMNS.findIndex(
+      ([, fieldKey]) => fieldKey === column.key
+    );
+    if (headerIndex < 0) return;
+
+    const excelColumn = excelColumnLetter(headerIndex + 1);
+    validations.push(
+      `<dataValidation type="list" allowBlank="1" showErrorMessage="1" showInputMessage="1" errorTitle="Invalid ${xmlEscape(column.label)}" error="Select a value from Organization Master." promptTitle="${xmlEscape(column.label)}" prompt="Select from the Organization Master dropdown." sqref="${excelColumn}2:${excelColumn}1000"><formula1>=HRSYNC_${column.key}_List</formula1></dataValidation>`
+    );
+  });
+
+  if (validations.length) {
+    const block = `<dataValidations count="${validations.length}">${validations.join("")}</dataValidations>`;
+    if (sheetXml.includes("</sheetData>")) {
+      sheetXml = sheetXml.replace("</sheetData>", `</sheetData>${block}`);
+    } else {
+      sheetXml = sheetXml.replace("</worksheet>", `${block}</worksheet>`);
+    }
+    zip.file("xl/worksheets/sheet1.xml", sheetXml);
+  }
+
+  return await zip.generateAsync({ type: "arraybuffer", compression: "DEFLATE" });
+}
+
 function excelDateToISO(value) {
   if (value === null || value === undefined || value === "") return "";
 
@@ -927,7 +1082,8 @@ function exportEmployeesToExcel(employees) {
   XLSX.writeFile(workbook, `HRSYNC_Employee_Master_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-function downloadEmployeeImportTemplate() {
+async function downloadEmployeeImportTemplate() {
+  const masters = readMasters();
   const emptyRow = Object.fromEntries(
     EMPLOYEE_EXPORT_COLUMNS.map(([header]) => [header, ""])
   );
@@ -940,7 +1096,18 @@ function downloadEmployeeImportTemplate() {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Employee Import");
 
-  XLSX.writeFile(workbook, "HRSYNC_Employee_Import_Template.xlsx");
+  const fileData = await addOrganizationMasterDropdowns(workbook, masters);
+  const blob = new Blob([fileData], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "HRSYNC_Employee_Import_Template.xlsx";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function normalizeImportedEmployee(row) {
@@ -1031,6 +1198,14 @@ async function importEmployeesFromExcel(file, employees, saveEmployees) {
       return;
     }
 
+    const masterErrors = validateAndCanonicalizeOrganizationFields(employee, masters);
+    if (masterErrors.length) {
+      masterErrors.forEach((item) => {
+        errors.push(`Row ${rowNumber}: ${item.message}`);
+      });
+      return;
+    }
+
     if (employee.pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(employee.pan)) {
       errors.push(`Row ${rowNumber}: Invalid PAN format for ${employee.employeeId}.`);
       return;
@@ -1066,16 +1241,22 @@ async function importEmployeesFromExcel(file, employees, saveEmployees) {
     }
   });
 
+  // Master-data errors block the entire import. This prevents one Excel file
+  // from creating mixed Department/Designation/Group/Vendor spellings.
+  if (errors.length) {
+    return { added: 0, updated: 0, errors };
+  }
+
   await saveEmployees(next);
 
   return { added, updated, errors };
 }
 
-export default function Employees() {
+export default function Employees({ employees: initialEmployees = [], currentUser = null }) {
   const [masters, setMasters] = useState(readMasters);
-  const [employees, setEmployees] = useState([]);
+  const [employees, setEmployees] = useState(() => Array.isArray(initialEmployees) ? initialEmployees : []);
   const [organizationId, setOrganizationId] = useState("");
-  const [employeeLoading, setEmployeeLoading] = useState(true);
+  const [employeeLoading, setEmployeeLoading] = useState(false);
   const [employeeError, setEmployeeError] = useState("");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL");
@@ -1111,6 +1292,7 @@ const [transferForm, setTransferForm] = useState({
     const refreshHodMappings = () => setHodMappings(readHodMappings());
 
     window.addEventListener("bauerHrmsMastersUpdated", refreshMasters);
+    window.addEventListener("bauerHrmsOrganizationMastersUpdated", refreshMasters);
     window.addEventListener("bauerHrmsHodMappingsUpdated", refreshHodMappings);
     window.addEventListener("storage", refreshMasters);
 
@@ -1121,38 +1303,44 @@ const [transferForm, setTransferForm] = useState({
       setEmployeeError("");
 
       try {
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser();
+        // Dashboard already has the authenticated company context. Reuse it
+        // immediately so Employee Master does not wait for another auth round-trip.
+        let resolvedOrganizationId = currentUser?.organizationId || currentUser?.organization_id || "";
 
-        if (authError) throw authError;
-        if (!user?.id) throw new Error("Your HRSYNC session has expired. Please log in again.");
+        if (!resolvedOrganizationId) {
+          const {
+            data: { user },
+            error: authError,
+          } = await supabase.auth.getUser();
 
-        const { data: membership, error: membershipError } = await supabase
-          .from("organization_users")
-          .select("id, organization_id, employee_id, status")
-          .eq("user_id", user.id)
-          .eq("status", "Active")
-          .maybeSingle();
+          if (authError) throw authError;
+          if (!user?.id) throw new Error("Your HRSYNC session has expired. Please log in again.");
 
-        if (membershipError) throw membershipError;
-        if (!membership?.organization_id) {
-          throw new Error(
-            "No active company is linked to your HRSYNC account."
-          );
+          const { data: membership, error: membershipError } = await supabase
+            .from("organization_users")
+            .select("id, organization_id, employee_id, status")
+            .eq("user_id", user.id)
+            .eq("status", "Active")
+            .maybeSingle();
+
+          if (membershipError) throw membershipError;
+          resolvedOrganizationId = membership?.organization_id || "";
+        }
+
+        if (!resolvedOrganizationId) {
+          throw new Error("No active company is linked to your HRSYNC account.");
         }
 
         const { data: rows, error: employeeQueryError } = await supabase
           .from("employees")
           .select("*")
-          .eq("organization_id", membership.organization_id)
+          .eq("organization_id", resolvedOrganizationId)
           .order("employee_name", { ascending: true });
 
         if (employeeQueryError) throw employeeQueryError;
 
         if (!cancelled) {
-          setOrganizationId(membership.organization_id);
+          setOrganizationId(resolvedOrganizationId);
           setEmployees((rows || []).map(employeeFromDb));
         }
       } catch (error) {
@@ -1174,10 +1362,11 @@ const [transferForm, setTransferForm] = useState({
     return () => {
       cancelled = true;
       window.removeEventListener("bauerHrmsMastersUpdated", refreshMasters);
+    window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshMasters);
       window.removeEventListener("bauerHrmsHodMappingsUpdated", refreshHodMappings);
       window.removeEventListener("storage", refreshMasters);
     };
-  }, []);
+  }, [currentUser?.organizationId, currentUser?.organization_id]);
 
   const saveEmployees = async (next) => {
     if (!organizationId) {
@@ -1349,10 +1538,12 @@ const transferRecord = {
       const result = await importEmployeesFromExcel(file, employees, saveEmployees);
 
       const message = [
-        `Import completed.`,
+        result.errors.length
+          ? `Import blocked. Please correct the Excel file and import again.`
+          : `Import completed successfully.`,
         `Added: ${result.added}`,
         `Updated: ${result.updated}`,
-        result.errors.length ? `Skipped: ${result.errors.length}` : "",
+        result.errors.length ? `Errors: ${result.errors.length}` : "",
         result.errors.length ? `\n\n${result.errors.slice(0, 10).join("\n")}` : "",
         result.errors.length > 10 ? `\n...and ${result.errors.length - 10} more errors.` : "",
       ]
@@ -1737,17 +1928,7 @@ const transferRecord = {
   const activeCount = employees.filter((item) => item.status === "Active").length;
   const inactiveCount = employees.filter((item) => item.status === "Inactive").length;
 
-  const organizationFields = [
-    ["location", "Zone / Location", "locations"],
-    ["employeeGroup", "Employee Group", "employeeGroups"],
-    ["shift", "Shift", "shifts"],
-    ["branch", "Branch Name", "branches"],
-    ["designation", "Designation", "designations"],
-    ["employmentType", "Employment Type", "employmentTypes"],
-    ["department", "Department", "departments"],
-    ["vendor", "Vendor / Contractor", "jobRoles"],
-    ["jobType", "Job Type", "jobTypes"],
-  ];
+  const organizationFields = ORGANIZATION_MASTER_FIELDS;
 
   const gratuityPreview = calculateGratuity(form);
 

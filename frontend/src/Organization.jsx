@@ -177,6 +177,13 @@ const MASTER_CONFIG = [
     placeholder: "e.g. Company Roll",
   },
   {
+    key: "categoryTypes",
+    label: "Category Type",
+    singular: "Category Type",
+    description: "Configure company-specific workforce category types. These values are used dynamically by Workforce Category.",
+    placeholder: "e.g. Permanent",
+  },
+  {
     key: "prorationRules",
     label: "Proration Rules",
     singular: "Proration Rule",
@@ -311,6 +318,13 @@ const DEFAULT_MASTERS = {
     { id: "grp-3", name: "GET", active: true },
     { id: "grp-4", name: "Consultant", active: true },
     { id: "grp-5", name: "Expat", active: true },
+  ],
+  categoryTypes: [
+    { id: "COMPANY_ROLL", name: "Company Roll", active: true },
+    { id: "THIRD_PARTY", name: "Third Party", active: true },
+    { id: "EXPATRIATE", name: "Expatriate", active: true },
+    { id: "CONSULTANT", name: "Consultant", active: true },
+    { id: "OTHER", name: "Other / Custom", active: true },
   ],
   workforceCategories: [
     { id: "wc-001", code: "CR", name: "Company Roll", categoryType: "COMPANY_ROLL", payrollApplicable: true, vendorRequired: false, attendanceApplicable: true, payrollProfile: "Standard Employee", active: true },
@@ -511,8 +525,9 @@ const DEFAULT_MASTERS = {
 
 
 function getDefaultWorkforceCategory() {
+  const defaultType = DEFAULT_MASTERS.categoryTypes?.find((item) => item.active !== false);
   return {
-    id: "", code: "", name: "", categoryType: "COMPANY_ROLL",
+    id: "", code: "", name: "", categoryType: defaultType?.id || "COMPANY_ROLL",
     payrollApplicable: true, vendorRequired: false, attendanceApplicable: true,
     payrollProfile: "Standard Employee", active: true,
   };
@@ -908,6 +923,9 @@ function loadMasters() {
         ...DEFAULT_MASTERS,
         ...parsed,
         workforceCategories: migratedWorkforceCategories,
+        categoryTypes: Array.isArray(parsed.categoryTypes) && parsed.categoryTypes.length
+          ? parsed.categoryTypes
+          : DEFAULT_MASTERS.categoryTypes,
         prorationRules: (parsed.prorationRules || DEFAULT_MASTERS.prorationRules).map(normalizeProrationRule),
         payrollProfiles: (parsed.payrollProfiles || DEFAULT_MASTERS.payrollProfiles).map(normalizePayrollProfile),
         statutoryPolicies,
@@ -1655,7 +1673,7 @@ function Organization() {
     const duplicate = currentItems.some(
       (item) =>
         item.id !== editing?.id &&
-        item.name.toLowerCase() === cleanValue.toLowerCase()
+        String(item.name || "").toLowerCase() === cleanValue.toLowerCase()
     );
 
     if (duplicate) {
@@ -1670,10 +1688,23 @@ function Organization() {
         item.id === editing.id ? { ...item, name: cleanValue } : item
       );
     } else {
+      const generatedId = activeMaster === "categoryTypes"
+        ? cleanValue
+            .toUpperCase()
+            .replace(/[^A-Z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "")
+            .slice(0, 40) || `CATEGORY_TYPE_${Date.now()}`
+        : `${activeMaster}-${Date.now()}`;
+
+      const uniqueId = activeMaster === "categoryTypes" &&
+        currentItems.some((item) => String(item.id || "").toUpperCase() === generatedId.toUpperCase())
+        ? `${generatedId}_${Date.now()}`
+        : generatedId;
+
       nextItems = [
         ...currentItems,
         {
-          id: `${activeMaster}-${Date.now()}`,
+          id: uniqueId,
           name: cleanValue,
           active: true,
         },
@@ -1865,8 +1896,23 @@ function Organization() {
               <div className="workforce-category-grid">
                 <label>Category Code *<input maxLength="12" value={workforceCategoryForm.code} onChange={(e) => setWorkforceCategoryForm({ ...workforceCategoryForm, code: e.target.value.toUpperCase() })} placeholder="e.g. CR" /></label>
                 <label>Category Name *<input value={workforceCategoryForm.name} onChange={(e) => setWorkforceCategoryForm({ ...workforceCategoryForm, name: e.target.value })} placeholder="e.g. Company Roll" /></label>
-                <label>Category Type<select value={workforceCategoryForm.categoryType} onChange={(e) => { const categoryType = e.target.value; setWorkforceCategoryForm({ ...workforceCategoryForm, categoryType, vendorRequired: categoryType === "THIRD_PARTY" ? true : workforceCategoryForm.vendorRequired, payrollProfile: categoryType === "THIRD_PARTY" ? "Third Party Worker" : categoryType === "EXPATRIATE" ? "Expat Payroll" : categoryType === "CONSULTANT" ? "Consultant Payroll" : "Standard Employee" }); }}>
-                  <option value="COMPANY_ROLL">Company Roll</option><option value="THIRD_PARTY">Third Party</option><option value="EXPATRIATE">Expatriate</option><option value="CONSULTANT">Consultant</option><option value="OTHER">Other / Custom</option>
+                <label>Category Type<select value={workforceCategoryForm.categoryType} onChange={(e) => {
+                  const categoryType = e.target.value;
+                  const nextType = (masters.categoryTypes || []).find((item) => item.id === categoryType);
+                  const nextForm = { ...workforceCategoryForm, categoryType };
+                  if (categoryType === "THIRD_PARTY") {
+                    nextForm.vendorRequired = true;
+                    nextForm.payrollProfile = "Third Party Worker";
+                  } else if (categoryType === "EXPATRIATE") {
+                    nextForm.payrollProfile = "Expat Payroll";
+                  } else if (categoryType === "CONSULTANT") {
+                    nextForm.payrollProfile = "Consultant Payroll";
+                  }
+                  setWorkforceCategoryForm(nextForm);
+                }}>
+                  {(masters.categoryTypes || []).filter((item) => item.active !== false).map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
                 </select></label>
                 <label>Payroll Profile *<input value={workforceCategoryForm.payrollProfile} onChange={(e) => setWorkforceCategoryForm({ ...workforceCategoryForm, payrollProfile: e.target.value })} placeholder="e.g. Standard Employee" /></label>
               </div>
@@ -2531,7 +2577,7 @@ function Organization() {
                   {filteredItems.map((item, index) => (
                     <tr key={item.id}>
                       <td>{index + 1}</td><td className="master-name">{item.code || "—"}</td>
-                      <td><strong>{item.name}</strong><small className="table-subtext">{item.categoryType || "Custom"}</small></td>
+                      <td><strong>{item.name}</strong><small className="table-subtext">{(masters.categoryTypes || []).find((type) => type.id === item.categoryType)?.name || item.categoryType || "Custom"}</small></td>
                       <td><span className={`status-pill ${item.payrollApplicable ? "active" : "inactive"}`}>{item.payrollApplicable ? "Applicable" : "No"}</span></td>
                       <td><span className={`status-pill ${item.vendorRequired ? "active" : "inactive"}`}>{item.vendorRequired ? "Required" : "No"}</span></td>
                       <td>{item.payrollProfile || "—"}</td>
