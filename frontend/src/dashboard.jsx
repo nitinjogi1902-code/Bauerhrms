@@ -387,11 +387,18 @@ function Dashboard({ onLogout, currentUser = null }) {
   const hasPermission = (permission) => {
     const code = String(permission || "").trim().toLowerCase();
     if (isPlatformSuperAdmin) return true;
-    if (!permissionsResolved) return false;
-    // For company users, effective access MUST come from the intersection of
-    // company-enabled modules and the user's role permissions. Never fall
-    // back to permissionCodes carried in the login session, because those
-    // may contain role permissions for modules disabled by the Platform Admin.
+
+    // Keep the sidebar visible while the background permission check is
+    // running. The login session already contains the user's role permissions.
+    // Once the authoritative Supabase check completes, use only the resolved
+    // company-enabled permissions.
+    if (!permissionsResolved) return userPermissions.has(code);
+
+    // If the background check returns no permissions, do not make the entire
+    // sidebar disappear. Keep the existing session permissions visible until
+    // the permission state is explicitly confirmed.
+    if (!resolvedPermissions.length) return userPermissions.has(code);
+
     return resolvedPermissions.includes(code);
   };
 
@@ -1120,7 +1127,7 @@ function Dashboard({ onLogout, currentUser = null }) {
       <aside className={`hrms-sidebar ${sidebarOpen ? "" : "collapsed"}`}>
         <div className="sidebar-brand">
           <div className="sidebar-logo">
-            <img src="/HR SYNC Logo.png" alt="HRSYNC" />
+            <img src="/hrsync-logo.webp" alt="HRSYNC" />
           </div>
 
           {sidebarOpen && (
