@@ -724,38 +724,56 @@ function Dashboard({ onLogout, currentUser = null }) {
     try {
       setEmployeeCountLoading(true);
 
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
+      /*
+       * Use the authenticated company context already resolved by Login.jsx.
+       * This avoids making Dashboard dependent on a second auth round-trip
+       * immediately after login.
+       */
+      let resolvedOrganizationId =
+        currentUser?.organizationId ||
+        currentUser?.organization_id ||
+        "";
 
-      if (authError) throw authError;
+      /*
+       * Fallback only when organizationId is not present in currentUser.
+       * This keeps the Dashboard compatible with older/local sessions.
+       */
+      if (!resolvedOrganizationId) {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
 
-      if (!user?.id) {
-        setEmployees([]);
-        setEmployeeCount(0);
-        return;
+        if (authError) throw authError;
+
+        if (!user?.id) {
+          throw new Error(
+            "Your HRSYNC session has expired. Please log in again."
+          );
+        }
+
+        const { data: membership, error: membershipError } = await supabase
+          .from("organization_users")
+          .select("organization_id, status")
+          .eq("user_id", user.id)
+          .eq("status", "Active")
+          .maybeSingle();
+
+        if (membershipError) throw membershipError;
+
+        resolvedOrganizationId = membership?.organization_id || "";
       }
 
-      const { data: membership, error: membershipError } = await supabase
-        .from("organization_users")
-        .select("organization_id, status")
-        .eq("user_id", user.id)
-        .eq("status", "Active")
-        .maybeSingle();
-
-      if (membershipError) throw membershipError;
-
-      if (!membership?.organization_id) {
-        setEmployees([]);
-        setEmployeeCount(0);
-        return;
+      if (!resolvedOrganizationId) {
+        throw new Error(
+          "No active company is linked to your HRSYNC account."
+        );
       }
 
       const { data: rows, error: employeeQueryError } = await supabase
         .from("employees")
         .select("*")
-        .eq("organization_id", membership.organization_id)
+        .eq("organization_id", resolvedOrganizationId)
         .order("employee_name", { ascending: true });
 
       if (employeeQueryError) throw employeeQueryError;
@@ -781,9 +799,6 @@ function Dashboard({ onLogout, currentUser = null }) {
   };
 
   useEffect(() => {
-    loadVendorDashboardData();
-    loadTenantEmployees();
-
     const refresh = () => {
       loadVendorDashboardData();
       loadTenantEmployees();

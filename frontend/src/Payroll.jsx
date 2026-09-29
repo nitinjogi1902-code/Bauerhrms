@@ -563,9 +563,17 @@ const calculateMonthlyAttendance = (employeeId, month) => {
   refreshPayrollEmployees();
 
   window.addEventListener("storage", refreshPayrollEmployees);
+  window.addEventListener(
+    "bauerHrmsEmployeesUpdated",
+    refreshPayrollEmployees
+  );
 
   return () => {
     window.removeEventListener("storage", refreshPayrollEmployees);
+    window.removeEventListener(
+      "bauerHrmsEmployeesUpdated",
+      refreshPayrollEmployees
+    );
   };
 }, []);
   const [activeSection, setActiveSection] = useState("dashboard");

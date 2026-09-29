@@ -6,7 +6,7 @@ import { createEmployeeInvitation, getEmployeeAccount, resendEmployeeInvitation 
 import { supabase } from "./supabaseClient";
 
 const ORGANIZATION_STORAGE_KEY = "bauerHrmsOrganizationMasters";
-const EMPLOYEE_STORAGE_KEY = "hrsyncEmployeesLegacy";
+const EMPLOYEE_STORAGE_KEY = "bauerHrmsEmployees";
 const HOD_MAPPING_STORAGE_KEY = "hrms_hod_mappings";
 const DOCUMENT_DB_NAME = "bauerHrmsEmployeeDocuments";
 const DOCUMENT_STORE = "documents";
@@ -109,6 +109,17 @@ function readEmployees() {
     return saved ? JSON.parse(saved) : [];
   } catch {
     return [];
+  }
+}
+
+function syncEmployeeCache(employeeList) {
+  try {
+    localStorage.setItem(
+      EMPLOYEE_STORAGE_KEY,
+      JSON.stringify(Array.isArray(employeeList) ? employeeList : [])
+    );
+  } catch (error) {
+    console.error("Unable to sync employee cache:", error);
   }
 }
 
@@ -1260,6 +1271,7 @@ export default function Employees({ employees: initialEmployees = [], currentUse
   const [employeeError, setEmployeeError] = useState("");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState(() => new Set());
   const [importing, setImporting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -1340,8 +1352,10 @@ const [transferForm, setTransferForm] = useState({
         if (employeeQueryError) throw employeeQueryError;
 
         if (!cancelled) {
+          const mappedEmployees = (rows || []).map(employeeFromDb);
           setOrganizationId(resolvedOrganizationId);
-          setEmployees((rows || []).map(employeeFromDb));
+          setEmployees(mappedEmployees);
+          syncEmployeeCache(mappedEmployees);
         }
       } catch (error) {
         console.error("Unable to load tenant employees:", error);
@@ -1411,6 +1425,7 @@ const [transferForm, setTransferForm] = useState({
       }));
 
       setEmployees(refreshed);
+      syncEmployeeCache(refreshed);
       window.dispatchEvent(new Event("bauerHrmsEmployeesUpdated"));
       return refreshed;
     } catch (error) {
@@ -1870,11 +1885,55 @@ const transferRecord = {
     }
   };
 
+  const cleanupHodMappingsForEmployees = (employeesToDelete) => {
+    const deletedCodes = new Set(
+      employeesToDelete
+        .map((employee) => String(employee?.employeeId || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    if (!deletedCodes.size) return;
+
+    const currentMappings = readHodMappings();
+    const nextMappings = currentMappings.filter((mapping) => {
+      const employeeCode = String(mapping?.employeeCode || "").trim().toLowerCase();
+      const hodEmployeeCode = String(mapping?.hodEmployeeCode || "").trim().toLowerCase();
+      return !deletedCodes.has(employeeCode) && !deletedCodes.has(hodEmployeeCode);
+    });
+
+    if (nextMappings.length !== currentMappings.length) {
+      saveHodMappings(nextMappings);
+    }
+  };
+
+  const deleteEmployeesFromDatabase = async (employeesToDelete) => {
+    const ids = employeesToDelete.map((employee) => employee?.id).filter(Boolean);
+    if (!ids.length) return;
+
+    // Storage files are not removed by PostgreSQL FK CASCADE, so clean them
+    // before deleting the employee rows. Database child rows are then cleaned
+    // automatically by the existing ON DELETE CASCADE constraints.
+    for (const employee of employeesToDelete) {
+      const docs = await getEmployeeDocuments(employee.id, organizationId);
+      for (const doc of docs) {
+        await deleteDocumentBlob(doc.id, organizationId);
+      }
+    }
+
+    const { error } = await supabase
+      .from("employees")
+      .delete()
+      .in("id", ids)
+      .eq("organization_id", organizationId);
+
+    if (error) throw error;
+  };
+
   const deleteEmployee = async (id) => {
     const employee = employees.find((item) => item.id === id);
     if (!employee) return;
 
-    if (!window.confirm(`Delete ${employee.name}? This will also remove attached documents.`)) return;
+    if (!window.confirm(`Delete ${employee.name}? This will also remove all related employee records and attached documents.`)) return;
 
     if (!organizationId) {
       window.alert("Company context is not available. Please sign in again.");
@@ -1882,23 +1941,105 @@ const transferRecord = {
     }
 
     try {
-      const docs = await getEmployeeDocuments(id, organizationId);
-      for (const doc of docs) {
-        await deleteDocumentBlob(doc.id, organizationId);
-      }
+      await deleteEmployeesFromDatabase([employee]);
+      cleanupHodMappingsForEmployees([employee]);
 
-      const { error } = await supabase
-        .from("employees")
-        .delete()
-        .eq("id", id)
-        .eq("organization_id", organizationId);
-
-      if (error) throw error;
-
-      setEmployees((current) => current.filter((item) => item.id !== id));
+      setEmployees((current) => {
+        const next = current.filter((item) => item.id !== id);
+        syncEmployeeCache(next);
+        return next;
+      });
+      setSelectedEmployeeIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
       window.dispatchEvent(new Event("bauerHrmsEmployeesUpdated"));
     } catch (error) {
+      console.error("Unable to delete employee:", error);
       window.alert(error?.message || "Unable to delete employee.");
+    }
+  };
+
+  const toggleEmployeeSelection = (id) => {
+    if (!id) return;
+
+    setSelectedEmployeeIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    const filteredIds = filtered.map((item) => item?.id).filter(Boolean);
+
+    setSelectedEmployeeIds((current) => {
+      const next = new Set(current);
+      const allSelected =
+        filteredIds.length > 0 &&
+        filteredIds.every((id) => next.has(id));
+
+      if (allSelected) {
+        filteredIds.forEach((id) => next.delete(id));
+      } else {
+        filteredIds.forEach((id) => next.add(id));
+      }
+
+      return next;
+    });
+  };
+
+  const clearSelectedEmployees = () => {
+    setSelectedEmployeeIds(new Set());
+  };
+
+  const bulkDeleteEmployees = async () => {
+    const selectedIds = Array.from(selectedEmployeeIds).filter(Boolean);
+
+    if (!selectedIds.length) {
+      window.alert("Please select at least one employee.");
+      return;
+    }
+
+    if (!organizationId) {
+      window.alert("Company context is not available. Please sign in again.");
+      return;
+    }
+
+    const selectedEmployees = employees.filter((item) =>
+      selectedIds.includes(item.id)
+    );
+
+    const confirmed = window.confirm(
+      `Delete ${selectedEmployees.length} selected employee${
+        selectedEmployees.length === 1 ? "" : "s"
+      }? This will also remove all related employee records and attached documents.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteEmployeesFromDatabase(selectedEmployees);
+      cleanupHodMappingsForEmployees(selectedEmployees);
+
+      setEmployees((current) => {
+        const next = current.filter((item) => !selectedIds.includes(item.id));
+        syncEmployeeCache(next);
+        return next;
+      });
+      setSelectedEmployeeIds(new Set());
+      window.dispatchEvent(new Event("bauerHrmsEmployeesUpdated"));
+
+      window.alert(
+        `${selectedEmployees.length} employee${
+          selectedEmployees.length === 1 ? "" : "s"
+        } deleted successfully.`
+      );
+    } catch (error) {
+      console.error("Unable to bulk delete employees:", error);
+      window.alert(error?.message || "Unable to delete selected employees.");
     }
   };
 
@@ -1924,6 +2065,19 @@ const transferRecord = {
       );
     });
   }, [employees, search, filterStatus]);
+
+  useEffect(() => {
+    const availableIds = new Set(employees.map((item) => item?.id).filter(Boolean));
+
+    setSelectedEmployeeIds((current) => {
+      const next = new Set(
+        Array.from(current).filter((id) => availableIds.has(id))
+      );
+
+      if (next.size === current.size) return current;
+      return next;
+    });
+  }, [employees]);
 
   const activeCount = employees.filter((item) => item.status === "Active").length;
   const inactiveCount = employees.filter((item) => item.status === "Inactive").length;
@@ -2076,9 +2230,35 @@ const transferRecord = {
 
       <div className="employee-table-card">
         <div className="table-title">
-          <div>
+          <div className="table-title-left">
             <h2>Employee Records</h2>
             <span>{filtered.length} records</span>
+          </div>
+
+          <div className="bulk-delete-bar">
+            {selectedEmployeeIds.size > 0 && (
+              <span className="selected-count">
+                {selectedEmployeeIds.size} selected
+              </span>
+            )}
+
+            <button
+              type="button"
+              className="secondary-btn bulk-clear-btn"
+              onClick={clearSelectedEmployees}
+              disabled={selectedEmployeeIds.size === 0}
+            >
+              Clear Selection
+            </button>
+
+            <button
+              type="button"
+              className="bulk-delete-btn"
+              onClick={bulkDeleteEmployees}
+              disabled={selectedEmployeeIds.size === 0}
+            >
+              Delete Selected ({selectedEmployeeIds.size})
+            </button>
           </div>
         </div>
 
@@ -2099,6 +2279,30 @@ const transferRecord = {
             <table>
               <thead>
                 <tr>
+                  <th className="select-column">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all visible employees"
+                      checked={
+                        filtered.length > 0 &&
+                        filtered.every((item) =>
+                          selectedEmployeeIds.has(item.id)
+                        )
+                      }
+                      ref={(element) => {
+                        if (element) {
+                          element.indeterminate =
+                            filtered.some((item) =>
+                              selectedEmployeeIds.has(item.id)
+                            ) &&
+                            !filtered.every((item) =>
+                              selectedEmployeeIds.has(item.id)
+                            );
+                        }
+                      }}
+                      onChange={toggleSelectAllFiltered}
+                    />
+                  </th>
                   <th>#</th>
                   <th>Employee ID</th>
                   <th>Employee Name</th>
@@ -2119,6 +2323,14 @@ const transferRecord = {
 
                   return (
                     <tr key={item.id}>
+                      <td className="select-column">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${item.name || item.employeeId || "employee"}`}
+                          checked={selectedEmployeeIds.has(item.id)}
+                          onChange={() => toggleEmployeeSelection(item.id)}
+                        />
+                      </td>
                       <td>{index + 1}</td>
                       <td><b>{item.employeeId}</b></td>
                       <td><b>{item.name}</b></td>

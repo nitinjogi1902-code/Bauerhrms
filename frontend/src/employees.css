@@ -3244,3 +3244,296 @@
     align-items: flex-start;
   }
 }
+
+
+/* =========================================================
+   DESKTOP TABLE WIDTH FIX
+   Purpose: keep the complete Employee Master row visible
+   without horizontal scrolling. Existing theme/data untouched.
+   ========================================================= */
+
+.employees-page {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.employee-table-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.employee-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.employee-table-wrap table {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+/* Compact column allocation for a full desktop row */
+.employee-table-wrap th:nth-child(1),
+.employee-table-wrap td:nth-child(1) { width: 3%; }
+
+.employee-table-wrap th:nth-child(2),
+.employee-table-wrap td:nth-child(2) { width: 8%; }
+
+.employee-table-wrap th:nth-child(3),
+.employee-table-wrap td:nth-child(3) { width: 9%; }
+
+.employee-table-wrap th:nth-child(4),
+.employee-table-wrap td:nth-child(4) { width: 9%; }
+
+.employee-table-wrap th:nth-child(5),
+.employee-table-wrap td:nth-child(5) { width: 8%; }
+
+.employee-table-wrap th:nth-child(6),
+.employee-table-wrap td:nth-child(6) { width: 9%; }
+
+.employee-table-wrap th:nth-child(7),
+.employee-table-wrap td:nth-child(7) { width: 9%; }
+
+.employee-table-wrap th:nth-child(8),
+.employee-table-wrap td:nth-child(8) { width: 8%; }
+
+.employee-table-wrap th:nth-child(9),
+.employee-table-wrap td:nth-child(9) { width: 7%; }
+
+.employee-table-wrap th:nth-child(10),
+.employee-table-wrap td:nth-child(10) { width: 6%; }
+
+.employee-table-wrap th:nth-child(11),
+.employee-table-wrap td:nth-child(11) { width: 6%; }
+
+.employee-table-wrap th:nth-child(12),
+.employee-table-wrap td:nth-child(12) { width: 18%; }
+
+.employee-table-wrap th {
+  padding: 10px 7px;
+  font-size: 9px;
+  line-height: 1.15;
+  overflow: hidden;
+}
+
+.employee-table-wrap td {
+  padding: 10px 7px;
+  font-size: 10px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Employee code/name stay readable instead of being unnecessarily clipped. */
+.employee-table-wrap td:nth-child(2),
+.employee-table-wrap td:nth-child(3) {
+  text-overflow: clip;
+}
+
+.employee-table-wrap td:nth-child(2) b,
+.employee-table-wrap td:nth-child(3) b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Put all six actions inside the allocated Action column. */
+.employee-table-wrap .action-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.employee-table-wrap .action-row button {
+  min-width: 0;
+  width: 100%;
+  padding: 5px 3px;
+  font-size: 8.5px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Slightly more breathing room on wider screens. */
+@media (min-width: 1251px) {
+  .employee-table-wrap th {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .employee-table-wrap td {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .employee-table-wrap .action-row button {
+    font-size: 9px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+}
+
+/* On smaller screens, preserve the no-horizontal-scroll rule and let
+   action buttons use two columns so labels remain usable. */
+@media (max-width: 950px) {
+  .employee-table-wrap th,
+  .employee-table-wrap td {
+    padding-left: 5px;
+    padding-right: 5px;
+    font-size: 8.5px;
+  }
+
+  .employee-table-wrap .action-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .employee-table-wrap .action-row button {
+    font-size: 8px;
+  }
+}
+
+
+/* =========================================================
+   BULK EMPLOYEE SELECTION / DELETE
+   Existing Employee Master theme + horizontal-width fix kept.
+   ========================================================= */
+
+.table-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.table-title-left {
+  min-width: 0;
+}
+
+.bulk-delete-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.selected-count {
+  color: #1765a7;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.bulk-clear-btn,
+.bulk-delete-btn {
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bulk-clear-btn:disabled,
+.bulk-delete-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bulk-delete-btn {
+  border: 1px solid #f0cccc;
+  background: #fff7f7;
+  color: #c64a4a;
+}
+
+.bulk-delete-btn:hover:not(:disabled) {
+  background: #fdeeee;
+  border-color: #e8b3b3;
+}
+
+/* New checkbox column + 13-column table allocation.
+   This overrides only the old 12-column width map. */
+.employee-table-wrap th:nth-child(1),
+.employee-table-wrap td:nth-child(1) { width: 2%; }
+
+.employee-table-wrap th:nth-child(2),
+.employee-table-wrap td:nth-child(2) { width: 3%; }
+
+.employee-table-wrap th:nth-child(3),
+.employee-table-wrap td:nth-child(3) { width: 8%; }
+
+.employee-table-wrap th:nth-child(4),
+.employee-table-wrap td:nth-child(4) { width: 9%; }
+
+.employee-table-wrap th:nth-child(5),
+.employee-table-wrap td:nth-child(5) { width: 9%; }
+
+.employee-table-wrap th:nth-child(6),
+.employee-table-wrap td:nth-child(6) { width: 8%; }
+
+.employee-table-wrap th:nth-child(7),
+.employee-table-wrap td:nth-child(7) { width: 9%; }
+
+.employee-table-wrap th:nth-child(8),
+.employee-table-wrap td:nth-child(8) { width: 9%; }
+
+.employee-table-wrap th:nth-child(9),
+.employee-table-wrap td:nth-child(9) { width: 8%; }
+
+.employee-table-wrap th:nth-child(10),
+.employee-table-wrap td:nth-child(10) { width: 7%; }
+
+.employee-table-wrap th:nth-child(11),
+.employee-table-wrap td:nth-child(11) { width: 6%; }
+
+.employee-table-wrap th:nth-child(12),
+.employee-table-wrap td:nth-child(12) { width: 6%; }
+
+.employee-table-wrap th:nth-child(13),
+.employee-table-wrap td:nth-child(13) { width: 16%; }
+
+.employee-table-wrap .select-column {
+  width: 2% !important;
+  min-width: 28px;
+  max-width: 34px;
+  padding-left: 5px;
+  padding-right: 3px;
+  text-align: center;
+}
+
+.employee-table-wrap .select-column input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #1765a7;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+@media (max-width: 700px) {
+  .table-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .bulk-delete-bar {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
