@@ -1173,6 +1173,10 @@ function normalizeImportedEmployee(row) {
 }
 
 async function importEmployeesFromExcel(file, employees, saveEmployees) {
+  // Read the latest Organization Masters here because this function
+  // is outside the Employees component and cannot access component state.
+  const masters = readMasters();
+
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
