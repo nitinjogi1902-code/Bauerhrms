@@ -1277,6 +1277,7 @@ export default function Employees({ employees: initialEmployees = [], currentUse
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState(() => new Set());
   const [importing, setImporting] = useState(false);
+  const [busyAction, setBusyAction] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [previewEmployee, setPreviewEmployee] = useState(null);
@@ -1530,7 +1531,12 @@ const transferRecord = {
     };
   });
 
-  await saveEmployees(nextEmployees);
+  setBusyAction("Updating employee transfer...");
+  try {
+    await saveEmployees(nextEmployees);
+  } finally {
+    setBusyAction("");
+  }
 
   setPreviewEmployee({
     ...employee,
@@ -1553,6 +1559,7 @@ const transferRecord = {
     if (!file) return;
 
     setImporting(true);
+    setBusyAction("Importing employee records...");
     try {
       const result = await importEmployeesFromExcel(file, employees, saveEmployees);
 
@@ -1574,6 +1581,7 @@ const transferRecord = {
       window.alert(error?.message || "Unable to import the Excel file.");
     } finally {
       setImporting(false);
+      setBusyAction("");
     }
   };
 
@@ -1584,6 +1592,7 @@ const transferRecord = {
     if (!file) return;
 
     setHodMappingImporting(true);
+    setBusyAction("Importing HOD mappings...");
 
     try {
       const result = await importHodMappingsFromExcel(
@@ -1617,6 +1626,7 @@ const transferRecord = {
       );
     } finally {
       setHodMappingImporting(false);
+      setBusyAction("");
     }
   };
 
@@ -1767,6 +1777,7 @@ const transferRecord = {
     }
 
     setDocumentUploading(true);
+    setBusyAction("Uploading employee document...");
     try {
       if (!organizationId) {
         throw new Error("Company context is not available. Please sign in again.");
@@ -1777,6 +1788,7 @@ const transferRecord = {
       setDocuments(next);
     } finally {
       setDocumentUploading(false);
+      setBusyAction("");
     }
   };
 
@@ -1833,6 +1845,7 @@ const transferRecord = {
       editingId ||
       (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`);
 
+    setBusyAction(editingId ? "Updating employee..." : "Saving employee...");
     try {
       if (editingId) {
         await saveEmployees(
@@ -1847,6 +1860,8 @@ const transferRecord = {
     } catch (error) {
       window.alert(error?.message || "Unable to save employee data.");
       return;
+    } finally {
+      setBusyAction("");
     }
 
     // Save is complete. Keep document handling separate so an IndexedDB/document
@@ -1873,6 +1888,7 @@ const transferRecord = {
   };
 
   const toggleStatus = async (id) => {
+    setBusyAction("Updating employee status...");
     try {
       await saveEmployees(
         employees.map((item) =>
@@ -1886,6 +1902,8 @@ const transferRecord = {
       );
     } catch (error) {
       window.alert(error?.message || "Unable to update employee status.");
+    } finally {
+      setBusyAction("");
     }
   };
 
@@ -1944,6 +1962,7 @@ const transferRecord = {
       return;
     }
 
+    setBusyAction("Deleting employee...");
     try {
       await deleteEmployeesFromDatabase([employee]);
       cleanupHodMappingsForEmployees([employee]);
@@ -1962,6 +1981,8 @@ const transferRecord = {
     } catch (error) {
       console.error("Unable to delete employee:", error);
       window.alert(error?.message || "Unable to delete employee.");
+    } finally {
+      setBusyAction("");
     }
   };
 
@@ -2024,6 +2045,7 @@ const transferRecord = {
 
     if (!confirmed) return;
 
+    setBusyAction(`Deleting ${selectedEmployees.length} employee${selectedEmployees.length === 1 ? "" : "s"}...`);
     try {
       await deleteEmployeesFromDatabase(selectedEmployees);
       cleanupHodMappingsForEmployees(selectedEmployees);
@@ -2044,6 +2066,8 @@ const transferRecord = {
     } catch (error) {
       console.error("Unable to bulk delete employees:", error);
       window.alert(error?.message || "Unable to delete selected employees.");
+    } finally {
+      setBusyAction("");
     }
   };
 
@@ -2137,6 +2161,82 @@ const transferRecord = {
 
   return (
     <section className="employees-page">
+      {busyAction && (
+        <>
+          <style>{`
+            @keyframes hrsyncLoadingSpin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
+
+          <div
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 99999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(15, 23, 42, 0.22)",
+              backdropFilter: "blur(5px)",
+              WebkitBackdropFilter: "blur(5px)",
+              cursor: "wait",
+            }}
+          >
+            <div
+              style={{
+                width: "min(390px, calc(100vw - 40px))",
+                padding: "28px 30px",
+                borderRadius: "18px",
+                background: "rgba(255, 255, 255, 0.97)",
+                boxShadow: "0 24px 70px rgba(15, 23, 42, 0.22)",
+                textAlign: "center",
+                border: "1px solid rgba(124, 92, 246, 0.14)",
+              }}
+            >
+              <div
+                style={{
+                  width: 46,
+                  height: 46,
+                  margin: "0 auto 16px",
+                  borderRadius: "50%",
+                  border: "4px solid #e9e4ff",
+                  borderTopColor: "#7657f6",
+                  animation: "hrsyncLoadingSpin 0.8s linear infinite",
+                }}
+              />
+
+              <div
+                style={{
+                  fontSize: "17px",
+                  fontWeight: 700,
+                  color: "#1f2a44",
+                  marginBottom: "7px",
+                }}
+              >
+                {busyAction}
+              </div>
+
+              <div
+                style={{
+                  fontSize: "13px",
+                  lineHeight: 1.5,
+                  color: "#7a849b",
+                }}
+              >
+                Please wait while HRSYNC completes this action.
+                <br />
+                Do not close or refresh the page.
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="employees-head">
         <div>
           <div className="eyebrow">WORKFORCE MANAGEMENT</div>
