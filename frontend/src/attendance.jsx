@@ -95,6 +95,23 @@ const loadWeekOffPoliciesFromStorage = () => {
   }
 };
 
+const loadVendorMasterOptions = () => {
+  try {
+    const saved = localStorage.getItem(ORGANIZATION_STORAGE_KEY);
+    if (!saved) return [];
+    const parsed = JSON.parse(saved);
+    const jobRoles = Array.isArray(parsed?.jobRoles) ? parsed.jobRoles : [];
+
+    return jobRoles
+      .filter((item) => typeof item === "string" || item?.active !== false)
+      .map((item) => (typeof item === "string" ? item : item?.name))
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+
 const employeeMatchesWeekOffPolicy = (employee, policy) => {
   if (!employee || !policy || policy.active !== true) return false;
   const assignmentType = String(policy.assignmentType || "All Employees");
@@ -443,6 +460,7 @@ function Attendance() {
 
   const [employees, setEmployees] = useState(loadEmployeesFromStorage);
   const [employeeLoadError, setEmployeeLoadError] = useState("");
+  const [organizationVendors, setOrganizationVendors] = useState(loadVendorMasterOptions);
 
   useEffect(() => {
     let cancelled = false;
@@ -532,6 +550,25 @@ function Attendance() {
       );
     };
   }, []);
+
+  useEffect(() => {
+    const refreshVendorMasters = () => {
+      setOrganizationVendors(loadVendorMasterOptions());
+    };
+
+    refreshVendorMasters();
+
+    window.addEventListener("bauerHrmsOrganizationMastersUpdated", refreshVendorMasters);
+    window.addEventListener("bauerHrmsMastersUpdated", refreshVendorMasters);
+    window.addEventListener("storage", refreshVendorMasters);
+
+    return () => {
+      window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshVendorMasters);
+      window.removeEventListener("bauerHrmsMastersUpdated", refreshVendorMasters);
+      window.removeEventListener("storage", refreshVendorMasters);
+    };
+  }, []);
+
   const weekOffPolicies = loadWeekOffPoliciesFromStorage();
 
   const [search, setSearch] = useState("");
@@ -2621,7 +2658,15 @@ const [newEmployee, setNewEmployee] = useState({
   };
 
   const attendanceDepartments = useMemo(() => Array.from(new Set(employees.map((employee) => String(employee.department || "").trim()).filter(Boolean))).sort(), [employees]);
-  const attendanceVendors = useMemo(() => Array.from(new Set(employees.map((employee) => String(employee.vendor || "").trim()).filter((vendor) => vendor && vendor !== "-"))).sort(), [employees]);
+  const attendanceVendors = useMemo(() => {
+    const employeeVendors = employees
+      .map((employee) => String(employee.vendor || "").trim())
+      .filter((vendor) => vendor && vendor !== "-");
+
+    return Array.from(
+      new Set([...organizationVendors, ...employeeVendors])
+    ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [employees, organizationVendors]);
 
   const attendanceDashboardEmployees = useMemo(() => employees.filter((employee) => {
     const matchesSite = attendanceSite === "All" || String(employee.site || "") === attendanceSite;
