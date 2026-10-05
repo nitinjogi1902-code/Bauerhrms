@@ -1021,12 +1021,30 @@ const [newEmployee, setNewEmployee] = useState({
       P: 0, A: 0, EL: 0, CL: 0, SL: 0, FL: 0, CO: 0, "CO-E": 0, "CO-U": 0,
       OD: 0, WFH: 0, WO: 0, HO: 0, HD: 0, Unmarked: 0,
     };
+
     employees.forEach((employee) => {
-      const statusValue = todayAttendance[employee.id]?.status || "Unmarked";
+      const record = getDisplayedAttendanceRecord(employee, attendanceDate);
+      const statusValue = String(record?.status || "Unmarked").trim().toUpperCase();
+
+      // CO-E is a transaction, not a replacement for the Sunday attendance
+      // status. A Sunday P/OD/WFH/HD therefore remains P/OD/WFH/HD while
+      // simultaneously contributing one CO-E to the daily summary.
+      const compOffTransaction = getCompOffTransactionForRecord(
+        record,
+        attendanceDate
+      );
+
+      if (compOffTransaction === "CO-E") {
+        counts["CO-E"] += 1;
+      } else if (compOffTransaction === "CO-U") {
+        counts["CO-U"] += 1;
+      }
+
       counts[statusValue] = (counts[statusValue] || 0) + 1;
     });
+
     return counts;
-  }, [employees, attendanceDate, attendanceRecords]);
+  }, [employees, attendanceDate, attendanceRecords, weekOffPolicies]);
 
 
   const monthDays = useMemo(() => {
