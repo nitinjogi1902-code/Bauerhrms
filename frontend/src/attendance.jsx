@@ -1018,7 +1018,7 @@ const [newEmployee, setNewEmployee] = useState({
 
   const attendanceSummary = useMemo(() => {
     const counts = {
-      P: 0, A: 0, EL: 0, CL: 0, SL: 0, FL: 0, CO: 0,
+      P: 0, A: 0, EL: 0, CL: 0, SL: 0, FL: 0, CO: 0, "CO-E": 0, "CO-U": 0,
       OD: 0, WFH: 0, WO: 0, HO: 0, HD: 0, Unmarked: 0,
     };
     employees.forEach((employee) => {
