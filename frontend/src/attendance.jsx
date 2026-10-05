@@ -1242,6 +1242,8 @@ const [newEmployee, setNewEmployee] = useState({
       unmarked: 0,
       workHours: 0,
       otHours: 0,
+      CO_E: 0,
+      CO_U: 0,
     };
 
     monthDays.forEach((dateKey) => {
@@ -1252,7 +1254,11 @@ const [newEmployee, setNewEmployee] = useState({
       else if (statusValue === "A") summary.A += 1;
       else if (["EL", "CL", "SL", "FL"].includes(statusValue)) summary.leave += 1;
       else if (statusValue === "WFH") summary.WFH += 1;
-      else if (["CO", "CO-E", "CO-U"].includes(statusValue)) summary.CO += 1;
+      else if (["CO", "CO-E", "CO-U"].includes(statusValue)) {
+        summary.CO += 1;
+        if (statusValue === "CO-E") summary.CO_E += 1;
+        if (statusValue === "CO-U") summary.CO_U += 1;
+      }
       else if (statusValue === "OD") summary.OD += 1;
       else if (statusValue === "WO") summary.WO += 1;
       else if (statusValue === "HO") summary.HO += 1;
@@ -1483,7 +1489,7 @@ const [newEmployee, setNewEmployee] = useState({
       ["HRMS – MONTHLY ATTENDANCE IMPORT TEMPLATE"],
       ["Attendance Month", monthLabel],
       ["Purpose", "Monthly site attendance upload into HRMS"],
-      ["Status Codes", "P = Present | A = Absent | EL = Earned Leave | CL = Casual Leave | SL = Sick Leave | FL = Force Leave | CO = Comp Off | OD = On Duty | WFH = Work From Home | WO = Weekly Off | HO = Holiday"],
+      ["Status Codes", "P = Present | A = Absent | EL = Earned Leave | CL = Casual Leave | SL = Sick Leave | FL = Force Leave | CO-E = Comp Off Earned (Sunday Working) | CO-U = Comp Off Utilisation (Weekday Adjustment) | CO = Comp Off (Legacy) | OD = On Duty | WFH = Work From Home | WO = Weekly Off | HO = Holiday"],
       ["Instructions", "Do not modify employee master fields. Enter attendance only in date columns. Use approved status codes only. Keep blank where no attendance update is required. Weekend columns are highlighted for reference; actual WO is controlled by employee Week-Off Policy."],
       headers,
       dayReferenceRow,
@@ -1665,7 +1671,7 @@ const [newEmployee, setNewEmployee] = useState({
       ["Attendance Date", dateLabel],
       ["Purpose", "Daily site attendance upload — one Excel file for all employees for one attendance date."],
       ["Instructions", "Do not modify employee master fields. Enter Status / punch / hours data only. Employee ID and Date are validated before import."],
-      ["Status Codes", "P = Present | A = Absent | EL = Earned Leave | CL = Casual Leave | SL = Sick Leave | FL = Force Leave | CO = Comp Off | OD = On Duty | WFH = Work From Home | WO = Weekly Off | HO = Holiday"],
+      ["Status Codes", "P = Present | A = Absent | EL = Earned Leave | CL = Casual Leave | SL = Sick Leave | FL = Force Leave | CO-E = Comp Off Earned (Sunday Working) | CO-U = Comp Off Utilisation (Weekday Adjustment) | CO = Comp Off (Legacy) | OD = On Duty | WFH = Work From Home | WO = Weekly Off | HO = Holiday"],
       headers,
       ...rows,
     ];
@@ -2714,7 +2720,7 @@ const [newEmployee, setNewEmployee] = useState({
   }), [employees, attendanceSite, attendanceDepartment, attendanceVendor, employeeType]);
 
   const attendanceDashboardSummary = useMemo(() => {
-    const summary = { total: attendanceDashboardEmployees.length, present: 0, absent: 0, leave: 0, wfh: 0, compOff: 0, onDuty: 0, holiday: 0, wo: 0, half: 0, unmarked: 0, late: 0, missingPunch: 0, otHours: 0, workHours: 0 };
+    const summary = { total: attendanceDashboardEmployees.length, present: 0, absent: 0, leave: 0, wfh: 0, compOff: 0, compOffEarned: 0, compOffUtilised: 0, onDuty: 0, holiday: 0, wo: 0, half: 0, unmarked: 0, late: 0, missingPunch: 0, otHours: 0, workHours: 0 };
     attendanceDashboardEmployees.forEach((employee) => {
       const record = getDisplayedAttendanceRecord(employee);
       const statusValue = record.status || "Unmarked";
@@ -2722,7 +2728,11 @@ const [newEmployee, setNewEmployee] = useState({
       else if (statusValue === "A") summary.absent += 1;
       else if (["CL", "SL", "EL", "FL"].includes(statusValue)) summary.leave += 1;
       else if (statusValue === "WFH") summary.wfh += 1;
-      else if (statusValue === "CO") summary.compOff += 1;
+      else if (["CO", "CO-E", "CO-U"].includes(statusValue)) {
+        summary.compOff += 1;
+        if (statusValue === "CO-E") summary.compOffEarned += 1;
+        if (statusValue === "CO-U") summary.compOffUtilised += 1;
+      }
       else if (statusValue === "OD") summary.onDuty += 1;
       else if (statusValue === "HO") summary.holiday += 1;
       else if (statusValue === "WO") summary.wo += 1;
@@ -3234,6 +3244,8 @@ const handleImportExcel = (event) => {
                 <div className="attendance-kpi leave"><span>◐</span><div><small>On Leave</small><strong>{attendanceDashboardSummary.leave}</strong></div></div>
                 <div className="attendance-kpi wfh"><span>⌂</span><div><small>WFH</small><strong>{attendanceDashboardSummary.wfh}</strong></div></div>
                 <div className="attendance-kpi co"><span>↻</span><div><small>Comp Off</small><strong>{attendanceDashboardSummary.compOff}</strong></div></div>
+                <div className="attendance-kpi co"><span>↑</span><div><small>CO-E Earned</small><strong>{attendanceDashboardSummary.compOffEarned}</strong></div></div>
+                <div className="attendance-kpi co"><span>↓</span><div><small>CO-U Utilised</small><strong>{attendanceDashboardSummary.compOffUtilised}</strong></div></div>
                 <div className="attendance-kpi late"><span>◷</span><div><small>Late Arrival</small><strong>{attendanceDashboardSummary.late}</strong></div></div>
                 <div className="attendance-kpi missing"><span>⚠</span><div><small>Missing Punch</small><strong>{attendanceDashboardSummary.missingPunch}</strong></div></div>
                 <div className="attendance-kpi ot"><span>⏱</span><div><small>OT Hours</small><strong>{attendanceDashboardSummary.otHours.toFixed(2)}</strong></div></div>
@@ -3272,7 +3284,7 @@ const handleImportExcel = (event) => {
           {attendanceView === "daily" && (
             <>
               <div className="attendance-toolbar"><div><strong>{new Date(`${attendanceDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</strong><span>{filteredAttendanceEmployees.length} employees shown</span></div><div className="attendance-toolbar-actions"><button className="secondary-btn" onClick={downloadAttendanceTemplate}>⬇ Monthly Template</button><button className="secondary-btn" onClick={downloadDailyAttendanceTemplate}>⬇ Daily Template</button><button className="primary-button bulk-import-btn" onClick={() => openAttendanceImport("monthly")}>📥 Monthly Import</button><button className="primary-button bulk-import-btn" onClick={() => openAttendanceImport("daily")}>📅 Daily Import</button><button className="secondary-btn" onClick={() => markAllAttendance("WO")}>Mark Weekly Off</button><button className="danger-light-btn" onClick={clearAttendanceDay}>Clear Day</button></div></div>
-              <div className="attendance-summary-grid">{[["Total Employees",attendanceSummary.P+attendanceSummary.A+attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.FL+attendanceSummary.CO+attendanceSummary.OD+attendanceSummary.WFH+attendanceSummary.WO+attendanceSummary.HO+attendanceSummary.HD+attendanceSummary.Unmarked,"total"],["Present",attendanceSummary.P,"present"],["Absent",attendanceSummary.A,"absent"],["Leave",attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.FL,"leave"],["WFH",attendanceSummary.WFH,"wfh"],["Comp Off",attendanceSummary.CO,"co"],["Unmarked",attendanceSummary.Unmarked,"unmarked"]].map(([label,value,type])=><div className={`attendance-summary-card ${type}`} key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+              <div className="attendance-summary-grid">{[["Total Employees",attendanceSummary.P+attendanceSummary.A+attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.FL+attendanceSummary.CO+attendanceSummary["CO-E"]+attendanceSummary["CO-U"]+attendanceSummary.OD+attendanceSummary.WFH+attendanceSummary.WO+attendanceSummary.HO+attendanceSummary.HD+attendanceSummary.Unmarked,"total"],["Present",attendanceSummary.P,"present"],["Absent",attendanceSummary.A,"absent"],["Leave",attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.FL,"leave"],["WFH",attendanceSummary.WFH,"wfh"],["Comp Off",attendanceSummary.CO,"co"],["CO-E — Earned",attendanceSummary["CO-E"],"co"],["CO-U — Utilised",attendanceSummary["CO-U"],"co"],["Unmarked",attendanceSummary.Unmarked,"unmarked"]].map(([label,value,type])=><div className={`attendance-summary-card ${type}`} key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
               <div className="attendance-table-card"><div className="table-wrapper"><table><thead><tr><th>Employee</th><th>Site</th><th>Type</th><th>Attendance</th><th>In Time</th><th>Out Time</th><th>Working Hrs.</th><th>OT Hrs.</th><th>Source</th><th>Remarks</th><th className="attendance-action-header">Action</th></tr></thead><tbody>{filteredAttendanceEmployees.map(employee=>{
                 const record = getDisplayedAttendanceRecord(employee, attendanceDate);
                 const rawRecord = todayAttendance[employee.id] || {};
@@ -3504,6 +3516,8 @@ const handleImportExcel = (event) => {
                     <div><span>Leave</span><strong>{monthlyTimesheetSummary.leave}</strong></div>
                     <div><span>WFH</span><strong>{monthlyTimesheetSummary.WFH}</strong></div>
                     <div><span>Comp Off</span><strong>{monthlyTimesheetSummary.CO}</strong></div>
+                    <div><span>CO-E Earned</span><strong>{monthlyTimesheetSummary.CO_E}</strong></div>
+                    <div><span>CO-U Utilised</span><strong>{monthlyTimesheetSummary.CO_U}</strong></div>
                     <div><span>Weekly Off</span><strong>{monthlyTimesheetSummary.WO}</strong></div>
                     <div><span>Work Hours</span><strong>{monthlyTimesheetSummary.workHours.toFixed(2)}</strong></div>
                     <div><span>OT Hours</span><strong>{monthlyTimesheetSummary.otHours.toFixed(2)}</strong></div>
