@@ -951,21 +951,58 @@ const [newEmployee, setNewEmployee] = useState({
 
   const filteredAttendanceEmployees = useMemo(() => {
     const query = attendanceSearch.trim().toLowerCase();
+
     return employees.filter((employee) => {
       const record = getDisplayedAttendanceRecord(employee);
+
       const matchesSearch =
         !query ||
-        String(getAttendanceEmployeeCode(employee) || "").toLowerCase().includes(query) ||
+        String(getAttendanceEmployeeCode(employee) || "")
+          .toLowerCase()
+          .includes(query) ||
         String(employee.name || "").toLowerCase().includes(query) ||
         String(employee.designation || "").toLowerCase().includes(query);
+
       const matchesSite =
-        attendanceSite === "All" || String(employee.site || "") === attendanceSite;
+        attendanceSite === "All" ||
+        String(employee.site || "") === attendanceSite;
+
+      const matchesDepartment =
+        attendanceDepartment === "All" ||
+        String(employee.department || "") === attendanceDepartment;
+
+      const matchesEmployeeType =
+        employeeType === "All" ||
+        String(employee.type || "") === employeeType;
+
+      const matchesVendor =
+        attendanceVendor === "All" ||
+        String(employee.vendor || "") === attendanceVendor;
+
       const matchesStatus =
         attendanceStatusFilter === "All" ||
         String(record.status || "-") === attendanceStatusFilter;
-      return matchesSearch && matchesSite && matchesStatus;
+
+      return (
+        matchesSearch &&
+        matchesSite &&
+        matchesDepartment &&
+        matchesEmployeeType &&
+        matchesVendor &&
+        matchesStatus
+      );
     });
-  }, [employees, attendanceDate, attendanceSearch, attendanceSite, attendanceStatusFilter, attendanceRecords]);
+  }, [
+    employees,
+    attendanceDate,
+    attendanceSearch,
+    attendanceSite,
+    attendanceDepartment,
+    employeeType,
+    attendanceVendor,
+    attendanceStatusFilter,
+    attendanceRecords,
+  ]);
 
   const attendanceSummary = useMemo(() => {
     const counts = {
@@ -1420,7 +1457,7 @@ const [newEmployee, setNewEmployee] = useState({
     const dayHeaders = dateObjects.map((item) => item.dayName);
     const headers = [...employeeHeaders, ...dateHeaders];
 
-    const rows = employees.map((employee) => {
+    const rows = filteredAttendanceEmployees.map((employee) => {
       const row = [
         getAttendanceEmployeeCode(employee) || "",
         employee.name || "",
@@ -1605,7 +1642,7 @@ const [newEmployee, setNewEmployee] = useState({
       "Remarks",
     ];
 
-    const rows = employees.map((employee) => [
+    const rows = filteredAttendanceEmployees.map((employee) => [
       getAttendanceEmployeeCode(employee) || employee.id || "",
       employee.name || "",
       employee.designation || "",
