@@ -335,17 +335,34 @@ const getCompOffTransactionForRecord = (record, dateKey) => {
 };
 
 const getCompOffLedger = (employeeId, beforeDate, attendanceRecords, pendingUpdates = []) => {
-  const dates = new Set(Object.keys(attendanceRecords || {}));
-  pendingUpdates.forEach((item) => dates.add(item.dateKey));
+  const employeeKey = String(employeeId || "");
+  const updatesByDate = new Map();
+
+  // Pending Excel rows represent the state that will exist if the import is
+  // confirmed. Keep the latest pending row for each employee/date so an
+  // imported status correctly replaces the old attendance status.
+  pendingUpdates.forEach((item) => {
+    if (String(item?.employeeId || "") !== employeeKey || !item?.dateKey) return;
+    updatesByDate.set(String(item.dateKey), item);
+  });
+
+  const dates = new Set(
+    Object.keys(attendanceRecords || {}).filter((dateKey) => dateKey < beforeDate)
+  );
+  [...updatesByDate.keys()]
+    .filter((dateKey) => dateKey < beforeDate)
+    .forEach((dateKey) => dates.add(dateKey));
 
   let earned = 0;
   let used = 0;
   const transactions = [];
-  [...dates].filter((dateKey) => dateKey < beforeDate).sort().forEach((dateKey) => {
+
+  [...dates].sort().forEach((dateKey) => {
     const baseRecord = attendanceRecords?.[dateKey]?.[employeeId] || {};
-    const pending = pendingUpdates.find((item) => item.dateKey === dateKey && String(item.employeeId) === String(employeeId));
+    const pending = updatesByDate.get(dateKey);
     const record = pending ? { ...baseRecord, ...pending } : baseRecord;
     const transaction = getCompOffTransactionForRecord(record, dateKey);
+
     if (transaction === "CO-E") {
       earned += 1;
       transactions.push({ dateKey, type: "CO-E" });
@@ -355,12 +372,7 @@ const getCompOffLedger = (employeeId, beforeDate, attendanceRecords, pendingUpda
     }
   });
 
-  return {
-    earned,
-    used,
-    balance: earned - used,
-    transactions,
-  };
+  return { earned, used, balance: earned - used, transactions };
 };
 
 const validateCompOffUpdate = (update, attendanceRecords, pendingUpdates = []) => {
@@ -2007,30 +2019,46 @@ const [newEmployee, setNewEmployee] = useState({
   const confirmAttendanceImport = () => {
     if (!attendanceImportPreview?.updates?.length) return;
 
+    // Validate the entire Excel file chronologically before writing anything.
+    // This is important for Comp Off because a CO-E earlier in the same file
+    // must be available when a later CO-U is evaluated.
     const orderedUpdates = [...attendanceImportPreview.updates].sort((a, b) =>
-      String(a.dateKey).localeCompare(String(b.dateKey)) || String(a.employeeId).localeCompare(String(b.employeeId))
+      String(a.dateKey).localeCompare(String(b.dateKey)) ||
+      String(a.employeeId).localeCompare(String(b.employeeId))
     );
+
     const compOffErrors = [];
     const pending = [];
+
     orderedUpdates.forEach((update) => {
       const validation = validateCompOffUpdate(update, attendanceRecords, pending);
       if (validation) {
         compOffErrors.push({ ...update, message: validation });
         return;
       }
+
+      // Only successful rows are added to the simulated ledger. Therefore a
+      // later CO-U can use a CO-E/ Sunday working record from this same import.
       pending.push(update);
     });
 
     if (compOffErrors.length) {
-      const first = compOffErrors.slice(0, 10).map((item) =>
-        `${item.employeeId} · ${item.dateKey}: ${item.message}`
-      ).join("\n");
-      window.alert(`Comp Off validation failed for ${compOffErrors.length} record(s).\n\n${first}${compOffErrors.length > 10 ? "\n..." : ""}\n\nNo attendance records were imported.`);
+      const first = compOffErrors
+        .slice(0, 10)
+        .map((item) => `${item.employeeId} · ${item.dateKey}: ${item.message}`)
+        .join("\n");
+
+      window.alert(
+        `Comp Off validation failed for ${compOffErrors.length} record(s).\n\n${first}${
+          compOffErrors.length > 10 ? "\n..." : ""
+        }\n\nNo attendance records were imported.`
+      );
       return;
     }
 
     setAttendanceRecords((previous) => {
       const next = { ...previous };
+
       attendanceImportPreview.updates.forEach(({ dateKey, employeeId, status, inTime, outTime, workingHours, otHours, remarks }) => {
         const previousRecord = next[dateKey]?.[employeeId] || {};
         next[dateKey] = {
