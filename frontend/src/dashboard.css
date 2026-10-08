@@ -2326,3 +2326,129 @@ button { -webkit-tap-highlight-color: transparent; }
   flex-basis: 48px;
 }
 
+/* =========================================================
+   HRSYNC — FULL WIDTH DASHBOARD
+   Uses the complete available screen width
+   ========================================================= */
+
+/* Main workspace */
+.hrms-main {
+  width: calc(100% - 248px);
+  margin-left: 248px;
+  min-height: 100vh;
+}
+
+/* When sidebar is collapsed */
+.hrms-main.full {
+  width: calc(100% - 78px);
+  margin-left: 78px;
+}
+
+/* Full-width dashboard content */
+.dashboard-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 24px 24px 65px;
+}
+
+/* Hero */
+.dashboard-hero {
+  width: 100%;
+}
+
+/* Status */
+.status-strip {
+  width: 100%;
+}
+
+/* KPI cards */
+.kpi-grid {
+  width: 100%;
+}
+
+/* Main dashboard panels */
+.top-panels,
+.middle-grid,
+.bottom-grid {
+  width: 100%;
+}
+
+/* Make all panels use available width */
+.panel {
+  min-width: 0;
+}
+
+/* =========================================================
+   LARGE DESKTOP
+   ========================================================= */
+
+@media (min-width: 1600px) {
+  .dashboard-content {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+}
+
+/* =========================================================
+   LAPTOP / SMALL DESKTOP
+   ========================================================= */
+
+@media (max-width: 1280px) and (min-width: 1041px) {
+  .dashboard-content {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 1040px) {
+  .hrms-main {
+    width: calc(100% - 220px);
+    margin-left: 220px;
+  }
+
+  .hrms-main.full {
+    width: calc(100% - 76px);
+    margin-left: 76px;
+  }
+
+  .dashboard-content {
+    width: 100%;
+    max-width: none;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 800px) {
+  .hrms-main,
+  .hrms-main.full {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .dashboard-content {
+    width: 100%;
+    max-width: none;
+    padding: 18px 14px 70px;
+  }
+}
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 560px) {
+  .dashboard-content {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}

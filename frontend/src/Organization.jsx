@@ -1,6 +1,11 @@
-import { useMemo, useState } from "react";
+/* LOCATION MASTER FINALIZED — detailed enterprise location form + directory */
+import { useEffect, useMemo, useState } from "react";
 import "./Organization.css";
-const STORAGE_KEY = "bauerHrmsOrganizationMasters";
+import {
+  loadOrganizationMasters,
+  saveOrganizationMasters,
+} from "./organizationStorage";
+
 
 
 const MASTER_ICON_PATHS = {
@@ -524,6 +529,29 @@ const DEFAULT_MASTERS = {
 };
 
 
+function getDefaultLocation() {
+  return {
+    id: "",
+    name: "",
+    code: "",
+    type: "Office",
+    address1: "",
+    address2: "",
+    city: "",
+    state: "",
+    pinCode: "",
+    country: "India",
+    reportingBranch: "",
+    project: "",
+    division: "",
+    contactPerson: "",
+    contactNumber: "",
+    email: "",
+    remarks: "",
+    active: true,
+  };
+}
+
 function getDefaultWorkforceCategory() {
   const defaultType = DEFAULT_MASTERS.categoryTypes?.find((item) => item.active !== false);
   return {
@@ -885,11 +913,9 @@ function getDefaultLeaveType() {
   });
 }
 
-function loadMasters() {
+function normalizeMasters(parsed) {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
+    if (parsed) {
       const migratedWorkforceCategories = Array.isArray(parsed.workforceCategories) && parsed.workforceCategories.length
         ? parsed.workforceCategories
         : (parsed.employeeGroups || DEFAULT_MASTERS.employeeGroups).map((item, index) => {
@@ -947,13 +973,17 @@ function loadMasters() {
 }
 
 function Organization() {
-  const [masters, setMasters] = useState(loadMasters);
+  const [masters, setMasters] = useState(DEFAULT_MASTERS);
   const [activeMaster, setActiveMaster] = useState("locations");
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [locationTypeFilter, setLocationTypeFilter] = useState("All");
+  const [locationStatusFilter, setLocationStatusFilter] = useState("All");
+  const [openLocationFilter, setOpenLocationFilter] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [value, setValue] = useState("");
+  const [locationForm, setLocationForm] = useState(getDefaultLocation());
   const [workforceCategoryForm, setWorkforceCategoryForm] = useState(getDefaultWorkforceCategory());
   const [payrollProfileForm, setPayrollProfileForm] = useState(getDefaultPayrollProfile());
   const [prorationRuleForm, setProrationRuleForm] = useState(getDefaultProrationRule());
@@ -964,7 +994,7 @@ function Organization() {
   const [deductionPolicyForm, setDeductionPolicyForm] = useState(getDefaultDeductionPolicy());
   const [shiftForm, setShiftForm] = useState(getDefaultShift());
   const [policyForm, setPolicyForm] = useState(
-    () => normalizeLeavePolicy(loadMasters().leavePolicies?.[0] || DEFAULT_MASTERS.leavePolicies[0])
+    () => normalizeLeavePolicy(DEFAULT_MASTERS.leavePolicies?.[0] || DEFAULT_MASTERS.leavePolicies[0])
   );
   const [leaveTypeForm, setLeaveTypeForm] = useState(getDefaultLeaveType());
   const [editingLeaveType, setEditingLeaveType] = useState(null);
@@ -986,25 +1016,93 @@ function Organization() {
     active: true,
   });
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadFromDatabase = async () => {
+      try {
+        const parsed = await loadOrganizationMasters(DEFAULT_MASTERS);
+
+        if (!mounted) return;
+
+        const normalized = normalizeMasters(parsed);
+
+        setMasters(normalized);
+        setPolicyForm(
+          normalizeLeavePolicy(
+            normalized.leavePolicies?.[0] ||
+            DEFAULT_MASTERS.leavePolicies[0]
+          )
+        );
+      } catch (error) {
+        console.error("Unable to load organization masters:", error);
+      }
+    };
+
+    loadFromDatabase();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (!event.target.closest(".location-filter-custom")) {
+        setOpenLocationFilter(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
   const currentConfig = MASTER_CONFIG.find((item) => item.key === activeMaster);
   const currentItems = masters[activeMaster] || [];
 
   const filteredItems = useMemo(() => {
     return currentItems.filter((item) => {
-      const matchesSearch = String(item.name || item.ruleVersion || "").toLowerCase().includes(search.toLowerCase());
-      const matchesStatus = showInactive ? true : item.active;
-      return matchesSearch && matchesStatus;
-    });
-  }, [currentItems, search, showInactive]);
+      const searchable = activeMaster === "locations"
+        ? [item.name, item.code, item.type, item.city, item.state, item.project, item.division, item.reportingBranch]
+            .filter(Boolean)
+            .join(" ")
+        : String(item.name || item.ruleVersion || "");
 
-  const saveMasters = (next) => {
+      const matchesSearch = searchable.toLowerCase().includes(search.toLowerCase());
+
+      const matchesStatus = activeMaster === "locations"
+        ? locationStatusFilter === "All"
+          ? (showInactive ? true : item.active)
+          : locationStatusFilter === "Active"
+            ? item.active
+            : !item.active
+        : (showInactive ? true : item.active);
+
+      const matchesLocationType = activeMaster !== "locations"
+        || locationTypeFilter === "All"
+        || String(item.type || "Office") === locationTypeFilter;
+
+      return matchesSearch && matchesStatus && matchesLocationType;
+    });
+  }, [activeMaster, currentItems, search, showInactive, locationTypeFilter, locationStatusFilter]);
+
+  const saveMasters = async (next) => {
     setMasters(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+
+    try {
+      await saveOrganizationMasters(next);
+    } catch (error) {
+      console.error("Unable to save organization masters:", error);
+      window.alert("Unable to save changes to the database.");
+    }
   };
 
   const openAdd = () => {
     setEditing(null);
     setValue("");
+    if (activeMaster === "locations") {
+      setLocationForm(getDefaultLocation());
+    }
 
     if (activeMaster === "workforceCategories") {
       setWorkforceCategoryForm(getDefaultWorkforceCategory());
@@ -1075,7 +1173,9 @@ function Organization() {
   const openEdit = (item) => {
     setEditing(item);
 
-    if (activeMaster === "workforceCategories") {
+    if (activeMaster === "locations") {
+      setLocationForm({ ...getDefaultLocation(), ...item });
+    } else if (activeMaster === "workforceCategories") {
       setWorkforceCategoryForm({ ...getDefaultWorkforceCategory(), ...item });
     } else if (activeMaster === "payrollProfiles") {
       setPayrollProfileForm(normalizePayrollProfile(item));
@@ -1664,6 +1764,70 @@ function Organization() {
     setEditing(null);
   };
 
+  const saveLocation = (event) => {
+    event.preventDefault();
+
+    const clean = {
+      ...getDefaultLocation(),
+      ...locationForm,
+      name: String(locationForm.name || "").trim(),
+      code: String(locationForm.code || "").trim().toUpperCase(),
+      type: String(locationForm.type || "Office").trim(),
+      address1: String(locationForm.address1 || "").trim(),
+      address2: String(locationForm.address2 || "").trim(),
+      city: String(locationForm.city || "").trim(),
+      state: String(locationForm.state || "").trim(),
+      pinCode: String(locationForm.pinCode || "").trim(),
+      country: String(locationForm.country || "India").trim(),
+      reportingBranch: String(locationForm.reportingBranch || "").trim(),
+      project: String(locationForm.project || "").trim(),
+      division: String(locationForm.division || "").trim(),
+      contactPerson: String(locationForm.contactPerson || "").trim(),
+      contactNumber: String(locationForm.contactNumber || "").trim(),
+      email: String(locationForm.email || "").trim(),
+      remarks: String(locationForm.remarks || "").trim(),
+      active: locationForm.active !== false,
+      id: editing?.id || `loc-${Date.now()}`,
+    };
+
+    if (!clean.name || !clean.code || !clean.type || !clean.city || !clean.state) {
+      window.alert("Location Name, Location Code, Location Type, City and State are required.");
+      return;
+    }
+
+    if (
+      (masters.locations || []).some(
+        (item) =>
+          item.id !== editing?.id &&
+          String(item.code || "").trim().toLowerCase() === clean.code.toLowerCase()
+      )
+    ) {
+      window.alert("Location Code already exists.");
+      return;
+    }
+
+    if (
+      (masters.locations || []).some(
+        (item) =>
+          item.id !== editing?.id &&
+          String(item.name || "").trim().toLowerCase() === clean.name.toLowerCase()
+      )
+    ) {
+      window.alert("Location Name already exists.");
+      return;
+    }
+
+    const current = masters.locations || [];
+    const nextItems = editing
+      ? current.map((item) => (item.id === editing.id ? clean : item))
+      : [...current, clean];
+
+    saveMasters({ ...masters, locations: nextItems });
+    setLocationForm(clean);
+    setShowForm(false);
+    setEditing(null);
+  };
+
   const saveItem = (event) => {
     event.preventDefault();
     const cleanValue = value.trim();
@@ -1803,32 +1967,35 @@ function Organization() {
       </div>
 
       <div className="organization-layout">
-        <aside className="master-sidebar">
-          <div className="master-sidebar-title">ORGANIZATION MASTERS</div>
-
-          {MASTER_CONFIG.map((master) => (
-            <button
-              key={master.key}
-              className={`master-nav master-nav-${master.key} ${
-                activeMaster === master.key ? "active" : ""
-              }`}
-              onClick={() => {
-                setActiveMaster(master.key);
-                setSearch("");
-                setShowInactive(false);
-                setShowForm(false);
-              }}
-            >
-              <span className="master-nav-icon">
-                <MasterIcon type={master.key} />
-              </span>
-              <span>{master.label}</span>
-              <b>{(masters[master.key] || []).filter((x) => x.active).length}</b>
-            </button>
-          ))}
-        </aside>
-
-        <section className="master-content">
+        <section className="master-content master-content-full">
+          <div className="master-tabs-shell">
+            <div className="master-tabs-label">ORGANIZATION MASTERS</div>
+            <div className="master-tabs">
+              {MASTER_CONFIG.map((master) => (
+                <button
+                  key={master.key}
+                  className={`master-tab ${
+                    activeMaster === master.key ? "active" : ""
+                  }`}
+                  onClick={() => {
+                    setActiveMaster(master.key);
+                    setSearch("");
+                    setShowInactive(false);
+                    setLocationTypeFilter("All");
+                    setLocationStatusFilter("All");
+                    setShowForm(false);
+                  }}
+                  title={master.description}
+                >
+                  <span className="master-tab-icon">
+                    <MasterIcon type={master.key} size={16} />
+                  </span>
+                  <span>{master.label}</span>
+                  <b>{(masters[master.key] || []).filter((x) => x.active).length}</b>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="master-content-header">
             <div className="master-title-block">
               <div className="master-title-icon">
@@ -1852,31 +2019,34 @@ function Organization() {
               </label>
 
               <button className="secondary-action" onClick={openAdd}>
-                + {activeMaster === "leavePolicies" || activeMaster === "payrollProfiles" || activeMaster === "statutoryPolicies" || activeMaster === "salaryRules" || activeMaster === "otPolicies" || activeMaster === "deductionPolicies" ? "Configure" : "Add"}
+                <span className="button-plus-dark">+</span>
+                {activeMaster === "leavePolicies" || activeMaster === "payrollProfiles" || activeMaster === "statutoryPolicies" || activeMaster === "salaryRules" || activeMaster === "otPolicies" || activeMaster === "deductionPolicies" ? "Configure" : `Add ${currentConfig.singular}`}
               </button>
             </div>
           </div>
 
-          <div className="master-toolbar">
-            <div className="master-search">
-              <span className="search-icon" aria-hidden="true">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <circle cx="11" cy="11" r="6.5" />
-                  <path d="m16 16 4 4" />
-                </svg>
-              </span>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={`Search ${currentConfig.label.toLowerCase()}...`}
-              />
-            </div>
+          {activeMaster !== "locations" && (
+            <div className="master-toolbar">
+              <div className="master-search">
+                <span className="search-icon" aria-hidden="true">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                    <circle cx="11" cy="11" r="6.5" />
+                    <path d="m16 16 4 4" />
+                  </svg>
+                </span>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={`Search ${currentConfig.label.toLowerCase()}...`}
+                />
+              </div>
 
-            <span className="record-count">
-              {filteredItems.length} record
-              {filteredItems.length === 1 ? "" : "s"}
-            </span>
-          </div>
+              <span className="record-count">
+                {filteredItems.length} record
+                {filteredItems.length === 1 ? "" : "s"}
+              </span>
+            </div>
+          )}
 
           {showForm && activeMaster === "workforceCategories" && (
             <form className="workforce-category-form policy-form" onSubmit={saveWorkforceCategory}>
@@ -2556,7 +2726,7 @@ function Organization() {
             </form>
           )}
 
-          {showForm && !["workforceCategories", "payrollProfiles", "prorationRules", "statutoryPolicies", "salaryRules", "payrollCalendars", "otPolicies", "shifts", "leavePolicies", "holidays", "weekOffPolicies"].includes(activeMaster) && (
+          {showForm && !["locations", "workforceCategories", "payrollProfiles", "prorationRules", "statutoryPolicies", "salaryRules", "payrollCalendars", "otPolicies", "shifts", "leavePolicies", "holidays", "weekOffPolicies"].includes(activeMaster) && (
             <form className="master-form" onSubmit={saveItem}>
               <div>
                 <label>{currentConfig.singular} Name</label>
@@ -2569,7 +2739,235 @@ function Organization() {
             </form>
           )}
 
-          {activeMaster === "workforceCategories" ? (
+          {activeMaster === "locations" ? (
+            <div className="location-master-workspace">
+              <div className="location-table-panel">
+                <div className="location-panel-head">
+                  <div>
+                    <span className="location-kicker">LOCATION DIRECTORY</span>
+                    <h3>Zones, Offices & Project Sites</h3>
+                    <p>Maintain the locations used across Employee, Attendance, Leave, Payroll and workforce deployment.</p>
+                  </div>
+                  <span className="location-record-summary">{filteredItems.length} location{filteredItems.length === 1 ? "" : "s"}</span>
+                </div>
+
+                <div className="location-directory-toolbar">
+                  <div className="master-search location-directory-search">
+                    <span className="search-icon" aria-hidden="true">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                        <circle cx="11" cy="11" r="6.5" />
+                        <path d="m16 16 4 4" />
+                      </svg>
+                    </span>
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search locations, code, city or state..."
+                      aria-label="Search locations"
+                    />
+                  </div>
+
+                  <div className={`location-filter-custom ${openLocationFilter === "type" ? "is-open" : ""}`}>
+                    <span className="location-filter-label">Type</span>
+                    <button
+                      type="button"
+                      className="location-filter-trigger"
+                      aria-haspopup="listbox"
+                      aria-expanded={openLocationFilter === "type"}
+                      onClick={() => setOpenLocationFilter((current) => current === "type" ? null : "type")}
+                    >
+                      <span>{locationTypeFilter === "All" ? "All Types" : locationTypeFilter}</span>
+                      <svg className="location-filter-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    {openLocationFilter === "type" && (
+                      <div className="location-filter-menu" role="listbox" aria-label="Location type">
+                        {["All", "Head Office", "Office", "Branch", "Yard", "Project Site", "Design Office", "Warehouse", "Plant", "Other"].map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className={`location-filter-option ${locationTypeFilter === option ? "selected" : ""}`}
+                            onClick={() => {
+                              setLocationTypeFilter(option);
+                              setOpenLocationFilter(null);
+                            }}
+                          >
+                            <span>{option === "All" ? "All Types" : option}</span>
+                            {locationTypeFilter === option && <span className="location-filter-check">✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={`location-filter-custom ${openLocationFilter === "status" ? "is-open" : ""}`}>
+                    <span className="location-filter-label">Status</span>
+                    <button
+                      type="button"
+                      className="location-filter-trigger"
+                      aria-haspopup="listbox"
+                      aria-expanded={openLocationFilter === "status"}
+                      onClick={() => setOpenLocationFilter((current) => current === "status" ? null : "status")}
+                    >
+                      <span>{locationStatusFilter === "All" ? "All Status" : locationStatusFilter}</span>
+                      <svg className="location-filter-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    {openLocationFilter === "status" && (
+                      <div className="location-filter-menu" role="listbox" aria-label="Location status">
+                        {["All", "Active", "Inactive"].map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className={`location-filter-option ${locationStatusFilter === option ? "selected" : ""}`}
+                            onClick={() => {
+                              setLocationStatusFilter(option);
+                              setOpenLocationFilter(null);
+                            }}
+                          >
+                            <span>{option === "All" ? "All Status" : option}</span>
+                            {locationStatusFilter === option && <span className="location-filter-check">✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {(search || locationTypeFilter !== "All" || locationStatusFilter !== "All") && (
+                    <button
+                      type="button"
+                      className="location-clear-filters"
+                      onClick={() => {
+                        setSearch("");
+                        setLocationTypeFilter("All");
+                        setLocationStatusFilter("All");
+                        setOpenLocationFilter(null);
+                      }}
+                    >
+                      <span aria-hidden="true">↻</span> Clear Filters
+                    </button>
+                  )}
+                </div>
+
+                <div className="master-table-wrap location-table-wrap">
+                  <table className="master-table location-master-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Location</th>
+                        <th>Code</th>
+                        <th>Type</th>
+                        <th>City</th>
+                        <th>State</th>
+                        <th>Project / Branch</th>
+                        <th>Status</th>
+                        <th className="action-column">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredItems.map((item, index) => (
+                        <tr key={item.id}>
+                          <td>{index + 1}</td>
+                          <td>
+                            <strong className="master-name">{item.name}</strong>
+                            {item.project ? <small className="table-subtext">{item.project}</small> : null}
+                          </td>
+                          <td className="location-code-cell">{item.code || "—"}</td>
+                          <td><span className="location-type-pill">{item.type || "Office"}</span></td>
+                          <td>{item.city || "—"}</td>
+                          <td>{item.state || "—"}</td>
+                          <td>{item.project || item.reportingBranch || "—"}</td>
+                          <td><span className={`status-pill ${item.active ? "active" : "inactive"}`}>{item.active ? "Active" : "Inactive"}</span></td>
+                          <td className="row-actions">
+                            <button onClick={() => openEdit(item)}>Edit</button>
+                            <button onClick={() => toggleStatus(item)}>{item.active ? "Deactivate" : "Activate"}</button>
+                            <button className="delete-button" onClick={() => deleteItem(item)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {!filteredItems.length && (
+                        <tr><td colSpan="9" className="empty-state">No locations found.<button onClick={openAdd}>Add one now</button></td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="location-table-footer">
+                  <span>Location master is shared across HRMS modules.</span>
+                  <span>Showing {filteredItems.length} record{filteredItems.length === 1 ? "" : "s"}</span>
+                </div>
+              </div>
+
+              {showForm ? (
+                <form className="location-editor" onSubmit={saveLocation}>
+                  <div className="location-editor-head">
+                    <div className="location-editor-icon"><MasterIcon type="locations" size={20} /></div>
+                    <div>
+                      <span>LOCATION CONFIGURATION</span>
+                      <h3>{editing ? "Edit Location" : "Add Location"}</h3>
+                      <p>Create a new office, yard, project site or workforce location.</p>
+                    </div>
+                    <button type="button" className="location-close" onClick={() => setShowForm(false)} aria-label="Close">×</button>
+                  </div>
+
+                  <div className="location-section">
+                    <div className="location-section-title"><span>01</span><div><strong>Basic Information</strong><small>Identity and classification</small></div></div>
+                    <div className="location-form-grid two">
+                      <label>Location Name *<input autoFocus value={locationForm.name} onChange={(e) => setLocationForm({ ...locationForm, name: e.target.value })} placeholder="e.g. Gurgaon HO" /></label>
+                      <label>Location Code *<input maxLength="20" value={locationForm.code} onChange={(e) => setLocationForm({ ...locationForm, code: e.target.value.toUpperCase() })} placeholder="e.g. GGN-HO" /></label>
+                      <label>Location Type *<select value={locationForm.type} onChange={(e) => setLocationForm({ ...locationForm, type: e.target.value })}><option>Office</option><option>Head Office</option><option>Yard</option><option>Project Site</option><option>Design Office</option><option>Warehouse</option><option>Plant</option><option>Other</option></select></label>
+                      <label>Status *<select value={locationForm.active ? "Active" : "Inactive"} onChange={(e) => setLocationForm({ ...locationForm, active: e.target.value === "Active" })}><option>Active</option><option>Inactive</option></select></label>
+                    </div>
+                  </div>
+
+                  <div className="location-section">
+                    <div className="location-section-title"><span>02</span><div><strong>Address Details</strong><small>Physical location information</small></div></div>
+                    <div className="location-form-grid two">
+                      <label>Address Line 1 *<input value={locationForm.address1} onChange={(e) => setLocationForm({ ...locationForm, address1: e.target.value })} placeholder="House No., Building, Street" /></label>
+                      <label>Address Line 2<input value={locationForm.address2} onChange={(e) => setLocationForm({ ...locationForm, address2: e.target.value })} placeholder="Area, Landmark (Optional)" /></label>
+                      <label>City *<input value={locationForm.city} onChange={(e) => setLocationForm({ ...locationForm, city: e.target.value })} placeholder="e.g. Gurgaon" /></label>
+                      <label>State *<input value={locationForm.state} onChange={(e) => setLocationForm({ ...locationForm, state: e.target.value })} placeholder="e.g. Haryana" /></label>
+                      <label>PIN Code<input inputMode="numeric" maxLength="6" value={locationForm.pinCode} onChange={(e) => setLocationForm({ ...locationForm, pinCode: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="e.g. 122001" /></label>
+                      <label>Country *<input value={locationForm.country} onChange={(e) => setLocationForm({ ...locationForm, country: e.target.value })} /></label>
+                    </div>
+                  </div>
+
+                  <div className="location-section">
+                    <div className="location-section-title"><span>03</span><div><strong>Organization Mapping</strong><small>Connect location with branch and project</small></div></div>
+                    <div className="location-form-grid two">
+                      <label>Reporting Branch / HO<input value={locationForm.reportingBranch} onChange={(e) => setLocationForm({ ...locationForm, reportingBranch: e.target.value })} placeholder="e.g. BAUER / Gurgaon HO" /></label>
+                      <label>Project (If Applicable)<input value={locationForm.project} onChange={(e) => setLocationForm({ ...locationForm, project: e.target.value })} placeholder="e.g. NPCIL Hazar / Polavaram COW" /></label>
+                      <label>Division / Function<input value={locationForm.division} onChange={(e) => setLocationForm({ ...locationForm, division: e.target.value })} placeholder="e.g. Projects / Engineering" /></label>
+                      <label>Location Contact Person<input value={locationForm.contactPerson} onChange={(e) => setLocationForm({ ...locationForm, contactPerson: e.target.value })} placeholder="Optional" /></label>
+                    </div>
+                  </div>
+
+                  <div className="location-section">
+                    <div className="location-section-title"><span>04</span><div><strong>Contact & Remarks</strong><small>Additional administrative details</small></div></div>
+                    <div className="location-form-grid two">
+                      <label>Contact Number<input inputMode="tel" value={locationForm.contactNumber} onChange={(e) => setLocationForm({ ...locationForm, contactNumber: e.target.value })} placeholder="Optional" /></label>
+                      <label>Email<input type="email" value={locationForm.email} onChange={(e) => setLocationForm({ ...locationForm, email: e.target.value })} placeholder="location@bauerindia.com" /></label>
+                      <label className="full">Remarks<textarea maxLength="250" value={locationForm.remarks} onChange={(e) => setLocationForm({ ...locationForm, remarks: e.target.value })} placeholder="Enter remarks (Optional)" /></label>
+                    </div>
+                  </div>
+
+                  <div className="location-editor-actions">
+                    <button type="button" className="cancel-action" onClick={() => setShowForm(false)}>Cancel</button>
+                    <button type="submit" className="primary-action"><span className="button-plus">✓</span>{editing ? "Update Location" : "Save Location"}</button>
+                  </div>
+                </form>
+              ) : (
+                <div className="location-add-placeholder">
+                  <div className="location-add-placeholder-icon"><MasterIcon type="locations" size={24} /></div>
+                  <strong>Add or edit a location</strong>
+                  <span>Use the button above to create a detailed location record.</span>
+                  <button type="button" className="secondary-action" onClick={openAdd}>+ Add Location</button>
+                </div>
+              )}
+            </div>
+          ) : activeMaster === "workforceCategories" ? (
             <div className="master-table-wrap">
               <table className="master-table workforce-master-table">
                 <thead><tr><th>#</th><th>Code</th><th>Workforce Category</th><th>Payroll</th><th>Vendor</th><th>Payroll Profile</th><th>Status</th><th className="action-column">Action</th></tr></thead>

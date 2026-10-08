@@ -1,18 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import "./Payroll.css";
+import { supabase } from "./supabaseClient";
 import { STATUTORY_RULE_VERSION, getStatutoryCalculation } from "./statutoryEngine";
 
 const payrollMenu = [
   { id: "dashboard", label: "Payroll Dashboard", icon: "▦" },
-  { id: "monthly", label: "Monthly Payroll", icon: "▤" },
-  { id: "processing", label: "Payroll Processing", icon: "⚙" },
-  { id: "vendor", label: "Vendor Payroll", icon: "♙" },
-  { id: "salary", label: "Salary Structure", icon: "₹" },
-  { id: "statutory", label: "Statutory", icon: "▣" },
-  { id: "deductions", label: "Deductions", icon: "−" },
-  { id: "ot", label: "OT & Arrear", icon: "↗" },
-  { id: "reports", label: "Payroll Reports", icon: "▥" },
+  { id: "run", label: "Payroll Run", icon: "01" },
+  { id: "inputs", label: "Payroll Inputs", icon: "02" },
+  { id: "calculation", label: "Payroll Calculation", icon: "03" },
+  { id: "validation", label: "Validation & Approval", icon: "04" },
+  { id: "payroll-control", label: "Payroll Lock", icon: "05" },
+  { id: "salary-release", label: "Salary Release", icon: "06" },
+  { id: "payslips-bank", label: "Payslips & Bank", icon: "07" },
+  { id: "reports", label: "Payroll Reports", icon: "08" },
 ];
 
 const defaultPayrollEmployees = [
@@ -89,33 +90,6 @@ const defaultPayrollEmployees = [
     status: "Pending",
   },
 ];
-const PAYROLL_EMPLOYEE_STORAGE_KEY = "bauerHrmsEmployees";
-
-const loadPayrollEmployees = () => {
-  try {
-    const savedEmployees = localStorage.getItem(
-      PAYROLL_EMPLOYEE_STORAGE_KEY
-    );
-
-    if (!savedEmployees) {
-      return [];
-    }
-
-    const parsedEmployees = JSON.parse(savedEmployees);
-
-    return Array.isArray(parsedEmployees)
-      ? parsedEmployees
-      : [];
-  } catch (error) {
-    console.error(
-      "Unable to load Payroll employees:",
-      error
-    );
-
-    return [];
-  }
-};
-
 const vendors = [
   { name: "Conzepts", employees: 18, serviceCharge: "4.00%", status: "Active" },
   { name: "Taurus", employees: 14, serviceCharge: "4.00%", status: "Active" },
@@ -188,14 +162,7 @@ const calculateProfessionalTax = ({ settings = {}, monthlyWage = 0, gender = "Ma
    Payroll calculations read active masters from Organization.
    Legacy Payroll settings remain only as a safe fallback.
    ========================================================= */
-const loadOrganizationPayrollMasters = () => {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(ORGANIZATION_STORAGE_KEY) || "{}");
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-};
+const loadOrganizationPayrollMasters = () => organizationMasters || {};
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
 
@@ -334,46 +301,212 @@ const calculateOrganizationProration = ({ gross, attendance, employee, payrollMo
   return { payableGross: raw, paidDays, denominator, ratio };
 };
 
-function Payroll() {
-  const [payrollEmployees, setPayrollEmployees] = useState(
-  loadPayrollEmployees);
-  const employees = payrollEmployees;
-  const getMonthlyAttendance = (employeeId, month) => {
-  try {
-    const savedAttendance = localStorage.getItem("hrms_attendance");
 
-    if (!savedAttendance) {
-      return {};
-    }
+const PAYROLL_MODULE_SETTINGS_KEY = "payrollModule";
+const ORGANIZATION_CODE = "BAUERE";
 
-    const attendance = JSON.parse(savedAttendance);
-    const monthRecords = {};
+const DEFAULT_IT_DECLARATION = {
+  regime: "New Tax Regime",
+  financialYear: "FY 2026-27",
+  status: "Open",
+  lastDate: "",
+  declarations: {},
+};
 
-    Object.entries(attendance).forEach(([date, records]) => {
-      if (date.startsWith(month) && records?.[employeeId]) {
-        monthRecords[date] = records[employeeId];
-      }
-    });
+const DEFAULT_PAYROLL_CONTROL = {
+  month: "",
+  status: "Pending",
+  locked: false,
+  lockedAt: "",
+  lockedBy: "",
+  released: false,
+  releasedAt: "",
+  releasedBy: "",
+};
 
-    return monthRecords;
-  } catch (error) {
-    console.error("Unable to load attendance:", error);
-    return {};
+const normalizePayrollModule = (value) => ({
+  salaryStructures:
+    value?.salaryStructures &&
+    typeof value.salaryStructures === "object" &&
+    !Array.isArray(value.salaryStructures)
+      ? value.salaryStructures
+      : {},
+  deductions: Array.isArray(value?.deductions) ? value.deductions : [],
+  otEntries: Array.isArray(value?.otEntries) ? value.otEntries : [],
+  arrearEntries: Array.isArray(value?.arrearEntries) ? value.arrearEntries : [],
+  vendorBilling: {
+    gstRate: String(value?.vendorBilling?.gstRate ?? "18"),
+    gstType: value?.vendorBilling?.gstType || "CGST + SGST",
+  },
+  payrollRuns: Array.isArray(value?.payrollRuns) ? value.payrollRuns : [],
+  processedPayroll: Array.isArray(value?.processedPayroll)
+    ? value.processedPayroll
+    : [],
+  payrollMonth: value?.payrollMonth || "",
+  payrollProcessingStatus: value?.payrollProcessingStatus || "Pending",
+  itDeclaration: {
+    ...DEFAULT_IT_DECLARATION,
+    ...(value?.itDeclaration || {}),
+    declarations:
+      value?.itDeclaration?.declarations &&
+      typeof value.itDeclaration.declarations === "object"
+        ? value.itDeclaration.declarations
+        : {},
+  },
+  payrollControl: {
+    ...DEFAULT_PAYROLL_CONTROL,
+    ...(value?.payrollControl || {}),
+  },
+});
+
+async function getPayrollOrganization() {
+  let { data, error } = await supabase
+    .from("organizations")
+    .select("id, code, settings")
+    .eq("code", ORGANIZATION_CODE)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (!data) {
+    const fallback = await supabase
+      .from("organizations")
+      .select("id, code, settings")
+      .limit(1)
+      .maybeSingle();
+
+    if (fallback.error) throw fallback.error;
+    data = fallback.data;
   }
+
+  if (!data) throw new Error("No organization record was found.");
+  return data;
+}
+
+async function loadPayrollModuleState() {
+  const organization = await getPayrollOrganization();
+  const settings = organization?.settings || {};
+  return {
+    organization,
+    module: normalizePayrollModule(settings?.[PAYROLL_MODULE_SETTINGS_KEY]),
+    masters: settings?.organizationMasters || {},
+  };
+}
+
+async function savePayrollModuleState(patch) {
+  const organization = await getPayrollOrganization();
+  const currentSettings = organization?.settings || {};
+  const currentModule = normalizePayrollModule(
+    currentSettings?.[PAYROLL_MODULE_SETTINGS_KEY]
+  );
+
+  const nextModule = {
+    ...currentModule,
+    ...patch,
+  };
+
+  const { error } = await supabase
+    .from("organizations")
+    .update({
+      settings: {
+        ...currentSettings,
+        [PAYROLL_MODULE_SETTINGS_KEY]: nextModule,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", organization.id);
+
+  if (error) throw error;
+  return nextModule;
+}
+
+const mapPayrollEmployeeRow = (row) => {
+  const metadata =
+    row?.metadata && typeof row.metadata === "object"
+      ? row.metadata
+      : {};
+
+  return {
+    ...metadata,
+    id: row?.id || row?.employee_id || "",
+    employeeId: row?.employee_id || metadata.employeeId || "",
+    employeeCode:
+      row?.employee_id ||
+      metadata.employeeCode ||
+      metadata.employeeId ||
+      "",
+    empCode:
+      row?.employee_id ||
+      metadata.empCode ||
+      metadata.employeeId ||
+      "",
+    name: row?.employee_name || metadata.name || "",
+    designation: row?.designation || metadata.designation || "",
+    department: row?.department || metadata.department || "",
+    site: row?.location || metadata.location || metadata.site || "",
+    location: row?.location || metadata.location || metadata.site || "",
+    type:
+      metadata.employeeGroup ||
+      metadata.employeeGroupName ||
+      row?.employment_type ||
+      metadata.employmentType ||
+      metadata.type ||
+      "",
+    employmentType: row?.employment_type || metadata.employmentType || "",
+    vendor:
+      row?.vendor ||
+      row?.vendor_name ||
+      metadata.vendor ||
+      metadata.vendorName ||
+      "",
+    doj: row?.date_of_joining || metadata.doj || "",
+    dateOfJoining: row?.date_of_joining || metadata.dateOfJoining || "",
+    status: row?.status || metadata.status || "Active",
+    gender: row?.gender || metadata.gender || "Male",
+    pan: row?.pan || metadata.pan || "",
+    uan: row?.uan || metadata.uan || metadata.pfNumber || "",
+    esiNumber:
+      row?.esi_number ||
+      metadata.esiNumber ||
+      metadata.esicNumber ||
+      "",
+    bankName: row?.bank_name || metadata.bankName || "",
+    bankAccount:
+      row?.bank_account_number ||
+      metadata.bankAccountNumber ||
+      "",
+    ifsc: row?.bank_ifsc || metadata.bankIfsc || "",
+    officialEmail: row?.email || metadata.officialEmail || "",
+    personalEmail: row?.personal_email || metadata.personalEmail || "",
+    mobile: row?.mobile || metadata.mobile || "",
+  };
+};
+
+function Payroll() {
+  const [payrollEmployees, setPayrollEmployees] = useState([]);
+  const employees = payrollEmployees;
+  const [attendanceRecords, setAttendanceRecords] = useState({});
+  const [forceLeaveRecords, setForceLeaveRecords] = useState([]);
+  const [organizationMasters, setOrganizationMasters] = useState({});
+  const getMonthlyAttendance = (employeeId, month) => {
+  const monthRecords = {};
+  Object.entries(attendanceRecords || {}).forEach(([date, records]) => {
+    if (String(date).startsWith(month) && records?.[employeeId]) {
+      monthRecords[date] = records[employeeId];
+    }
+  });
+  return monthRecords;
 };
 const ORGANIZATION_STORAGE_KEY = "bauerHrmsOrganizationMasters";
 
 const getOrganizationLeaveTypes = () => {
-  try {
-    const organization = JSON.parse(localStorage.getItem(ORGANIZATION_STORAGE_KEY) || "{}");
-    const leavePolicy = Array.isArray(organization?.leavePolicies)
-      ? organization.leavePolicies[0]
-      : null;
-    return Array.isArray(leavePolicy?.leaveTypes) ? leavePolicy.leaveTypes : [];
-  } catch (error) {
-    console.error("Unable to load Organization leave policy:", error);
-    return [];
-  }
+  const leavePolicies = Array.isArray(organizationMasters?.leavePolicies)
+    ? organizationMasters.leavePolicies
+    : [];
+  const leavePolicy = leavePolicies[0] || null;
+  return Array.isArray(leavePolicy?.leaveTypes)
+    ? leavePolicy.leaveTypes
+    : [];
 };
 
 const getLeaveSalaryTreatment = (status) => {
@@ -555,27 +688,203 @@ const calculateMonthlyAttendance = (employeeId, month) => {
     forceLeaveSalaryTreatment: salaryHoldDays > 0 ? "Salary Hold" : (forceLeavePaidDays > 0 ? "Paid" : ""),
   };
 };
+  const [payrollModuleLoaded, setPayrollModuleLoaded] = useState(false);
+  const [itDeclaration, setITDeclaration] = useState(DEFAULT_IT_DECLARATION);
+  const [payrollControl, setPayrollControl] = useState(DEFAULT_PAYROLL_CONTROL);
+  const [salaryReleaseState, setSalaryReleaseState] = useState({
+    released: false,
+    releasedAt: "",
+    releasedBy: "",
+  });
+
+  const [payrollRun, setPayrollRun] = useState(null);
+  const [inputSection, setInputSection] = useState("overview");
+
+  const getPayrollRunForMonth = (moduleState, month) => {
+    const runs = Array.isArray(moduleState?.payrollRuns) ? moduleState.payrollRuns : [];
+    return runs.find((run) => String(run?.month || "") === String(month)) || null;
+  };
+
+  const createOrOpenPayrollRun = async () => {
+    if (payrollControl.locked) { window.alert("This payroll month is already locked."); return; }
+    try {
+      const state = await loadPayrollModuleState();
+      const currentRuns = Array.isArray(state.module?.payrollRuns) ? state.module.payrollRuns : [];
+      const existing = getPayrollRunForMonth(state.module, payrollMonth);
+      const nextRun = existing || { id: `PAY-${String(payrollMonth).replace("-", "")}`, month: payrollMonth, status: "Draft", createdAt: new Date().toISOString(), createdBy: "HR / Payroll", employeeCount: employees.length };
+      const nextRuns = existing ? currentRuns.map((run) => run?.month === payrollMonth ? { ...run, employeeCount: employees.length } : run) : [nextRun, ...currentRuns];
+      await savePayrollModuleState({ payrollRuns: nextRuns, payrollMonth });
+      setPayrollRun(nextRun); setActiveSection("inputs"); setInputSection("overview");
+    } catch (error) { console.error("Unable to create payroll run:", error); window.alert("Unable to create/open the payroll run."); }
+  };
+
+  const updatePayrollRunStatus = async (status, extra = {}) => {
+    try {
+      const state = await loadPayrollModuleState();
+      const runs = Array.isArray(state.module?.payrollRuns) ? state.module.payrollRuns : [];
+      const current = getPayrollRunForMonth(state.module, payrollMonth) || {
+        id: `PAY-${String(payrollMonth).replace("-", "")}`,
+        month: payrollMonth,
+        createdAt: new Date().toISOString(),
+        createdBy: "HR / Payroll",
+      };
+      const nextRun = { ...current, ...extra, status, employeeCount: employees.length, updatedAt: new Date().toISOString() };
+      const nextRuns = runs.some((run) => run?.month === payrollMonth)
+        ? runs.map((run) => run?.month === payrollMonth ? nextRun : run)
+        : [nextRun, ...runs];
+      await savePayrollModuleState({ payrollRuns: nextRuns });
+      setPayrollRun(nextRun);
+    } catch (error) {
+      console.error("Unable to update payroll run status:", error);
+    }
+  };
+
   useEffect(() => {
-  const refreshPayrollEmployees = () => {
-    setPayrollEmployees(loadPayrollEmployees());
-  };
+    let cancelled = false;
 
-  refreshPayrollEmployees();
+    const loadPayrollData = async () => {
+      try {
+        const { data: organization } = await getPayrollOrganization();
 
-  window.addEventListener("storage", refreshPayrollEmployees);
-  window.addEventListener(
-    "bauerHrmsEmployeesUpdated",
-    refreshPayrollEmployees
-  );
+        const { data: employeeRows, error: employeeError } = await supabase
+          .from("employees")
+          .select("*")
+          .eq("organization_id", organization.id)
+          .order("employee_name", { ascending: true });
 
-  return () => {
-    window.removeEventListener("storage", refreshPayrollEmployees);
-    window.removeEventListener(
-      "bauerHrmsEmployeesUpdated",
-      refreshPayrollEmployees
-    );
-  };
-}, []);
+        if (employeeError) throw employeeError;
+
+        const { data: attendanceRows } = await supabase
+          .from("attendance_records")
+          .select("*")
+          .eq("organization_id", organization.id);
+
+        const attendanceMap = {};
+        (attendanceRows || []).forEach((row) => {
+          const dateKey =
+            row?.attendance_date ||
+            row?.date ||
+            row?.attendanceDate ||
+            row?.date_key ||
+            "";
+          const employeeId =
+            row?.employee_id ||
+            row?.employeeId ||
+            row?.employee_code ||
+            row?.employeeCode ||
+            "";
+          if (!dateKey || !employeeId) return;
+
+          const record = {
+            ...((row?.metadata && typeof row.metadata === "object") ? row.metadata : {}),
+            status: row?.status || row?.attendance_status || row?.attendanceStatus || "",
+            otHours: row?.ot_hours ?? row?.otHours ?? row?.ot ?? 0,
+            inTime: row?.in_time ?? row?.inTime ?? "",
+            outTime: row?.out_time ?? row?.outTime ?? "",
+          };
+
+          if (!attendanceMap[dateKey]) attendanceMap[dateKey] = {};
+          attendanceMap[dateKey][employeeId] = record;
+        });
+
+        let forceLeaveRows = [];
+        try {
+          const { data } = await supabase
+            .from("force_leave_records")
+            .select("*")
+            .eq("organization_id", organization.id);
+          forceLeaveRows = Array.isArray(data) ? data : [];
+        } catch {
+          forceLeaveRows = [];
+        }
+
+        const settings = organization?.settings || {};
+        const moduleState = normalizePayrollModule(
+          settings?.[PAYROLL_MODULE_SETTINGS_KEY]
+        );
+
+        if (cancelled) return;
+
+        setPayrollEmployees(
+          (employeeRows || [])
+            .map(mapPayrollEmployeeRow)
+            .filter((employee) => employee.id && getEmployeeCode(employee))
+        );
+        const nextMasters = settings?.organizationMasters || {};
+        setOrganizationMasters(nextMasters);
+        setAttendanceRecords(attendanceMap);
+
+        const activeStatutoryPolicies = Array.isArray(nextMasters?.statutoryPolicies)
+          ? nextMasters.statutoryPolicies.filter((item) => item?.active !== false)
+          : [];
+        const activeStatutoryPolicy = activeStatutoryPolicies
+          .filter((item) => {
+            const from = String(item?.effectiveFrom || "0000-01-01");
+            const to = String(item?.effectiveTo || "9999-12-31");
+            return from <= payrollMonth + "-31" && payrollMonth + "-01" <= to;
+          })
+          .sort((a, b) =>
+            String(b?.effectiveFrom || "").localeCompare(String(a?.effectiveFrom || ""))
+          )[0];
+
+        if (activeStatutoryPolicy) {
+          setStatutorySettings({
+            ...defaultStatutorySettings,
+            ...activeStatutoryPolicy,
+            pf: { ...defaultStatutorySettings.pf, ...(activeStatutoryPolicy.pf || {}) },
+            esi: { ...defaultStatutorySettings.esi, ...(activeStatutoryPolicy.esi || {}) },
+            pt: { ...defaultStatutorySettings.pt, ...(activeStatutoryPolicy.pt || {}) },
+            lwf: { ...defaultStatutorySettings.lwf, ...(activeStatutoryPolicy.lwf || {}) },
+            wageDefinition: {
+              ...defaultStatutorySettings.wageDefinition,
+              ...(activeStatutoryPolicy.wageDefinition || {}),
+            },
+          });
+        }
+        setForceLeaveRecords(forceLeaveRows);
+        setSalaryStructures(moduleState.salaryStructures);
+        setDeductions(moduleState.deductions);
+        setOTEntries(moduleState.otEntries);
+        setArrearEntries(moduleState.arrearEntries);
+        setVendorBillingGstRate(moduleState.vendorBilling.gstRate);
+        setVendorBillingGstType(moduleState.vendorBilling.gstType);
+        setITDeclaration(moduleState.itDeclaration);
+        setPayrollControl(moduleState.payrollControl);
+        setPayrollRun(getPayrollRunForMonth(moduleState, payrollMonth));
+        setSalaryReleaseState({
+          released: Boolean(moduleState.payrollControl.released),
+          releasedAt: moduleState.payrollControl.releasedAt || "",
+          releasedBy: moduleState.payrollControl.releasedBy || "",
+        });
+
+        if (moduleState.payrollMonth === payrollMonth) {
+          setProcessedPayroll(moduleState.processedPayroll);
+          setPayrollProcessingStatus(moduleState.payrollProcessingStatus);
+        } else {
+          setProcessedPayroll([]);
+          setPayrollProcessingStatus("Pending");
+        }
+
+        setPayrollModuleLoaded(true);
+      } catch (error) {
+        console.error("Unable to load Payroll data from Supabase:", error);
+        if (!cancelled) {
+          setPayrollEmployees([]);
+          setPayrollModuleLoaded(false);
+        }
+      }
+    };
+
+    loadPayrollData();
+
+    const refresh = () => loadPayrollData();
+    window.addEventListener("bauerHrmsEmployeesUpdated", refresh);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("bauerHrmsEmployeesUpdated", refresh);
+    };
+  }, []);
   const [activeSection, setActiveSection] = useState("dashboard");
   const getCurrentPayrollMonth = () => {
   const today = new Date();
@@ -626,18 +935,7 @@ const [payrollMonth, setPayrollMonth] = useState(
   const [search, setSearch] = useState("");
 
   // Employee-wise salary structure master
-  const SALARY_STRUCTURE_KEY = "bauerHrmsSalaryStructures";
-
-  const loadSalaryStructures = () => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(SALARY_STRUCTURE_KEY) || "{}");
-      return stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
-    } catch {
-      return {};
-    }
-  };
-
-  const [salaryStructures, setSalaryStructures] = useState(() => loadSalaryStructures());
+  const [salaryStructures, setSalaryStructures] = useState({});
   const [showSalaryForm, setShowSalaryForm] = useState(false);
   const [editingSalaryId, setEditingSalaryId] = useState(null);
   const [salaryEmployeeId, setSalaryEmployeeId] = useState("");
@@ -647,19 +945,7 @@ const [payrollMonth, setPayrollMonth] = useState(
   // FORCE LEAVE - PAYROLL BRIDGE
   // =========================================================
 
-  const FORCE_LEAVE_STORAGE_KEY = "bauerHrmsForceLeaveRecords";
-
-  const loadForceLeaveRecordsForPayroll = () => {
-    try {
-      const saved = localStorage.getItem(FORCE_LEAVE_STORAGE_KEY);
-      if (!saved) return [];
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-      console.error("Unable to load Force Leave records for Payroll:", error);
-      return [];
-    }
-  };
+  const loadForceLeaveRecordsForPayroll = () => forceLeaveRecords;
 
   const isThirdPartyEmployee = (employee) => {
     const type = String(
@@ -752,59 +1038,56 @@ const [payrollMonth, setPayrollMonth] = useState(
     };
   };
 
-  const PAYROLL_RESULT_KEY = "bauerHrmsProcessedPayroll";
-const PAYROLL_RESULT_MONTH_KEY = "bauerHrmsProcessedPayrollMonth";
-const PAYROLL_STATUS_KEY = "bauerHrmsPayrollProcessingStatus";
+  const [payrollProcessingStatus, setPayrollProcessingStatus] =
+    useState("Pending");
 
-const [payrollProcessingStatus, setPayrollProcessingStatus] = useState(() => {
-  try {
-    const savedMonth = localStorage.getItem(PAYROLL_RESULT_MONTH_KEY);
-    const savedStatus = localStorage.getItem(PAYROLL_STATUS_KEY) || "Pending";
-    return savedMonth && savedMonth !== payrollMonth ? "Pending" : savedStatus;
-  } catch {
-    return "Pending";
-  }
-});
+  const [processedPayroll, setProcessedPayroll] = useState([]);
 
-const [processedPayroll, setProcessedPayroll] = useState(() => {
-  try {
-    const saved = localStorage.getItem(PAYROLL_RESULT_KEY);
-    const savedMonth = localStorage.getItem(PAYROLL_RESULT_MONTH_KEY);
-    if (!saved) return [];
-    if (savedMonth && savedMonth !== payrollMonth) return [];
-    const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-});
-useEffect(() => {
-  try {
-    const savedPayroll = localStorage.getItem(PAYROLL_RESULT_KEY);
-    const savedMonth = localStorage.getItem(PAYROLL_RESULT_MONTH_KEY);
-    const savedStatus = localStorage.getItem(PAYROLL_STATUS_KEY);
+  useEffect(() => {
+    if (!payrollModuleLoaded) return;
 
-    if (savedMonth && savedMonth !== payrollMonth) {
-      setProcessedPayroll([]);
-      setPayrollProcessingStatus("Pending");
-      return;
-    }
+    let cancelled = false;
 
-    if (savedPayroll && !savedMonth) {
-      // Legacy payroll results did not store their month. Treat the first
-      // load as the current month, then month switching becomes safe.
-      localStorage.setItem(PAYROLL_RESULT_MONTH_KEY, payrollMonth);
-    }
+    const loadSelectedMonth = async () => {
+      try {
+        const { module } = await loadPayrollModuleState();
+        if (cancelled) return;
 
-    const parsedPayroll = savedPayroll ? JSON.parse(savedPayroll) : [];
-    setProcessedPayroll(Array.isArray(parsedPayroll) ? parsedPayroll : []);
-    setPayrollProcessingStatus(savedStatus || "Pending");
-  } catch (error) {
-    console.error("Unable to refresh payroll report:", error);
-    setProcessedPayroll([]);
-    setPayrollProcessingStatus("Pending");
-  }
-}, [activeSection, payrollMonth]);
+        if (module.payrollMonth === payrollMonth) {
+          setProcessedPayroll(module.processedPayroll);
+          setPayrollProcessingStatus(module.payrollProcessingStatus || "Pending");
+          setPayrollControl(module.payrollControl);
+          setPayrollRun(getPayrollRunForMonth(module, payrollMonth));
+          setSalaryReleaseState({
+            released: Boolean(module.payrollControl?.released),
+            releasedAt: module.payrollControl?.releasedAt || "",
+            releasedBy: module.payrollControl?.releasedBy || "",
+          });
+        } else {
+          setProcessedPayroll([]);
+          setPayrollProcessingStatus("Pending");
+          setPayrollControl((previous) => ({
+            ...DEFAULT_PAYROLL_CONTROL,
+            month: payrollMonth,
+          }));
+          setPayrollRun(getPayrollRunForMonth(module, payrollMonth));
+          setSalaryReleaseState({
+            released: false,
+            releasedAt: "",
+            releasedBy: "",
+          });
+        }
+      } catch (error) {
+        console.error("Unable to load selected payroll month:", error);
+      }
+    };
+
+    loadSelectedMonth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [payrollMonth, payrollModuleLoaded]);
 
   // Salary Register report filters
   const [salaryRegisterSearch, setSalaryRegisterSearch] = useState("");
@@ -815,44 +1098,25 @@ useEffect(() => {
   // Dedicated report state
   const [reportEmployeeId, setReportEmployeeId] = useState("");
   const [vendorBillingVendor, setVendorBillingVendor] = useState("All Vendors");
-  const VENDOR_BILLING_SETTINGS_KEY = "bauerHrmsVendorBillingSettings";
-  const loadVendorBillingSettings = () => {
-    try {
-      const stored = JSON.parse(
-        localStorage.getItem(VENDOR_BILLING_SETTINGS_KEY) || "null"
-      );
-      return {
-        gstRate: stored?.gstRate ?? "18",
-        gstType: stored?.gstType ?? "CGST + SGST",
-      };
-    } catch {
-      return { gstRate: "18", gstType: "CGST + SGST" };
-    }
-  };
+  const [vendorBillingGstRate, setVendorBillingGstRate] = useState("18");
+const [vendorBillingGstType, setVendorBillingGstType] =
+  useState("CGST + SGST");
 
-  const [vendorBillingGstRate, setVendorBillingGstRate] = useState(() =>
-    loadVendorBillingSettings().gstRate
-  );
-  const [vendorBillingGstType, setVendorBillingGstType] = useState(() =>
-    loadVendorBillingSettings().gstType
-  );
-
-  const STATUTORY_KEY = "bauerHrmsStatutorySettings";
-  const defaultStatutorySettings = {
+const defaultStatutorySettings = {
     ruleVersion: STATUTORY_RULE_VERSION,
-    effectiveFrom: "2026-05-08",
-    companyRuleName: "Current Company / Establishment",
+    effectiveFrom: "",
+    companyRuleName: "No Active Statutory Policy",
     pf: {
-      enabled: true,
+      enabled: false,
       employeeRate: "12",
       employerRate: "12",
-      wageCeiling: "15000",
+      wageCeiling: "25000",
       wageBasis: "Basic + DA + Special Allowance",
       higherWageContribution: false,
       applicable: true,
     },
     esi: {
-      enabled: true,
+      enabled: false,
       employeeRate: "0.75",
       employerRate: "3.25",
       wageCeiling: "21000",
@@ -864,12 +1128,13 @@ useEffect(() => {
       state: "Haryana",
       mode: "State-wise Automatic",
       manualAmount: "",
+      slabs: [],
     },
     lwf: {
       enabled: false,
-      employeeAmount: "",
-      employerAmount: "",
-      frequency: "Monthly",
+      employeeAmount: "0",
+      employerAmount: "0",
+      frequency: "MONTHLY",
     },
     wageDefinition: {
       excludeHra: true,
@@ -880,32 +1145,8 @@ useEffect(() => {
     },
   };
 
-  const loadStatutorySettings = () => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(STATUTORY_KEY) || "null");
-      return stored && typeof stored === "object"
-        ? {
-            ...defaultStatutorySettings,
-            ...stored,
-            pf: { ...defaultStatutorySettings.pf, ...(stored.pf || {}) },
-            esi: {
-              ...defaultStatutorySettings.esi,
-              ...(stored.esi || {}),
-              contributionBasis: stored?.esi?.contributionBasis || defaultStatutorySettings.esi.contributionBasis,
-            },
-            pt: { ...defaultStatutorySettings.pt, ...(stored.pt || {}) },
-            lwf: { ...defaultStatutorySettings.lwf, ...(stored.lwf || {}) },
-            wageDefinition: { ...defaultStatutorySettings.wageDefinition, ...(stored.wageDefinition || {}) },
-            ruleVersion: stored.ruleVersion || defaultStatutorySettings.ruleVersion,
-            effectiveFrom: stored.effectiveFrom || defaultStatutorySettings.effectiveFrom,
-          }
-        : defaultStatutorySettings;
-    } catch {
-      return defaultStatutorySettings;
-    }
-  };
-
-  const [statutorySettings, setStatutorySettings] = useState(() => loadStatutorySettings());
+  const [statutorySettings, setStatutorySettings] =
+    useState(defaultStatutorySettings);
   const [statutoryTestGross, setStatutoryTestGross] = useState("30000");
 
   const statutoryTestEmployee = {
@@ -953,57 +1194,9 @@ useEffect(() => {
   };
 
   const saveStatutorySettings = () => {
-    const errors = [];
-    if (statutorySettings.pf.enabled) {
-      if (!(Number(statutorySettings.pf.employeeRate) > 0)) errors.push("PF employee contribution rate is required.");
-      if (!(Number(statutorySettings.pf.employerRate) > 0)) errors.push("PF employer contribution rate is required.");
-      if (!(Number(statutorySettings.pf.wageCeiling) > 0)) errors.push("PF wage ceiling is required.");
-    }
-    if (statutorySettings.esi.enabled) {
-      if (!(Number(statutorySettings.esi.employeeRate) >= 0)) errors.push("ESI employee contribution rate is required.");
-      if (!(Number(statutorySettings.esi.employerRate) > 0)) errors.push("ESI employer contribution rate is required.");
-      if (!(Number(statutorySettings.esi.wageCeiling) > 0)) errors.push("ESI wage ceiling is required.");
-    }
-    if (statutorySettings.pt.enabled && statutorySettings.pt.mode === "Manual" && !(Number(statutorySettings.pt.manualAmount) >= 0)) {
-      errors.push("Manual PT amount is required.");
-    }
-
-    if (errors.length) {
-      window.alert(errors.join("\n"));
-      return;
-    }
-    const next = { ...statutorySettings, ruleVersion: STATUTORY_RULE_VERSION };
-    setStatutorySettings(next);
-    localStorage.setItem(STATUTORY_KEY, JSON.stringify(next));
-
-    // Keep the same manual statutory rule in Organization Masters so
-    // Payroll Processing uses exactly what HR saved here.
-    try {
-      const masters = loadOrganizationPayrollMasters();
-      const policy = {
-        id: "STATUTORY-MANUAL-001",
-        name: next.companyRuleName || "Manual Statutory Rule",
-        code: "MANUAL-STATUTORY",
-        active: true,
-        effectiveFrom: next.effectiveFrom || "2026-05-08",
-        ruleVersion: next.ruleVersion,
-        companyRuleName: next.companyRuleName || "Current Company / Establishment",
-        pf: { ...next.pf },
-        esi: { ...next.esi },
-        pt: { ...next.pt },
-        lwf: { ...next.lwf },
-        wageDefinition: { ...next.wageDefinition },
-      };
-      const existingPolicies = Array.isArray(masters.statutoryPolicies) ? masters.statutoryPolicies : [];
-      const otherPolicies = existingPolicies.filter((item) => item?.id !== policy.id && item?.code !== policy.code);
-      const nextMasters = { ...masters, statutoryPolicies: [policy, ...otherPolicies] };
-      localStorage.setItem(ORGANIZATION_STORAGE_KEY, JSON.stringify(nextMasters));
-      window.dispatchEvent(new Event("bauerHrmsOrganizationMastersUpdated"));
-    } catch (error) {
-      console.error("Unable to sync statutory rule to Organization Masters:", error);
-    }
-
-    window.alert("Statutory configuration saved successfully and linked to Payroll Processing.");
+    window.alert(
+      "Statutory rules are managed in Policy Management. Publish the policy there; Payroll will automatically consume the active linked policy."
+    );
   };
 
   // Bulk salary upload — kept separate from the single-employee salary form
@@ -1017,20 +1210,7 @@ useEffect(() => {
      Loan / Advance + Food + Other + Recovery
      ========================================================= */
 
-  const DEDUCTIONS_KEY = "bauerHrmsPayrollDeductions";
-
-  const loadDeductions = () => {
-    try {
-      const stored = JSON.parse(
-        localStorage.getItem(DEDUCTIONS_KEY) || "[]"
-      );
-      return Array.isArray(stored) ? stored : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const [deductions, setDeductions] = useState(() => loadDeductions());
+  const [deductions, setDeductions] = useState([]);
   const [showDeductionForm, setShowDeductionForm] = useState(false);
   const [deductionType, setDeductionType] = useState("Loan / Advance");
   const [editingDeductionId, setEditingDeductionId] = useState(null);
@@ -1102,9 +1282,14 @@ useEffect(() => {
     resetDeductionForm();
   };
 
-  const saveDeductions = (next) => {
+  const saveDeductions = async (next) => {
     setDeductions(next);
-    localStorage.setItem(DEDUCTIONS_KEY, JSON.stringify(next));
+    try {
+      await savePayrollModuleState({ deductions: next });
+    } catch (error) {
+      console.error("Unable to save deductions:", error);
+      window.alert("Unable to save deductions to Payroll database.");
+    }
   };
 
   const saveDeduction = () => {
@@ -1674,37 +1859,10 @@ useEffect(() => {
      Arrear + Adjustment
      ========================================================= */
 
-  const OT_KEY = "bauerHrmsPayrollOT";
-  const ARREAR_KEY = "bauerHrmsPayrollArrears";
+  const [otEntries, setOTEntries] = useState([]);
+const [arrearEntries, setArrearEntries] = useState([]);
 
-  const loadOTEntries = () => {
-    try {
-      const stored = JSON.parse(
-        localStorage.getItem(OT_KEY) || "[]"
-      );
-      return Array.isArray(stored) ? stored : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const loadArrearEntries = () => {
-    try {
-      const stored = JSON.parse(
-        localStorage.getItem(ARREAR_KEY) || "[]"
-      );
-      return Array.isArray(stored) ? stored : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const [otEntries, setOTEntries] = useState(() => loadOTEntries());
-  const [arrearEntries, setArrearEntries] = useState(() =>
-    loadArrearEntries()
-  );
-
-  const [showOTForm, setShowOTForm] = useState(false);
+const [showOTForm, setShowOTForm] = useState(false);
   const [otFormType, setOTFormType] = useState("OT 1.5x");
   const [editingOTId, setEditingOTId] = useState(null);
 
@@ -2536,20 +2694,24 @@ useEffect(() => {
     };
   };
 
-  const saveOTEntries = (next) => {
+  const saveOTEntries = async (next) => {
     setOTEntries(next);
-    localStorage.setItem(
-      OT_KEY,
-      JSON.stringify(next)
-    );
+    try {
+      await savePayrollModuleState({ otEntries: next });
+    } catch (error) {
+      console.error("Unable to save OT entries:", error);
+      window.alert("Unable to save OT entries to Payroll database.");
+    }
   };
 
-  const saveArrearEntries = (next) => {
+  const saveArrearEntries = async (next) => {
     setArrearEntries(next);
-    localStorage.setItem(
-      ARREAR_KEY,
-      JSON.stringify(next)
-    );
+    try {
+      await savePayrollModuleState({ arrearEntries: next });
+    } catch (error) {
+      console.error("Unable to save arrears:", error);
+      window.alert("Unable to save arrears to Payroll database.");
+    }
   };
 
   const resetOTForm = () => {
@@ -2949,7 +3111,10 @@ useEffect(() => {
     };
 
     setSalaryStructures(next);
-    localStorage.setItem(SALARY_STRUCTURE_KEY, JSON.stringify(next));
+    savePayrollModuleState({ salaryStructures: next }).catch((error) => {
+      console.error("Unable to save salary structure:", error);
+      window.alert("Unable to save salary structure to Payroll database.");
+    });
     closeSalaryForm();
   };
 
@@ -3101,7 +3266,10 @@ useEffect(() => {
     const next = { ...salaryStructures };
     bulkSalaryRows.forEach(({ employee, structure }) => { next[employee.id] = structure; });
     setSalaryStructures(next);
-    localStorage.setItem(SALARY_STRUCTURE_KEY, JSON.stringify(next));
+    savePayrollModuleState({ salaryStructures: next }).catch((error) => {
+      console.error("Unable to save bulk salary structures:", error);
+      window.alert("Unable to save salary structures to Payroll database.");
+    });
     closeBulkSalary();
   };
 
@@ -3289,165 +3457,37 @@ const payableGross =
     };
   });
 
-  const renderDashboard = () => (
-    <>
+  const getWorkflowStepState = (step) => {
+    const calculated = processedPayroll.length > 0;
+    const approved = ["Finalized", "Locked", "Salary Released"].includes(payrollProcessingStatus);
+    if (step === 1) return employees.length > 0 ? "done" : "current";
+    if (step === 2) return calculated ? "done" : employees.length > 0 ? "current" : "pending";
+    if (step === 3) return approved ? "done" : calculated ? "current" : "pending";
+    if (step === 4) return payrollControl.locked ? "done" : approved ? "current" : "pending";
+    if (step === 5) return salaryReleaseState.released ? "done" : payrollControl.locked ? "current" : "pending";
+    return "pending";
+  };
+
+  const renderDashboard = () => {
+    const workflow = [["01","Inputs","Attendance, salary, OT, deductions & tax",1],["02","Calculation","Calculate employee-wise payroll",2],["03","Validation & Approval","Review exceptions and approve",3],["04","Payroll Lock","Freeze the approved month",4],["05","Salary Release","Release salary and payslips",5]];
+    return <>
       <div className="payroll-stat-grid">
-        <div className="payroll-stat-card blue">
-          <div className="payroll-stat-icon">₹</div>
-          <span>Total Gross</span>
-          <strong>{money(dashboardTotalGross)}</strong>
-          <small>Current payroll cycle</small>
-        </div>
-        <div className="payroll-stat-card green">
-          <div className="payroll-stat-icon">✓</div>
-          <span>Net Payable</span>
-          <strong>{money(dashboardTotalNet)}</strong>
-          <small>After deductions</small>
-        </div>
-        <div className="payroll-stat-card orange">
-          <div className="payroll-stat-icon">−</div>
-          <span>Total Deductions</span>
-          <strong>{money(dashboardTotalDeductions)}</strong>
-          <small>PF, PT, ESI & LOP</small>
-        </div>
-        <div className="payroll-stat-card purple">
-          <div className="payroll-stat-icon">◷</div>
-          <span>Pending Payroll</span>
-          <strong>{pendingCount}</strong>
-          <small>Employees awaiting processing</small>
-        </div>
-        <div className="payroll-stat-card cyan">
-          <div className="payroll-stat-icon">✓</div>
-          <span>Processed</span>
-          <strong>{processedCount}</strong>
-          <small>Ready for review</small>
-        </div>
-        <div className="payroll-stat-card red">
-          <div className="payroll-stat-icon">!</div>
-          <span>LOP Days</span>
-          <strong>{dashboardTotalLop}</strong>
-          <small>Requires payroll review</small>
-        </div>
+        <div className="payroll-stat-card blue"><div className="payroll-stat-icon">₹</div><span>Total Gross</span><strong>{money(dashboardTotalGross)}</strong><small>{getPayrollMonthLabel()}</small></div>
+        <div className="payroll-stat-card green"><div className="payroll-stat-icon">✓</div><span>Net Payable</span><strong>{money(dashboardTotalNet)}</strong><small>After all deductions</small></div>
+        <div className="payroll-stat-card orange"><div className="payroll-stat-icon">−</div><span>Total Deductions</span><strong>{money(dashboardTotalDeductions)}</strong><small>Statutory + payroll deductions</small></div>
+        <div className="payroll-stat-card purple"><div className="payroll-stat-icon">01</div><span>Employees</span><strong>{employees.length}</strong><small>Payroll population</small></div>
+        <div className="payroll-stat-card cyan"><div className="payroll-stat-icon">✓</div><span>Processed</span><strong>{processedCount}</strong><small>Calculated employees</small></div>
+        <div className="payroll-stat-card red"><div className="payroll-stat-icon">!</div><span>LOP Days</span><strong>{dashboardTotalLop}</strong><small>Requires review</small></div>
       </div>
-
-      <div className="payroll-main-grid">
-        <section className="payroll-card payroll-progress-card">
-          <div className="payroll-card-head">
-            <div>
-              <small className="payroll-eyebrow">PAYROLL CYCLE</small>
-              <h2>{getPayrollMonthLabel()} Payroll</h2>
-            </div>
-            <button className="payroll-link-btn" onClick={() => setActiveSection("processing")}>
-              Open Processing →
-            </button>
-          </div>
-
-          <div className="payroll-progress">
-            <div className="payroll-progress-track">
-              <span style={{ width: `${progressPercent}%` }} />
-            </div>
-            <div className="payroll-progress-meta">
-              <strong>{processedCount} of {employees.length}</strong>
-              <span>employees processed</span>
-            </div>
-          </div>
-
-          <div className="payroll-step-row">
-            <div className="done"><b>01</b><span>Attendance Locked</span></div>
-            <div className="done"><b>02</b><span>Paid Days Calculated</span></div>
-            <div className="current"><b>03</b><span>Payroll Processing</span></div>
-            <div><b>04</b><span>Final Approval</span></div>
-          </div>
-        </section>
-
-        <section className="payroll-card">
-          <div className="payroll-card-head">
-            <div>
-              <small className="payroll-eyebrow">QUICK ACTIONS</small>
-              <h2>Payroll Workspace</h2>
-            </div>
-          </div>
-          <div className="payroll-quick-grid">
-            <button onClick={() => setActiveSection("monthly")}><b>▤</b><span>Monthly Payroll</span><small>Review employees</small></button>
-            <button onClick={() => setActiveSection("vendor")}><b>♙</b><span>Vendor Payroll</span><small>Third-party costing</small></button>
-            <button onClick={() => setActiveSection("salary")}><b>₹</b><span>Salary Structure</span><small>Configure earnings</small></button>
-            <button onClick={() => setActiveSection("reports")}><b>▥</b><span>Payroll Reports</span><small>Export & review</small></button>
-          </div>
-        </section>
-      </div>
-
+      <section className="payroll-card payroll-run-overview"><div className="payroll-card-head"><div><small className="payroll-eyebrow">MONTHLY PAYROLL RUN</small><h2>{getPayrollMonthLabel()} Payroll</h2><p>{payrollRun?.id || `PAY-${String(payrollMonth).replace("-", "")}`} · {payrollProcessingStatus}</p></div><button type="button" className="payroll-primary-btn" onClick={createOrOpenPayrollRun} disabled={payrollControl.locked}>{payrollRun ? "Open Payroll Run →" : "Create Payroll Run →"}</button></div>
+        <div className="payroll-workflow-line">{workflow.map(([no,title,desc,step])=>{const state=getWorkflowStepState(step);return <button type="button" key={no} className={`payroll-workflow-step ${state}`} onClick={()=>{if(step===1){setActiveSection("inputs");setInputSection("overview");}if(step===2)setActiveSection("calculation");if(step===3)setActiveSection("validation");if(step===4)setActiveSection("payroll-control");if(step===5)setActiveSection("salary-release");}}><span>{no}</span><div><strong>{title}</strong><small>{desc}</small></div></button>})}</div>
+      </section>
       <div className="payroll-section-grid">
-        <section className="payroll-card">
-          <div className="payroll-card-head">
-            <div>
-              <small className="payroll-eyebrow">THIRD PARTY</small>
-              <h2>Vendor Costing Snapshot</h2>
-            </div>
-            <button className="payroll-link-btn" onClick={() => setActiveSection("vendor")}>View All →</button>
-          </div>
-          <div className="payroll-vendor-table">
-            <div className="payroll-table-head"><span>Vendor</span><span>Employees</span><span>Service Charge</span><span>Status</span></div>
-            {dashboardVendors.map((vendor) => (
-              <div className="payroll-table-row" key={vendor.name}>
-                <strong>{vendor.name}</strong>
-                <span>{vendor.employees}</span>
-                <span className="rate-badge">{vendor.serviceCharge}</span>
-                <span className="active-badge">{vendor.status}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="payroll-card payroll-attention-card">
-          <div className="payroll-card-head">
-            <div>
-              <small className="payroll-eyebrow">CONTROL CHECKS</small>
-              <h2>Review Before Processing</h2>
-            </div>
-          </div>
-          <div className="payroll-check-list">
-            <div>
-              <span className={`check-icon ${employeesWithLOP > 0 ? "warning" : "success"}`}>
-                {employeesWithLOP > 0 ? "!" : "✓"}
-              </span>
-              <div>
-                <strong>Attendance Review</strong>
-                <small>
-                  {employeesWithLOP > 0
-                    ? `${employeesWithLOP} employee${employeesWithLOP === 1 ? "" : "s"} have LOP days.`
-                    : "No LOP days found for the selected month."}
-                </small>
-              </div>
-            </div>
-            <div>
-              <span className={`check-icon ${attendanceReady ? "success" : "warning"}`}>
-                {attendanceReady ? "✓" : "!"}
-              </span>
-              <div>
-                <strong>Paid Days</strong>
-                <small>
-                  {attendanceReady
-                    ? `${employeesWithAttendance} employee${employeesWithAttendance === 1 ? "" : "s"} have attendance data.`
-                    : "Attendance data is not available for this payroll month."}
-                </small>
-              </div>
-            </div>
-            <div>
-              <span className={`check-icon ${salaryReady ? "success" : "neutral"}`}>₹</span>
-              <div>
-                <strong>Salary Structure</strong>
-                <small>
-                  {salaryReady
-                    ? "Salary structure is configured for all employees."
-                    : `${employeesWithSalary} of ${employees.length} employees have salary structure configured.`}
-                </small>
-              </div>
-            </div>
-          </div>
-        </section>
+        <section className="payroll-card"><div className="payroll-card-head"><div><small className="payroll-eyebrow">PRE-CALCULATION CHECK</small><h2>Payroll Readiness</h2></div></div><div className="payroll-readiness-list">{[["Employee Master",employees.length>0,`${employees.length} employee${employees.length===1?"":"s"} loaded`],["Attendance",attendanceReady,attendanceReady?"Attendance available for selected month":"Attendance data required"],["Salary Inputs",salaryReady,salaryReady?"Salary structure available":`${Math.max(0,employees.length-employeesWithSalary)} employee(s) missing salary`],["IT Declaration",itDeclaration.status!=="Closed",itDeclaration.status||"Open"]].map(([label,ok,detail])=><div key={label}><span className={ok?"check-icon success":"check-icon warning"}>{ok?"✓":"!"}</span><div><strong>{label}</strong><small>{detail}</small></div></div>)}</div></section>
+        <section className="payroll-card"><div className="payroll-card-head"><div><small className="payroll-eyebrow">MONTH-END STATUS</small><h2>Control Summary</h2></div></div><div className="payroll-control-summary"><div><span>Calculation</span><strong>{payrollProcessingStatus}</strong></div><div><span>Approval</span><strong>{["Finalized","Locked","Salary Released"].includes(payrollProcessingStatus)?"Approved":"Pending"}</strong></div><div><span>Lock</span><strong>{payrollControl.locked?"Locked":"Open"}</strong></div><div><span>Release</span><strong>{salaryReleaseState.released?"Released":"Pending"}</strong></div></div></section>
       </div>
-    </>
-  );
+    </>;
+  };
 
   const renderMonthly = () => (
     <section className="payroll-card payroll-full-card">
@@ -3596,6 +3636,10 @@ const payableGross =
   );
 
   const processCurrentPayroll = () => {
+  if (payrollControl.locked) {
+    window.alert("This payroll month is locked. Unlock it before recalculating.");
+    return;
+  }
     const masters = loadOrganizationPayrollMasters();
     const organizationStatutoryFallback = statutorySettings;
     const errors = [];
@@ -3709,9 +3753,33 @@ const payableGross =
 
     setProcessedPayroll(rows);
     setPayrollProcessingStatus("Processed");
-    localStorage.setItem(PAYROLL_RESULT_KEY, JSON.stringify(rows));
-    localStorage.setItem(PAYROLL_RESULT_MONTH_KEY, payrollMonth);
-    localStorage.setItem(PAYROLL_STATUS_KEY, "Processed");
+    setPayrollControl((previous) => ({
+      ...previous,
+      month: payrollMonth,
+      status: "Processed",
+      locked: false,
+      released: false,
+      releasedAt: "",
+      releasedBy: "",
+    }));
+    savePayrollModuleState({
+      processedPayroll: rows,
+      payrollMonth,
+      payrollProcessingStatus: "Processed",
+      payrollControl: {
+        ...payrollControl,
+        month: payrollMonth,
+        status: "Processed",
+        locked: false,
+        released: false,
+        releasedAt: "",
+        releasedBy: "",
+      },
+    }).catch((error) => {
+      console.error("Unable to save processed payroll:", error);
+      window.alert("Payroll calculated but could not be saved to the Payroll database.");
+    });
+    updatePayrollRunStatus("Calculated").catch(() => {});
   };
 
 const finalizeCurrentPayroll = () => {
@@ -3720,13 +3788,187 @@ const finalizeCurrentPayroll = () => {
     return;
   }
 
-  setPayrollProcessingStatus("Finalized");
+  if (payrollControl.locked) {
+    window.alert("This payroll month is already locked.");
+    return;
+  }
 
-  localStorage.setItem(
-    PAYROLL_STATUS_KEY,
-    "Finalized"
-  );
+  setPayrollProcessingStatus("Finalized");
+  const nextControl = {
+    ...payrollControl,
+    month: payrollMonth,
+    status: "Finalized",
+  };
+  setPayrollControl(nextControl);
+
+  savePayrollModuleState({
+    processedPayroll,
+    payrollMonth,
+    payrollProcessingStatus: "Finalized",
+    payrollControl: nextControl,
+  }).catch((error) => {
+    console.error("Unable to save finalized payroll:", error);
+    window.alert("Payroll finalized in the current screen, but database save failed.");
+  });
+  updatePayrollRunStatus("Approved").catch(() => {});
 };
+
+
+  const saveITDeclaration = async () => {
+    const next = {
+      ...itDeclaration,
+      status: "Submitted",
+      submittedAt: new Date().toISOString(),
+    };
+    setITDeclaration(next);
+    try {
+      await savePayrollModuleState({ itDeclaration: next });
+      window.alert("IT declaration status updated successfully.");
+    } catch (error) {
+      console.error("Unable to save IT declaration:", error);
+      window.alert("Unable to save IT declaration.");
+    }
+  };
+
+  const lockCurrentPayroll = async () => {
+    if (!processedPayroll.length || payrollProcessingStatus !== "Finalized") {
+      window.alert("Finalize the selected payroll month before locking it.");
+      return;
+    }
+
+    if (!window.confirm(
+      `Lock payroll for ${getPayrollMonthLabel()}? After locking, payroll calculation and release changes will be restricted.`
+    )) return;
+
+    const nextControl = {
+      ...payrollControl,
+      month: payrollMonth,
+      status: "Locked",
+      locked: true,
+      lockedAt: new Date().toISOString(),
+      lockedBy: "HR / Payroll",
+      released: false,
+      releasedAt: "",
+      releasedBy: "",
+    };
+
+    try {
+      await savePayrollModuleState({
+        processedPayroll,
+        payrollMonth,
+        payrollProcessingStatus: "Locked",
+        payrollControl: nextControl,
+      });
+      setPayrollControl(nextControl);
+      setPayrollProcessingStatus("Locked");
+      setSalaryReleaseState({
+        released: false,
+        releasedAt: "",
+        releasedBy: "",
+      });
+      await updatePayrollRunStatus("Locked", { lockedAt: nextControl.lockedAt, lockedBy: nextControl.lockedBy });
+      window.alert(`Payroll for ${getPayrollMonthLabel()} is locked.`);
+    } catch (error) {
+      console.error("Unable to lock payroll:", error);
+      window.alert("Unable to lock payroll.");
+    }
+  };
+
+  const unlockCurrentPayroll = async () => {
+    if (!payrollControl.locked) {
+      window.alert("Selected payroll month is not locked.");
+      return;
+    }
+
+    if (!window.confirm(
+      `Unlock payroll for ${getPayrollMonthLabel()}? This should only be done by authorised Payroll / HR users.`
+    )) return;
+
+    const nextControl = {
+      ...payrollControl,
+      status: "Finalized",
+      locked: false,
+      lockedAt: "",
+      lockedBy: "",
+      released: false,
+      releasedAt: "",
+      releasedBy: "",
+    };
+
+    try {
+      await savePayrollModuleState({
+        payrollMonth,
+        payrollProcessingStatus: "Finalized",
+        payrollControl: nextControl,
+      });
+      setPayrollControl(nextControl);
+      setPayrollProcessingStatus("Finalized");
+      setSalaryReleaseState({
+        released: false,
+        releasedAt: "",
+        releasedBy: "",
+      });
+      await updatePayrollRunStatus("Approved");
+    } catch (error) {
+      console.error("Unable to unlock payroll:", error);
+      window.alert("Unable to unlock payroll.");
+    }
+  };
+
+  const releaseSalaryForEmployees = async () => {
+    if (!processedPayroll.length || !["Finalized", "Locked"].includes(payrollProcessingStatus)) {
+      window.alert("Finalize payroll before releasing salary.");
+      return;
+    }
+
+    if (!payrollControl.locked) {
+      window.alert("Please lock the payroll month before salary release.");
+      return;
+    }
+
+    if (!window.confirm(
+      `Release salary slips for all ${processedPayroll.length} employees for ${getPayrollMonthLabel()}?`
+    )) return;
+
+    const releasedAt = new Date().toISOString();
+    const nextControl = {
+      ...payrollControl,
+      month: payrollMonth,
+      status: "Salary Released",
+      locked: true,
+      released: true,
+      releasedAt,
+      releasedBy: "HR / Payroll",
+    };
+    const nextProcessedPayroll = processedPayroll.map((row) => ({
+      ...row,
+      salaryReleaseStatus: "Released",
+      salaryReleasedAt: releasedAt,
+      salaryReleasedBy: "HR / Payroll",
+    }));
+
+    try {
+      await savePayrollModuleState({
+        payrollMonth,
+        processedPayroll: nextProcessedPayroll,
+        payrollProcessingStatus: "Salary Released",
+        payrollControl: nextControl,
+      });
+      setProcessedPayroll(nextProcessedPayroll);
+      setPayrollControl(nextControl);
+      setSalaryReleaseState({
+        released: true,
+        releasedAt: nextControl.releasedAt,
+        releasedBy: nextControl.releasedBy,
+      });
+      setPayrollProcessingStatus("Salary Released");
+      await updatePayrollRunStatus("Salary Released", { releasedAt, releasedBy: "HR / Payroll" });
+      window.alert(`Salary released for ${getPayrollMonthLabel()}.`);
+    } catch (error) {
+      console.error("Unable to release salary:", error);
+      window.alert("Unable to release salary.");
+    }
+  };
 
 const renderProcessing = () => {
   const attendanceReady = employees.length > 0;
@@ -3931,31 +4173,29 @@ const renderProcessing = () => {
   );
 };
 
-  const renderVendor = () => (
-    <section className="payroll-card payroll-full-card">
-      <div className="payroll-card-head">
-        <div><small className="payroll-eyebrow">THIRD PARTY PAYROLL</small><h2>Vendor Payroll & Costing</h2><p>Vendor defaults can be overridden by a specific Site / Project rule.</p></div>
-        <button className="payroll-primary-btn">+ Add Service Charge Rule</button>
-      </div>
-      <div className="vendor-rule-banner">
-        <span>Policy priority</span>
-        <strong>Vendor + Site Rule</strong>
-        <small>overrides Vendor Default</small>
-      </div>
-      <div className="payroll-table-scroll">
-        <table className="payroll-register-table">
-          <thead><tr><th>Vendor</th><th>Site / Project</th><th>Default Rate</th><th>Site Override</th><th>Effective From</th><th>Status</th></tr></thead>
-          <tbody>
-            <tr><td><strong>Conzepts</strong></td><td>All Sites</td><td>4.00%</td><td>—</td><td>01-Apr-2026</td><td><span className="active-badge">Active</span></td></tr>
-            <tr><td><strong>Taurus</strong></td><td>All Sites</td><td>4.00%</td><td>—</td><td>01-Apr-2026</td><td><span className="active-badge">Active</span></td></tr>
-            <tr><td><strong>Perfect</strong></td><td>All Sites</td><td>4.00%</td><td>—</td><td>01-Apr-2026</td><td><span className="active-badge">Active</span></td></tr>
-            <tr className="override-row"><td><strong>Perfect</strong></td><td><strong>Gurgaon HO</strong></td><td>4.00%</td><td><span className="override-badge">5.00%</span></td><td>01-Apr-2026</td><td><span className="active-badge">Active</span></td></tr>
-            <tr><td><strong>AlignPro</strong></td><td>All Sites</td><td>4.00%</td><td>—</td><td>01-Apr-2026</td><td><span className="active-badge">Active</span></td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
+  const renderVendor = () => {
+    const vendorRows = Array.from(new Set(employees.map((employee) => String(employee.vendor || "").trim()).filter(Boolean))).map((name) => ({
+      name,
+      employees: employees.filter((employee) => String(employee.vendor || "").trim().toLowerCase() === name.toLowerCase()).length,
+      sites: Array.from(new Set(employees.filter((employee) => String(employee.vendor || "").trim().toLowerCase() === name.toLowerCase()).map((employee) => employee.site).filter(Boolean))),
+    }));
+    return (
+      <section className="payroll-card payroll-full-card">
+        <div className="payroll-card-head">
+          <div><small className="payroll-eyebrow">PAYROLL INPUT · THIRD PARTY</small><h2>Third Party Payroll Inputs</h2><p>Review vendor manpower for the selected month. Vendor costing is calculated during the payroll run; configuration is maintained outside this screen.</p></div>
+          <button type="button" className="payroll-secondary-btn" onClick={() => setActiveSection("vendor-billing")}>View Vendor Costing →</button>
+        </div>
+        <div className="payroll-input-summary"><div><span>Third Party Employees</span><strong>{employees.filter(isThirdPartyEmployee).length}</strong></div><div><span>Vendors</span><strong>{vendorRows.length}</strong></div><div><span>Payroll Month</span><strong>{getPayrollMonthLabel()}</strong></div><div><span>Costing</span><strong>Calculated in Run</strong></div></div>
+        <div className="payroll-table-scroll" style={{ marginTop: "18px" }}>
+          <table className="payroll-register-table"><thead><tr><th>Vendor</th><th>Employees</th><th>Sites / Projects</th><th>Payroll Input</th></tr></thead><tbody>
+            {vendorRows.map((row) => <tr key={row.name}><td><strong>{row.name}</strong></td><td>{row.employees}</td><td>{row.sites.length ? row.sites.join(", ") : "—"}</td><td><span className="payroll-status processed">Ready for Calculation</span></td></tr>)}
+            {!vendorRows.length && <tr><td colSpan="4" style={{ padding: "32px", textAlign: "center" }}>No third-party vendor employees found for the selected payroll population.</td></tr>}
+          </tbody></table>
+        </div>
+        <div className="payroll-policy-reference"><span>Vendor costing</span><strong>Calculation only</strong><small>Service charge, GST and vendor billing are handled in the costing/reporting stage. No vendor rate configuration is exposed in the Payroll workflow.</small></div>
+      </section>
+    );
+  };
 
   const renderSimpleModule = (title, eyebrow, description, items) => (
     <section className="payroll-card payroll-full-card">
@@ -4146,10 +4386,10 @@ const renderProcessing = () => {
     setVendorBillingGstRate(settings.gstRate);
     setVendorBillingGstType(settings.gstType);
 
-    localStorage.setItem(
-      VENDOR_BILLING_SETTINGS_KEY,
-      JSON.stringify(settings)
-    );
+    savePayrollModuleState({ vendorBilling: settings }).catch((error) => {
+      console.error("Unable to save vendor billing settings:", error);
+      window.alert("Unable to save vendor billing settings to Payroll database.");
+    });
   };
 
   const exportPayrollReportExcel = ({
@@ -6797,19 +7037,214 @@ const renderProcessing = () => {
     );
   };
 
-  const renderContent = () => {
-    if (activeSection === "salary-register") return renderSalaryRegister();
-    if (activeSection === "payslip") return renderPayslip();
-    if (activeSection === "bank-payment") return renderBankPayment();
-    if (activeSection === "vendor-billing") return renderVendorBilling();
-    if (activeSection === "pf-esi-report") return renderPFESIReport();
-    if (activeSection === "lop-report") return renderLOPReport();
-    if (activeSection === "dashboard") return renderDashboard();
-    if (activeSection === "monthly") return renderMonthly();
-    if (activeSection === "processing") return renderProcessing();
-    if (activeSection === "vendor") return renderVendor();
 
-    if (activeSection === "salary") {
+  const renderITDeclaration = () => {
+    const declarationRows = employees.map((employee) => ({
+      employee,
+      declaration: itDeclaration.declarations?.[employee.id] || {},
+    }));
+
+    return (
+      <section className="payroll-card payroll-full-card">
+        <div className="payroll-card-head">
+          <div>
+            <small className="payroll-eyebrow">TAX & COMPLIANCE</small>
+            <h2>IT Declaration</h2>
+            <p>Manage employee tax regime and declaration status for payroll TDS.</p>
+          </div>
+          <button type="button" className="payroll-primary-btn" onClick={saveITDeclaration}>
+            Submit / Close Declaration
+          </button>
+        </div>
+
+        <div className="payroll-control-summary">
+          <div><span>Financial Year</span><strong>{itDeclaration.financialYear}</strong></div>
+          <div><span>Tax Regime</span><strong>{itDeclaration.regime}</strong></div>
+          <div><span>Status</span><strong>{itDeclaration.status}</strong></div>
+          <div><span>Employees</span><strong>{employees.length}</strong></div>
+        </div>
+
+        <div className="payroll-filter-bar">
+          <label>Financial Year
+            <select
+              value={itDeclaration.financialYear}
+              onChange={(e) => setITDeclaration((p) => ({ ...p, financialYear: e.target.value }))}
+            >
+              <option>FY 2026-27</option>
+              <option>FY 2025-26</option>
+            </select>
+          </label>
+          <label>Default Tax Regime
+            <select
+              value={itDeclaration.regime}
+              onChange={(e) => setITDeclaration((p) => ({ ...p, regime: e.target.value }))}
+            >
+              <option>New Tax Regime</option>
+              <option>Old Tax Regime</option>
+            </select>
+          </label>
+          <label>Declaration Last Date
+            <input
+              type="date"
+              value={itDeclaration.lastDate || ""}
+              onChange={(e) => setITDeclaration((p) => ({ ...p, lastDate: e.target.value }))}
+            />
+          </label>
+        </div>
+
+        <div className="payroll-table-scroll">
+          <table className="payroll-register-table">
+            <thead>
+              <tr>
+                <th>Employee</th><th>Code</th><th>Regime</th><th>Declaration</th><th>TDS Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {declarationRows.map(({ employee, declaration }) => (
+                <tr key={employee.id}>
+                  <td><strong>{employee.name}</strong></td>
+                  <td>{getEmployeeCode(employee) || "—"}</td>
+                  <td>{declaration.regime || itDeclaration.regime}</td>
+                  <td>{declaration.status || "Pending"}</td>
+                  <td>
+                    <span className={`payroll-status ${
+                      declaration.status === "Submitted" ? "processed" : "pending"
+                    }`}>
+                      {declaration.status || "Pending"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {!declarationRows.length && (
+                <tr><td colSpan="5" style={{ padding: "32px" }}>No employees available.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="payroll-policy-note">
+          <span>IT</span>
+          <div>
+            <strong>Payroll integration</strong>
+            <small>IT Declaration is kept inside Payroll because it directly controls tax/TDS processing. Detailed investment proof collection can be added later without changing the monthly payroll engine.</small>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
+  const renderSalaryRelease = () => (
+    <section className="payroll-card payroll-full-card">
+      <div className="payroll-card-head">
+        <div>
+          <small className="payroll-eyebrow">PAYMENT & EMPLOYEE COMMUNICATION</small>
+          <h2>Salary Release</h2>
+          <p>Release the finalized salary cycle and make payslips available to employees.</p>
+        </div>
+        <button
+          type="button"
+          className="payroll-primary-btn"
+          disabled={!payrollControl.locked || salaryReleaseState.released}
+          onClick={releaseSalaryForEmployees}
+        >
+          {salaryReleaseState.released ? "Salary Released" : "Release Salary"}
+        </button>
+      </div>
+
+      <div className="payroll-control-summary">
+        <div><span>Payroll Month</span><strong>{getPayrollMonthLabel()}</strong></div>
+        <div><span>Employees</span><strong>{processedPayroll.length}</strong></div>
+        <div><span>Payroll Status</span><strong>{payrollProcessingStatus}</strong></div>
+        <div><span>Release Status</span><strong>{salaryReleaseState.released ? "Released" : "Not Released"}</strong></div>
+      </div>
+
+      <div className="payroll-release-steps">
+        {[
+          ["01", "Calculate", processedPayroll.length > 0],
+          ["02", "Finalize", ["Finalized", "Locked", "Salary Released"].includes(payrollProcessingStatus)],
+          ["03", "Lock Month", Boolean(payrollControl.locked)],
+          ["04", "Release Salary", Boolean(salaryReleaseState.released)],
+        ].map(([number, label, done]) => (
+          <div key={number} className={done ? "done" : ""}>
+            <b>{number}</b><span>{label}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="payroll-table-scroll" style={{ marginTop: "18px" }}>
+        <table className="payroll-register-table">
+          <thead><tr><th>Employee</th><th>Net Payable</th><th>Payment Mode</th><th>Payslip</th><th>Status</th></tr></thead>
+          <tbody>
+            {processedPayroll.map((row) => (
+              <tr key={row.employeeId}>
+                <td><strong>{row.employeeName}</strong><small>{row.employeeCode}</small></td>
+                <td><strong>{money(row.netPayable)}</strong></td>
+                <td>{row.paymentMode || "Bank Transfer"}</td>
+                <td>
+                  <button type="button" className="payroll-link-btn" onClick={() => { setReportEmployeeId(row.employeeId); setActiveSection("payslip"); }}>
+                    View Payslip
+                  </button>
+                </td>
+                <td><span className={`payroll-status ${salaryReleaseState.released ? "processed" : "pending"}`}>
+                  {salaryReleaseState.released ? "Released" : "Ready"}
+                </span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+
+  const renderPayrollControl = () => (
+    <section className="payroll-card payroll-full-card">
+      <div className="payroll-card-head">
+        <div>
+          <small className="payroll-eyebrow">MONTH-END CONTROL</small>
+          <h2>Payroll Control</h2>
+          <p>Lock, unlock and control the selected payroll month before salary release.</p>
+        </div>
+        <span className={`payroll-control-status ${payrollControl.locked ? "locked" : "open"}`}>
+          {payrollControl.locked ? "MONTH LOCKED" : "MONTH OPEN"}
+        </span>
+      </div>
+
+      <div className="payroll-control-summary">
+        <div><span>Selected Month</span><strong>{getPayrollMonthLabel()}</strong></div>
+        <div><span>Calculation Status</span><strong>{payrollProcessingStatus}</strong></div>
+        <div><span>Locked At</span><strong>{payrollControl.lockedAt ? new Date(payrollControl.lockedAt).toLocaleString("en-IN") : "—"}</strong></div>
+        <div><span>Salary Release</span><strong>{payrollControl.released ? "Released" : "Pending"}</strong></div>
+      </div>
+
+      <div className="payroll-control-actions">
+        {!payrollControl.locked ? (
+          <button type="button" className="payroll-primary-btn" onClick={lockCurrentPayroll}>
+            🔒 Lock {getPayrollMonthLabel()}
+          </button>
+        ) : (
+          <button type="button" className="payroll-secondary-btn" onClick={unlockCurrentPayroll}>
+            Unlock Payroll
+          </button>
+        )}
+        <button type="button" className="payroll-secondary-btn" onClick={() => setActiveSection("processing")}>
+          Go to Processing
+        </button>
+        <button type="button" className="payroll-secondary-btn" onClick={() => setActiveSection("salary-release")}>
+          Salary Release
+        </button>
+      </div>
+
+      <div className="payroll-policy-note" style={{ marginTop: "18px" }}>
+        <span>✓</span>
+        <div>
+          <strong>Control rule</strong>
+          <small>Once a month is locked, payroll calculation changes are blocked at the Payroll workflow level. Unlock should be restricted to authorised Payroll / HR users.</small>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderSalary = () => {
       const configuredSalaryRows = employees.map((employee) => ({
         employee,
         structure: salaryStructures[employee.id],
@@ -7080,367 +7515,9 @@ const renderProcessing = () => {
           )}
         </section>
       );
-    }
+  };
 
-    if (activeSection === "statutory") {
-      const statutoryCards = [
-        {
-          key: "pf", title: "Provident Fund", short: "PF", description: "Employee & employer contribution", className: "statutory-pf",
-          fields: [
-            ["employeeRate", "Employee Contribution %", "number", "%"],
-            ["employerRate", "Employer Contribution %", "number", "%"],
-            ["wageCeiling", "PF Wage Ceiling", "number", "₹"],
-          ],
-          wageBasisOptions: ["Basic + DA", "Basic + DA + Special Allowance", "Gross"],
-        },
-        {
-          key: "esi", title: "ESI", short: "ESI", description: "Employee & employer ESIC", className: "statutory-esi",
-          fields: [
-            ["employeeRate", "Employee Contribution %", "number", "%"],
-            ["employerRate", "Employer Contribution %", "number", "%"],
-            ["wageCeiling", "ESI Wage Ceiling", "number", "₹"],
-            ["disabledEmployeeWageCeiling", "PwD Wage Ceiling", "number", "₹"],
-          ],
-          wageBasisOptions: ["Basic + DA", "Basic + DA + Special Allowance", "Gross"],
-        },
-        { key: "pt", title: "Professional Tax", short: "PT", description: "State-wise professional tax", className: "statutory-pt", fields: [] },
-        {
-          key: "lwf", title: "Labour Welfare Fund", short: "LWF", description: "Employee & employer welfare contribution", className: "statutory-lwf",
-          fields: [["employeeAmount", "Employee Contribution", "number", "₹"], ["employerAmount", "Employer Contribution", "number", "₹"]],
-        },
-      ];
-
-      return (
-        <section className="payroll-card payroll-full-card statutory-page">
-
-          {/* Statutory Preview Outer Header — UI only; existing functionality unchanged */}
-          <div
-            className="statutory-preview-outer-header"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "18px",
-              marginTop: "16px",
-              marginBottom: "16px",
-              padding: "16px 20px",
-              minHeight: "72px",
-              boxSizing: "border-box",
-              border: "1px solid #dce8f1",
-              borderLeft: "5px solid #1f78c1",
-              borderRadius: "12px",
-              background: "#fff",
-              boxShadow: "0 4px 15px rgba(24,54,78,.035)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
-              <div
-                style={{
-                  width: "46px",
-                  height: "46px",
-                  minWidth: "46px",
-                  borderRadius: "10px",
-                  background: "#eef6ff",
-                  color: "#1766a5",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "22px",
-                  fontWeight: 800,
-                  lineHeight: 1,
-                }}
-              >
-                ▦
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <strong
-                  style={{
-                    display: "block",
-                    color: "#173b5d",
-                    fontSize: "20px",
-                    fontWeight: 700,
-                    lineHeight: 1.15,
-                  }}
-                >
-                  Statutory
-                </strong>
-                <span
-                  style={{
-                    display: "block",
-                    marginTop: "4px",
-                    color: "#71879a",
-                    fontSize: "11px",
-                    lineHeight: 1.2,
-                  }}
-                >
-                  PF / ESI / PT / LWF Applicability
-                </span>
-              </div>
-            </div>
-
-            <span
-              className="statutory-rule-version"
-              style={{
-                flexShrink: 0,
-                padding: "8px 12px",
-                borderRadius: "999px",
-                background: "#eef6ff",
-                color: "#1766a5",
-                fontSize: "11px",
-                fontWeight: 700,
-              }}
-            >
-              {STATUTORY_RULE_VERSION}
-            </span>
-          </div>
-
-          <div className="payroll-card-head statutory-page-head">
-            <div>
-              <small className="payroll-eyebrow">STATUTORY MASTER</small>
-              <h2>Statutory Configuration</h2>
-              <p>Configure contribution rules once and use them during payroll processing.</p>
-            </div>
-            <div className="statutory-head-actions">
-              <span className="statutory-config-status">
-                {["pf", "esi", "pt", "lwf"].filter((key) => statutorySettings[key]?.enabled).length} Active Rules
-              </span>
-              <button className="payroll-primary-btn" type="button" onClick={saveStatutorySettings}>Save Configuration</button>
-            </div>
-          </div>
-
-          <div className="statutory-info-banner">
-            <div className="statutory-info-icon">✓</div>
-            <div>
-              <strong>Policy Driven Statutory Setup</strong>
-              <span>2026 rule set · Effective from {statutorySettings.effectiveFrom} · Rule version {statutorySettings.ruleVersion}</span>
-            </div>
-          </div>
-
-          <div style={{ margin: "16px 0", padding: "18px", border: "1px solid #e6e1f2", borderRadius: "14px", background: "linear-gradient(180deg,#ffffff 0%,#faf9ff 100%)", boxShadow: "0 6px 18px rgba(48,43,88,.04)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", marginBottom: "16px" }}>
-              <div style={{ minWidth: 0 }}>
-                <small className="payroll-eyebrow">MANUAL COMPANY RULE</small>
-                <strong style={{ display: "block", marginTop: "3px", color: "var(--pay-ink,#3d3a54)", fontSize: "15px" }}>Company / Establishment Statutory Profile</strong>
-                <span style={{ display: "block", marginTop: "4px", color: "#7b7890", fontSize: "11px" }}>Set the exact PF and ESI rate, ceiling and wage basis used by this payroll.</span>
-              </div>
-              <span style={{ flexShrink: 0, padding: "7px 11px", borderRadius: "999px", background: "#f0eeff", color: "#6655b6", fontSize: "10px", fontWeight: 800 }}>Manual Rule</span>
-            </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 1.65fr) minmax(220px, 0.75fr)",
-                gap: "16px",
-                alignItems: "end",
-              }}
-            >
-              <label
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "7px",
-                  minWidth: 0,
-                  margin: 0,
-                }}
-              >
-                <span
-                  style={{
-                    display: "block",
-                    color: "#6f6882",
-                    fontSize: "10px",
-                    fontWeight: 800,
-                    lineHeight: 1.2,
-                    letterSpacing: ".02em",
-                  }}
-                >
-                  Company / Establishment Name
-                </span>
-                <input
-                  type="text"
-                  value={statutorySettings.companyRuleName || ""}
-                  placeholder="e.g. Bauer Engineering India Pvt. Ltd."
-                  onChange={(e) =>
-                    setStatutorySettings((previous) => ({
-                      ...previous,
-                      companyRuleName: e.target.value,
-                    }))
-                  }
-                  style={{
-                    width: "100%",
-                    minWidth: 0,
-                    height: "40px",
-                    boxSizing: "border-box",
-                    padding: "0 12px",
-                    border: "1px solid #dcd6eb",
-                    borderRadius: "9px",
-                    background: "#ffffff",
-                    color: "#37314f",
-                    fontSize: "12px",
-                    lineHeight: 1.2,
-                    outline: "none",
-                  }}
-                />
-              </label>
-
-              <label
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "7px",
-                  minWidth: 0,
-                  margin: 0,
-                }}
-              >
-                <span
-                  style={{
-                    display: "block",
-                    color: "#6f6882",
-                    fontSize: "10px",
-                    fontWeight: 800,
-                    lineHeight: 1.2,
-                    letterSpacing: ".02em",
-                  }}
-                >
-                  Effective From
-                </span>
-                <input
-                  type="date"
-                  value={statutorySettings.effectiveFrom || ""}
-                  onChange={(e) =>
-                    setStatutorySettings((previous) => ({
-                      ...previous,
-                      effectiveFrom: e.target.value,
-                    }))
-                  }
-                  style={{
-                    width: "100%",
-                    minWidth: 0,
-                    height: "40px",
-                    boxSizing: "border-box",
-                    padding: "0 10px",
-                    border: "1px solid #dcd6eb",
-                    borderRadius: "9px",
-                    background: "#ffffff",
-                    color: "#37314f",
-                    fontSize: "12px",
-                    lineHeight: 1.2,
-                    outline: "none",
-                  }}
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="statutory-grid">
-            {statutoryCards.map((card) => {
-              const config = statutorySettings[card.key];
-              return (
-                <div className={`statutory-card ${card.className}`} key={card.key}>
-                  <div className="statutory-card-top">
-                    <div className="statutory-card-title">
-                      <span className="statutory-icon">{card.short}</span>
-                      <div><strong>{card.title}</strong><small>{card.description}</small></div>
-                    </div>
-                    <label className="statutory-switch">
-                      <input type="checkbox" checked={Boolean(config.enabled)} onChange={(e) => updateStatutory(card.key, "enabled", e.target.checked)} />
-                      <span></span>
-                    </label>
-                  </div>
-
-                  {card.key === "pt" ? (
-                    <div className="statutory-field-grid">
-                      <label><span>State / Region</span><select value={config.state} onChange={(e) => updateStatutory("pt", "state", e.target.value)}><option>Haryana</option><option>Delhi</option><option>Uttar Pradesh</option><option>Rajasthan</option><option>Maharashtra</option><option>Other</option></select></label>
-                      <label><span>Calculation Mode</span><select value={config.mode} onChange={(e) => updateStatutory("pt", "mode", e.target.value)}><option>State-wise Automatic</option><option>Manual</option></select></label>
-                      {config.mode === "Manual" && <label><span>Manual PT Amount</span><div className="statutory-input-wrap"><input type="number" min="0" step="1" value={config.manualAmount ?? ""} placeholder="Enter" onChange={(e) => updateStatutory("pt", "manualAmount", e.target.value)} /><em>₹</em></div></label>}
-                    </div>
-                  ) : (
-                    <div className="statutory-field-grid">
-                      {card.fields.map(([field, label, type, prefix]) => (
-                        <label key={field}><span>{label}</span><div className="statutory-input-wrap"><input type={type} min="0" step="0.01" value={config[field]} placeholder="Enter" onChange={(e) => updateStatutory(card.key, field, e.target.value)} /><em>{prefix}</em></div></label>
-                      ))}
-                      {(card.key === "pf" || card.key === "esi") && <label><span>Contribution Wage Basis</span><select value={card.key === "pf" ? (config.wageBasis || "Basic + DA + Special Allowance") : (config.contributionBasis || "Basic + DA + Special Allowance")} onChange={(e) => updateStatutory(card.key, card.key === "pf" ? "wageBasis" : "contributionBasis", e.target.value)}><option>Basic + DA</option><option>Basic + DA + Special Allowance</option><option>Gross</option></select></label>}
-                      {card.key === "lwf" && <label><span>Contribution Frequency</span><select value={config.frequency} onChange={(e) => updateStatutory("lwf", "frequency", e.target.value)}><option>Monthly</option><option>Quarterly</option><option>Half-Yearly</option><option>Yearly</option></select></label>}
-                    </div>
-                  )}
-
-                  {card.key === "pf" && <div className="statutory-inline-options"><label><input type="checkbox" checked={Boolean(config.higherWageContribution)} onChange={(e) => updateStatutory("pf", "higherWageContribution", e.target.checked)} /> Calculate above the configured ceiling</label></div>}
-                  {card.key === "pf" && <div className="statutory-rule-note"><span>PF Calculation Basis</span><strong>{config.wageBasis || "Basic + DA + Special Allowance"}</strong><small>{config.higherWageContribution ? "Ceiling is informational; contribution continues on the selected wage basis." : `Contribution base is capped at ₹${Number(config.wageCeiling || 15000).toLocaleString("en-IN")}.`}</small></div>}
-                  {card.key === "esi" && <div className="statutory-rule-note"><span>ESI Calculation Basis</span><strong>{config.contributionBasis || "Basic + DA + Special Allowance"}</strong><small>ESI coverage is checked against the manually configured ceiling of ₹{Number(config.wageCeiling || 21000).toLocaleString("en-IN")}.</small></div>}
-                  {card.key === "lwf" && <div className="statutory-rule-note"><span>LWF Contribution</span><strong>Configured Employee + Employer Amount</strong><small>Contribution is applied according to the selected frequency.</small></div>}
-                  {card.key === "pt" && <div className="statutory-rule-note"><span>PT Calculation</span><strong>{config.mode === "Manual" ? "Manual Amount" : "State-wise Automatic"}</strong><small>{config.mode === "Manual" ? `₹${Number(config.manualAmount || 0).toLocaleString("en-IN")} per payroll month` : `${config.state}: ${PROFESSIONAL_TAX_RULES[config.state]?.label || "State rule not configured"}`}</small></div>}
-
-                  <div className="statutory-card-footer"><span>{config.enabled ? "Enabled for payroll" : "Disabled"}</span><span>{card.key === "pt" ? config.state : "Configurable rule"}</span></div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="statutory-test-card">
-            <div className="statutory-test-head">
-              <div><small className="payroll-eyebrow">LIVE RULE TEST</small><strong>Statutory Calculation Preview</strong><span>Test the configured PF / ESI engine before connecting it to final payroll.</span></div>
-              <span className="statutory-rule-version">{STATUTORY_RULE_VERSION}</span>
-            </div>
-            <div className="statutory-test-controls">
-              <label>Current Monthly Gross<input type="number" min="0" value={statutoryTestGross} onChange={(e) => setStatutoryTestGross(e.target.value)} /></label>
-              <div className="statutory-period-box" style={{border: "0", background: "transparent", padding: "0", minHeight: "34px"}}>
-                <small style={{marginBottom: "5px"}}>ESI Eligibility</small>
-                <strong style={{border: "1px solid #dce5ed", borderRadius: "7px", background: "#fbfdff", padding: "8px 10px", minHeight: "34px", boxSizing: "border-box"}}>ESI Wage ≤ ₹21,000 = Eligible</strong>
-              </div>
-              <div className="statutory-period-box" style={{border: "0", background: "transparent", padding: "0", minHeight: "34px"}}>
-                <small style={{marginBottom: "5px"}}>ESI Contribution Rates</small>
-                <strong style={{border: "1px solid #dce5ed", borderRadius: "7px", background: "#fbfdff", padding: "8px 10px", minHeight: "34px", boxSizing: "border-box"}}>Employee 0.75% | Employer 3.25%</strong>
-              </div>
-            </div>
-            <div className="statutory-result-grid" style={{rowGap: "18px"}}>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>Labour Code Wage</span><strong>{money(statutoryPreview.labourCodeWage)}</strong></div>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>PF Employee</span><strong>{money(statutoryPreview.pf.employee)}</strong><small>Base {money(statutoryPreview.pf.base)} · {statutorySettings.pf.wageBasis || "Basic + DA + Special Allowance"}</small></div>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>PF Employer</span><strong>{money(statutoryPreview.pf.employer)}</strong></div>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#1766a5", fontSize: "7px", fontWeight: 800}}>ESI Wage</span><strong>{money(statutoryPreview.esi.wage)}</strong><small>{statutorySettings.esi.contributionBasis || "Basic + DA + Special Allowance"}</small></div>
-              <div
-  className={statutoryPreview.esi.covered ? "result-success" : "result-muted"}
-  style={{
-    position: "relative",
-    marginTop: "10px",
-    ...(statutoryPreview.esi.covered
-      ? {}
-      : {
-          background: "#fff1f1",
-          border: "1px solid #f2b8b8",
-        }),
-  }}
->
-                <span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>ESI Status</span>
-                <strong
-                  style={
-                    statutoryPreview.esi.covered
-                      ? undefined
-                      : { color: "#c62828" }
-                  }
-                >
-                  {statutoryPreview.esi.covered ? "Covered" : "Not Covered"}
-                </strong>
-                <small>
-                  {statutoryPreview.esi.covered
-                    ? `Eligible · Wage ≤ ₹${Number(statutorySettings.esi.wageCeiling || 21000).toLocaleString("en-IN")}`
-                    : `Not eligible · ESI Wage > ₹${Number(statutorySettings.esi.wageCeiling || 21000).toLocaleString("en-IN")}`}
-                </small>
-              </div>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>ESI Employee</span><strong>{money(statutoryPreview.esi.employee)}</strong><small>Next-rupee rounding</small></div>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>ESI Employer</span><strong>{money(statutoryPreview.esi.employer)}</strong><small>Next-rupee rounding</small></div>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>LWF Employee</span><strong>{money(statutoryPreview.lwf.employee)}</strong><small>{statutoryPreview.lwf.frequency}</small></div>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>LWF Employer</span><strong>{money(statutoryPreview.lwf.employer)}</strong><small>{statutoryPreview.lwf.frequency}</small></div>
-              <div style={{position: "relative", marginTop: "10px"}}><span style={{position: "absolute", top: "-12px", left: "0", border: "0", background: "transparent", padding: "0", color: "#8295a5", fontSize: "7px", fontWeight: 800}}>PT</span><strong>{money(statutoryPTPreview.amount)}</strong><small>{statutoryPTPreview.reason}</small></div>
-            </div>
-          </div>
-
-          <div className="statutory-summary">
-            <div><small>EMPLOYEE MASTER</small><strong>PF / ESI / PT / LWF applicability</strong><span>Employee-level applicability remains controlled from employee statutory details.</span></div>
-            <div className="statutory-summary-tags"><span className="stat-tag pf">PF</span><span className="stat-tag esi">ESI</span><span className="stat-tag pt">PT</span><span className="stat-tag lwf">LWF</span></div>
-          </div>
-        </section>
-      );
-    }
-
-    if (activeSection === "deductions") {
+  const renderDeductions = () => {
       const deductionCards = [
         ["Loan / Advance", "Recovery schedule", "₹"],
         ["Food Deduction", "Attendance / meal based", "FD"],
@@ -8532,9 +8609,9 @@ const renderProcessing = () => {
           )}
         </section>
       );
-    }
+  };
 
-    if (activeSection === "ot") {
+  const renderOt = () => {
       const currentOTEntries =
         otEntries.filter(
           (item) => item.payrollMonth === payrollMonth
@@ -10813,22 +10890,85 @@ const renderProcessing = () => {
           )}
         </>
       );
-    }
+  };
+
+  const renderPayrollRun = () => (
+    <section className="payroll-card payroll-full-card"><div className="payroll-card-head"><div><small className="payroll-eyebrow">STEP 01 · PAYROLL RUN</small><h2>Payroll Run</h2><p>Create and control one monthly payroll cycle from start to finish.</p></div><button type="button" className="payroll-primary-btn" onClick={createOrOpenPayrollRun} disabled={payrollControl.locked}>{payrollRun?"Open Run":"Create Payroll Run"}</button></div>
+      <div className="payroll-run-header-grid"><div><span>Payroll Run</span><strong>{payrollRun?.id||`PAY-${String(payrollMonth).replace("-","")}`}</strong></div><div><span>Payroll Month</span><strong>{getPayrollMonthLabel()}</strong></div><div><span>Employees</span><strong>{employees.length}</strong></div><div><span>Status</span><strong>{payrollProcessingStatus}</strong></div></div>
+      <div className="payroll-sequence-card"><div className="sequence-title"><strong>Monthly Payroll Sequence</strong><small>Complete each stage in order. Locked months cannot be recalculated.</small></div>{[["01","Payroll Inputs","Attendance, salary, OT, arrear, deductions, IT declaration and third-party inputs.","inputs",true],["02","Payroll Calculation","Calculate employee-wise earnings, statutory deductions and net pay.","calculation",processedPayroll.length>0],["03","Validation & Approval","Review exceptions and approve the calculated payroll.","validation",["Finalized","Locked","Salary Released"].includes(payrollProcessingStatus)],["04","Payroll Lock","Freeze the month before salary release.","payroll-control",payrollControl.locked],["05","Salary Release","Release salary and make payslips available.","salary-release",salaryReleaseState.released]].map(([no,title,desc,target,done])=><button type="button" key={no} className={`payroll-sequence-row ${done?"done":""}`} onClick={()=>setActiveSection(target)}><span className="sequence-number">{no}</span><div><strong>{title}</strong><small>{desc}</small></div><b>{done?"✓ Done":target==="inputs"?"Start":"Pending"}</b></button>)}</div>
+    </section>
+  );
+
+  const renderPayrollInputs = () => {
+    const cards=[["attendance","Attendance","Paid days, LOP, leave, comp-off and OT hours.","✓"],["salary","Salary Inputs","Employee-wise gross and salary components for the selected month.","₹"],["ot","OT & Arrear","Additional earnings, overtime and prior-period adjustments.","↗"],["deductions","Deductions","Loan, food, recovery and other employee deductions.","−"],["it","IT Declaration","Tax regime and employee declaration status used for TDS.","IT"],["third-party","Third Party","Vendor manpower inputs and costing for off-roll employees.","♙"]];
+    if(inputSection==="attendance") return <div><button type="button" className="payroll-back-btn" onClick={()=>setInputSection("overview")}>← Back to Payroll Inputs</button>{renderMonthly()}</div>;
+    if(inputSection==="salary") return <div><button type="button" className="payroll-back-btn" onClick={()=>setInputSection("overview")}>← Back to Payroll Inputs</button>{renderSalary()}</div>;
+    if(inputSection==="ot") return <div><button type="button" className="payroll-back-btn" onClick={()=>setInputSection("overview")}>← Back to Payroll Inputs</button>{renderOt()}</div>;
+    if(inputSection==="deductions") return <div><button type="button" className="payroll-back-btn" onClick={()=>setInputSection("overview")}>← Back to Payroll Inputs</button>{renderDeductions()}</div>;
+    if(inputSection==="it") return <div><button type="button" className="payroll-back-btn" onClick={()=>setInputSection("overview")}>← Back to Payroll Inputs</button>{renderITDeclaration()}</div>;
+    if(inputSection==="third-party") return <div><button type="button" className="payroll-back-btn" onClick={()=>setInputSection("overview")}>← Back to Payroll Inputs</button>{renderVendor()}</div>;
+    return <section className="payroll-card payroll-full-card"><div className="payroll-card-head"><div><small className="payroll-eyebrow">STEP 02 · PAYROLL INPUTS</small><h2>Payroll Inputs</h2><p>Complete all monthly inputs before starting payroll calculation.</p></div><span className="payroll-month-chip">{getPayrollMonthLabel()}</span></div><div className="payroll-input-card-grid">{cards.map(([id,title,desc,icon])=><button type="button" className="payroll-input-card" key={id} onClick={()=>setInputSection(id)}><span>{icon}</span><div><strong>{title}</strong><small>{desc}</small></div><b>Open →</b></button>)}</div><div className="payroll-input-summary"><div><span>Employees</span><strong>{employees.length}</strong></div><div><span>Salary Ready</span><strong>{employeesWithSalary}/{employees.length}</strong></div><div><span>Attendance</span><strong>{attendanceReady?"Available":"Pending"}</strong></div><div><span>IT Declaration</span><strong>{itDeclaration.status}</strong></div></div><div className="payroll-next-action"><div><strong>Next Step</strong><small>Once inputs are complete, move to Payroll Calculation.</small></div><button type="button" className="payroll-primary-btn" onClick={()=>setActiveSection("calculation")}>Go to Calculation →</button></div></section>;
+  };
+
+  const renderPayrollCalculation = () => {
+    const calculated=processedPayroll.length>0,totalGross=calculated?processedPayroll.reduce((x,r)=>x+Number(r.gross||0),0):dashboardTotalGross,totalNet=calculated?processedPayroll.reduce((x,r)=>x+Number(r.netPayable||0),0):0,totalPF=calculated?processedPayroll.reduce((x,r)=>x+Number(r.pf||0),0):0,totalESI=calculated?processedPayroll.reduce((x,r)=>x+Number(r.esi||0),0):0,totalPT=calculated?processedPayroll.reduce((x,r)=>x+Number(r.pt||0),0):0,totalLWF=calculated?processedPayroll.reduce((x,r)=>x+Number(r.lwfEmployee||0),0):0;
+    return <section className="payroll-card payroll-full-card"><div className="payroll-card-head"><div><small className="payroll-eyebrow">STEP 03 · PAYROLL CALCULATION</small><h2>Payroll Calculation</h2><p>Calculate the selected month using approved organization and Policy Management rules.</p></div><button type="button" className="payroll-primary-btn" onClick={processCurrentPayroll} disabled={payrollControl.locked}>{payrollControl.locked?"Payroll Locked":calculated?"Recalculate Payroll":"Calculate Payroll"}</button></div><div className="payroll-policy-reference"><span>Rule source</span><strong>Organization & Policy Management</strong><small>Payroll only consumes approved rules. PF, ESI, PT, LWF and other policies are not configured in Payroll.</small></div><div className="payroll-calculation-cards"><div><span>Employees</span><strong>{calculated?processedPayroll.length:employees.length}</strong></div><div><span>Gross</span><strong>{money(totalGross)}</strong></div><div><span>PF</span><strong>{money(totalPF)}</strong></div><div><span>ESI</span><strong>{money(totalESI)}</strong></div><div><span>PT / LWF</span><strong>{money(totalPT+totalLWF)}</strong></div><div><span>Net Payable</span><strong>{money(totalNet)}</strong></div></div>{calculated?<><div className="payroll-card-head compact"><div><small className="payroll-eyebrow">CALCULATED REGISTER</small><h3>Employee Payroll Calculation</h3></div><span className="payroll-status processed">Calculated</span></div><div className="payroll-table-scroll"><table className="payroll-register-table"><thead><tr><th>Employee</th><th>Gross</th><th>Paid Days</th><th>LOP</th><th>OT</th><th>PF</th><th>ESI</th><th>PT</th><th>Other Ded.</th><th>Net Pay</th></tr></thead><tbody>{processedPayroll.map(r=><tr key={r.employeeId}><td><strong>{r.employeeName}</strong><small>{r.employeeCode}</small></td><td>{money(r.gross)}</td><td>{r.paidDays}</td><td>{r.lopDays}</td><td>{money(r.otAmount)}</td><td>{money(r.pf)}</td><td>{money(r.esi)}</td><td>{money(r.pt)}</td><td>{money(r.totalOtherDeductions)}</td><td><strong>{money(r.netPayable)}</strong></td></tr>)}</tbody></table></div><div className="payroll-next-action"><div><strong>Calculation complete</strong><small>Review the register, then continue to Validation & Approval.</small></div><button type="button" className="payroll-primary-btn" onClick={()=>setActiveSection("validation")}>Continue to Validation →</button></div></>:<div className="payroll-empty-state"><strong>Payroll not calculated yet</strong><span>Complete Payroll Inputs and click Calculate Payroll.</span></div>}</section>;
+  };
+
+  const renderValidationApproval = () => {
+    const checks=[["Employee Master",employees.length>0,employees.length?`${employees.length} employee(s) loaded`:"No employees loaded"],["Attendance",attendanceReady,attendanceReady?"Attendance data available":"Attendance data missing"],["Salary Inputs",salaryReady,salaryReady?"All employee salary inputs are available":`${Math.max(0,employees.length-employeesWithSalary)} employee(s) missing salary`],["Payroll Calculation",processedPayroll.length>0,processedPayroll.length?`${processedPayroll.length} employee(s) calculated`:"Payroll calculation pending"],["Critical Exceptions",processedPayroll.length>0&&processedPayroll.every(r=>Number(r.gross||0)>0),processedPayroll.length?"No zero-gross calculated employees":"Calculation required"]];
+    const allReady=checks.every(x=>x[1]),approved=["Finalized","Locked","Salary Released"].includes(payrollProcessingStatus);
+    return <section className="payroll-card payroll-full-card"><div className="payroll-card-head"><div><small className="payroll-eyebrow">STEP 04 · VALIDATION & APPROVAL</small><h2>Payroll Validation & Approval</h2><p>Every critical payroll check must pass before the month can be approved and locked.</p></div><button type="button" className="payroll-primary-btn" disabled={!allReady||payrollControl.locked} onClick={finalizeCurrentPayroll}>{approved?"Payroll Approved":"Approve Payroll"}</button></div><div className="payroll-validation-grid">{checks.map(([label,ok,detail])=><div className={ok?"valid":"exception"} key={label}><span>{ok?"✓":"!"}</span><div><strong>{label}</strong><small>{detail}</small></div><b>{ok?"Passed":"Action Required"}</b></div>)}</div><div className="payroll-approval-summary"><div><span>Payroll Month</span><strong>{getPayrollMonthLabel()}</strong></div><div><span>Calculated</span><strong>{processedPayroll.length}</strong></div><div><span>Approval</span><strong>{approved?"Approved":"Pending"}</strong></div><div><span>Next Step</span><strong>{approved?"Payroll Lock":"Review & Approve"}</strong></div></div><div className="payroll-next-action"><div><strong>{approved?"Payroll approved":allReady?"Ready for approval":"Payroll has pending validation items"}</strong><small>{approved?"Proceed to Payroll Lock.":"Resolve all critical exceptions before approval."}</small></div><button type="button" className="payroll-secondary-btn" onClick={()=>setActiveSection("calculation")}>Back to Calculation</button></div></section>;
+  };
+
+  const renderPayslipsBank = () => <section className="payroll-card payroll-full-card"><div className="payroll-card-head"><div><small className="payroll-eyebrow">STEP 08 · EMPLOYEE PAYMENT</small><h2>Payslips & Bank</h2><p>Complete employee communication and payment processing after salary release.</p></div></div><div className="payroll-output-grid"><button type="button" className="payroll-output-card" onClick={()=>setActiveSection("payslip")}><span>▥</span><div><strong>Payslips</strong><small>Generate and release employee salary slips.</small></div><b>Open →</b></button><button type="button" className="payroll-output-card" onClick={()=>setActiveSection("bank-payment")}><span>₹</span><div><strong>Bank Payment</strong><small>Review bank transfer data and payment status.</small></div><b>Open →</b></button></div><div className="payroll-output-summary"><div><span>Payroll Status</span><strong>{payrollProcessingStatus}</strong></div><div><span>Salary Release</span><strong>{salaryReleaseState.released?"Released":"Pending"}</strong></div><div><span>Payslips</span><strong>{processedPayroll.length}</strong></div><div><span>Payment Mode</span><strong>Bank Transfer</strong></div></div></section>;
+
+  const renderContent = () => {
+    if (activeSection === "salary-register") return renderSalaryRegister();
+    if (activeSection === "payslip") return renderPayslip();
+    if (activeSection === "bank-payment") return renderBankPayment();
+    if (activeSection === "vendor-billing") return renderVendorBilling();
+    if (activeSection === "pf-esi-report") return renderPFESIReport();
+    if (activeSection === "lop-report") return renderLOPReport();
+    if (activeSection === "dashboard") return renderDashboard();
+    if (activeSection === "run") return renderPayrollRun();
+    if (activeSection === "inputs") return renderPayrollInputs();
+    if (activeSection === "calculation") return renderPayrollCalculation();
+    if (activeSection === "validation") return renderValidationApproval();
+    if (activeSection === "payroll-control") return renderPayrollControl();
+    if (activeSection === "salary-release") return renderSalaryRelease();
+    if (activeSection === "payslips-bank") return renderPayslipsBank();
+    if (activeSection === "monthly") return renderMonthly();
+    if (activeSection === "processing") return renderProcessing();
+    if (activeSection === "vendor") return renderVendor();
+    if (activeSection === "salary") return renderSalary();
+    if (activeSection === "deductions") return renderDeductions();
+    if (activeSection === "ot") return renderOt();
+    if (activeSection === "statutory") return renderPayrollCalculation();
 
     return renderSimpleModule("Payroll Reports", "REPORTING", "Payroll reports will use the finalized payroll register and statutory data.", [
       ["Salary Register", "Employee-wise monthly register", "▤"], ["Payslip", "Individual employee payslip", "▥"], ["Bank Payment", "Bank transfer statement", "₹"], ["Vendor Billing", "Third-party invoice costing", "♙"], ["PF / ESI Report", "Statutory report", "▣"], ["LOP Report", "Unpaid days review", "A"],
     ]);
   };
 
+  const payrollSectionLabels = {
+    "salary-register": "Salary Register",
+    payslip: "Payslips",
+    "bank-payment": "Bank Payment",
+    "vendor-billing": "Vendor Costing",
+    "pf-esi-report": "Statutory Report",
+    "lop-report": "LOP Report",
+  };
+
   return (
     <div className="payroll-page">
       <div className="payroll-page-head">
         <div>
-          <div className="payroll-breadcrumb">Payroll <span>/</span> {payrollMenu.find((item) => item.id === activeSection)?.label}</div>
+          <div className="payroll-breadcrumb">Payroll <span>/</span> {payrollMenu.find((item) => item.id === activeSection)?.label || payrollSectionLabels[activeSection] || "Payroll Reports"}</div>
           <div className="payroll-title-row">
             <div>
               <h1>Payroll <span>Management</span></h1>
-              <p>Manage salary processing, statutory deductions, third-party costing and payroll reports.</p>
+              <p>Run monthly payroll from inputs to calculation, approval, lock, salary release and reports.</p>
             </div>
             <div className="payroll-head-actions">
               <select
@@ -10856,9 +10996,9 @@ const renderProcessing = () => {
               <span>{item.label}</span>
             </button>
           ))}
-          <div className="payroll-policy-note">
-            <span>✓</span>
-            <div><strong>Policy Driven</strong><small>Payroll rules will be controlled through Organisation policies.</small></div>
+          <div className={`payroll-sidebar-status ${payrollControl.locked ? "locked" : "open"}`}>
+            <span>{payrollControl.locked ? "🔒" : "✓"}</span>
+            <div><strong>{payrollControl.locked ? "Payroll Locked" : "Payroll Open"}</strong><small>{getPayrollMonthLabel()} · {payrollProcessingStatus}</small></div>
           </div>
         </aside>
 

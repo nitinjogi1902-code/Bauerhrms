@@ -1281,6 +1281,7 @@ export default function Employees({ employees: initialEmployees = [], currentUse
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [previewEmployee, setPreviewEmployee] = useState(null);
+  const [previewTab, setPreviewTab] = useState("Overview");
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [accessEmployee, setAccessEmployee] = useState(null);
   const [accessAccount, setAccessAccount] = useState(null);
@@ -1740,6 +1741,7 @@ const transferRecord = {
   };
   const openPreview = async (employee) => {
     setPreviewEmployee(employee);
+    setPreviewTab("Overview");
     setPreviewDocuments([]);
 
     try {
@@ -2926,396 +2928,322 @@ const transferRecord = {
           </div>
         </div>
       )}
-            {/* EMPLOYEE PROFILE PREVIEW */}
-      {previewEmployee && (
-        <div
-          className="employee-profile-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setPreviewEmployee(null);
-            }
-          }}
-        >
-          <div className="employee-profile-modal">
+                                    {/* EMPLOYEE PROFILE PREVIEW */}
+      {previewEmployee && (() => {
+        const p = previewEmployee;
+        const tabs = [
+          ["Overview", "⌂"], ["Personal", "♙"], ["Employment", "▣"],
+          ["Compensation", "₹"], ["Documents", "▤"], ["Attendance", "◷"],
+          ["Leaves", "◒"], ["Training", "◇"], ["Performance", "★"],
+          ["Payroll", "▥"], ["History", "↔"],
+        ];
+        const value = (...keys) => {
+          for (const key of keys) if (hasQualityValue(p?.[key])) return p[key];
+          return "—";
+        };
+        const money = (...keys) => {
+          const v = value(...keys);
+          if (v === "—") return v;
+          const n = Number(String(v).replace(/[₹,]/g, ""));
+          return Number.isFinite(n) ? formatINR(n) : v;
+        };
+        const F = (label, val) => (
+          <div><span>{label}</span><strong>{hasQualityValue(val) ? val : "—"}</strong></div>
+        );
+        const quality = calculateEmployeeQuality(p, previewDocuments);
+        const closePreview = () => setPreviewEmployee(null);
+        const edit = () => { const employee = p; setPreviewEmployee(null); openEdit(employee); };
+        const transfer = () => {
+          setTransferForm({
+            toLocation: "",
+            transferDate: new Date().toISOString().split("T")[0],
+            reason: "",
+            remarks: "",
+          });
+          setShowTransferModal(true);
+        };
 
-            {/* HEADER */}
-            <div className="employee-profile-header">
-              <div className="employee-profile-identity">
-
-                <div
-                  className={`employee-profile-photo ${
-                    previewEmployee.photo ? "photo-clickable" : ""
-                  }`}
-                  onClick={() => {
-                    if (previewEmployee.photo) {
-                      setPhotoPreview(previewEmployee.photo);
-                    }
-                  }}
-                >
-                  {previewEmployee.photo ? (
-                    <img
-                      src={previewEmployee.photo}
-                      alt={previewEmployee.name || "Employee"}
-                    />
-                  ) : (
-                    <span>
-                      {(previewEmployee.name || "E")
-                        .charAt(0)
-                        .toUpperCase()}
-                    </span>
-                  )}
-                </div>
-
-                <div className="employee-profile-heading">
-                  <div className="employee-profile-id">
-                    {previewEmployee.employeeId || "—"}
-                  </div>
-
-                  <h2>{previewEmployee.name || "—"}</h2>
-
-                  <div className="employee-profile-designation">
-                    {previewEmployee.designation || "—"}
-                  </div>
-
-                  <div className="employee-profile-meta">
-                    <span>🏢 {previewEmployee.department || "—"}</span>
-                    <span>📍 {previewEmployee.location || "—"}</span>
-                    <span>📅 DOJ: {previewEmployee.doj || "—"}</span>
-                  </div>
-                </div>
-
-              </div>
-
-              <div className="employee-profile-header-right">
-
-                <span
-                  className={`status-badge ${
-                    previewEmployee.status === "Active"
-                      ? "active"
-                      : "inactive"
-                  }`}
-                >
-                  {previewEmployee.status || "Active"}
-                </span>
-
-                <button
-                  type="button"
-                  className="employee-profile-close"
-                  onClick={() => setPreviewEmployee(null)}
-                >
-                  ×
-                </button>
-
-              </div>
-            </div>
-
-            {/* QUICK SUMMARY */}
-            <div className="employee-profile-summary">
-
+        const Card = ({ kicker, title, action, children, className = "" }) => (
+          <div className={`employee-preview-panel ${className}`}>
+            <div className="employee-preview-card-head">
               <div>
-                <small>Employee Type</small>
-                <strong>{previewEmployee.employmentType || "—"}</strong>
+                <div className="employee-preview-card-kicker">{kicker}</div>
+                <h3>{title}</h3>
               </div>
-
-              <div>
-                <small>Employee Group</small>
-                <strong>{previewEmployee.employeeGroup || "—"}</strong>
-              </div>
-
-              <div>
-                <small>Job Type</small>
-                <strong>{previewEmployee.jobType || "—"}</strong>
-              </div>
-
-              <div>
-                <small>Vendor / Contractor</small>
-                <strong>{previewEmployee.vendor || "—"}</strong>
-              </div>
-
+              {action}
             </div>
-
-            {/* PROFILE OVERVIEW */}
-            <div className="employee-profile-section">
-
-              <div className="employee-profile-section-title">
-                Profile Overview
-              </div>
-
-              <div className="employee-profile-grid">
-
-                <div>
-                  <span>Employee ID</span>
-                  <strong>{previewEmployee.employeeId || "—"}</strong>
-                </div>
-
-                <div>
-                  <span>Employee Name</span>
-                  <strong>{previewEmployee.name || "—"}</strong>
-                </div>
-
-                <div>
-                  <span>Department</span>
-                  <strong>{previewEmployee.department || "—"}</strong>
-                </div>
-
-                <div>
-                  <span>Designation</span>
-                  <strong>{previewEmployee.designation || "—"}</strong>
-                </div>
-
-                <div>
-                  <span>Location</span>
-                  <strong>{previewEmployee.location || "—"}</strong>
-                </div>
-
-                <div>
-                  <span>Branch</span>
-                  <strong>{previewEmployee.branch || "—"}</strong>
-                </div>
-
-                <div>
-                  <span>Shift</span>
-                  <strong>{previewEmployee.shift || "—"}</strong>
-                </div>
-
-                <div>
-                  <span>Employment Type</span>
-                  <strong>{previewEmployee.employmentType || "—"}</strong>
-                </div>
-
-              </div>
-
-            </div>
-
-            {/* ACTIONS */}
-<div className="employee-profile-actions">
-
-  <button
-    type="button"
-    onClick={() => {
-      const employee = previewEmployee;
-      setPreviewEmployee(null);
-      openEdit(employee);
-    }}
-  >
-    ✎ Edit Profile
-  </button>
-
-<button
-  type="button"
-  onClick={() => {
-    setTransferForm({
-      toLocation: "",
-      transferDate: new Date().toISOString().split("T")[0],
-      reason: "",
-      remarks: "",
-    });
-
-    setShowTransferModal(true);
-  }}
->
-  ⇄ Transfer Employee
-</button>
-  <button
-    type="button"
-    onClick={() => setPreviewEmployee(null)}
-  >
-    Close
-  </button>
-
-</div>
-
-
-{/* ================= HR DATA QUALITY CHECK ================= */}
-
-{previewEmployee && (() => {
-  const quality = calculateEmployeeQuality(previewEmployee, previewDocuments);
-
-  return (
-    <div className="employee-profile-section quality-check-section">
-
-      <div className="employee-profile-section-title">
-        HR Data Quality Check
-      </div>
-
-      <div className="quality-check-header">
-
-        <div className="quality-score">
-          <strong>{quality.score}%</strong>
-          <span>Overall Data Quality</span>
-        </div>
-
-        <div className="quality-summary">
-          {quality.score >= 90
-            ? "Excellent"
-            : quality.score >= 70
-            ? "Good — Some information needs attention"
-            : "Attention Required"}
-        </div>
-
-      </div>
-
-      <div className="quality-check-list">
-
-        {quality.checks.map((check) => (
-          <div
-            className={`quality-check-item ${
-              check.complete
-                ? "quality-complete"
-                : "quality-warning"
-            }`}
-            key={check.name}
-          >
-
-            <div className="quality-check-icon">
-              {check.complete ? "✓" : "!"}
-            </div>
-
-            <div className="quality-check-name">
-              {check.name}
-            </div>
-
-            <div className="quality-check-progress">
-              {check.completed}/{check.total}
-            </div>
-
-            <div className="quality-check-status">
-              {check.complete ? "Complete" : "Attention"}
-            </div>
-
+            {children}
           </div>
-        ))}
+        );
 
-      </div>
+        const Grid = ({ children, wide = false }) => (
+          <div className={`employee-preview-grid ${wide ? "employee-preview-grid-3" : "employee-preview-grid-2"}`}>
+            {children}
+          </div>
+        );
 
-    </div>
-  );
-})()}
+        const moduleDetails = {
+          Attendance: [
+            ["Employee ID", p.employeeId], ["Employee Name", p.name], ["Location", p.location],
+            ["Shift", p.shift], ["Employee Type", p.employmentType], ["Status", p.status || "Active"],
+          ],
+          Leaves: [
+            ["Employee ID", p.employeeId], ["Employee Name", p.name], ["Employee Group", p.employeeGroup],
+            ["Department", p.department], ["Location", p.location], ["Status", p.status || "Active"],
+          ],
+          Training: [
+            ["Employee ID", p.employeeId], ["Employee Name", p.name], ["Department", p.department],
+            ["Designation", p.designation], ["Employment Type", p.employmentType], ["Location", p.location],
+          ],
+          Performance: [
+            ["Employee ID", p.employeeId], ["Employee Name", p.name], ["Department", p.department],
+            ["Designation", p.designation], ["Employee Group", p.employeeGroup], ["Status", p.status || "Active"],
+          ],
+        };
 
+        const moduleText = {
+          Attendance: ["ATTENDANCE", "Attendance records remain managed in the Attendance module."],
+          Leaves: ["LEAVE MANAGEMENT", "Leave balances and requests remain managed in the Leave module."],
+          Training: ["LEARNING & DEVELOPMENT", "Training records remain managed in the Training module."],
+          Performance: ["PMS", "Performance and appraisal records remain managed in the PMS module."],
+        };
 
-{/* ================= TRANSFER HISTORY ================= */}
+        const renderOverview = () => (
+          <>
+            <div className="employee-preview-overview-grid">
+              <Card kicker="EMPLOYEE INFORMATION" title="Profile Summary">
+                <Grid>
+                  {F("Employee ID", p.employeeId)}{F("Employee Name", p.name)}
+                  {F("Department", p.department)}{F("Designation", p.designation)}
+                  {F("Reporting Manager", value("reportingManager", "hodName"))}
+                  {F("Employment Type", p.employmentType)}{F("Employee Group", p.employeeGroup)}
+                  {F("Job Type", p.jobType)}{F("Vendor / Contractor", p.vendor)}
+                  {F("DOJ", p.doj)}{F("Location", p.location)}{F("Shift", p.shift)}
+                  {F("Work Email", p.officialEmail)}{F("Personal Email", p.personalEmail)}
+                  {F("Mobile", p.mobile)}
+                  {F("Status", <em className={`employee-preview-status ${String(p.status || "Active").toLowerCase() === "active" ? "active" : "inactive"}`}>{p.status || "Active"}</em>)}
+                </Grid>
+              </Card>
 
-{previewEmployee && (
-  <div className="employee-profile-section transfer-history-section">
-
-    <div className="employee-profile-section-title">
-      Transfer History
-    </div>
-
-    <div className="transfer-current-card">
-
-      <div>
-        <span>Current Location</span>
-        <strong>
-          {previewEmployee.location || "—"}
-        </strong>
-      </div>
-
-      <div>
-        <span>Total Transfers</span>
-        <strong>
-          {Array.isArray(previewEmployee.transferHistory)
-            ? previewEmployee.transferHistory.length
-            : 0}
-        </strong>
-      </div>
-
-      <div>
-        <span>Current Status</span>
-        <strong>
-          {previewEmployee.status || "Active"}
-        </strong>
-      </div>
-
-    </div>
-
-
-    {Array.isArray(previewEmployee.transferHistory) &&
-    previewEmployee.transferHistory.length > 0 ? (
-
-      <div className="transfer-history-list">
-
-        {previewEmployee.transferHistory
-          .slice()
-          .reverse()
-          .map((transfer, index) => (
-
-            <div
-              className="transfer-history-item"
-              key={index}
-            >
-
-             <div className="transfer-history-date">
-  <span>Transfer ID</span>
-  <strong>
-    {transfer.transferCode || "—"}
-  </strong>
-</div>
-
-<div className="transfer-history-date">
-  <span>Date</span>
-  <strong>
-    {transfer.date || "—"}
-  </strong>
-</div>
-
-              <div className="transfer-history-route">
-
-                <div>
-                  <span>From</span>
-                  <strong>
-                    {transfer.fromLocation || "—"}
-                  </strong>
+              <Card
+                kicker="PERSONAL PROFILE"
+                title="Photo & Basic Info"
+                action={<button type="button" className="employee-preview-outline-btn" onClick={edit}>Change Photo</button>}
+                className="employee-preview-photo-card"
+              >
+                <div className="employee-preview-photo-content">
+                  <div className={`employee-preview-large-photo ${p.photo ? "photo-clickable" : ""}`} onClick={() => p.photo && setPhotoPreview(p.photo)}>
+                    {p.photo ? <img src={p.photo} alt={p.name || "Employee"} /> : <span>{(p.name || "E").charAt(0).toUpperCase()}</span>}
+                  </div>
+                  <Grid>
+                    {F("Full Name", p.name)}{F("Date of Birth", p.dob)}{F("Gender", p.gender)}
+                    {F("Blood Group", p.bloodGroup)}{F("Marital Status", value("maritalStatus"))}
+                    {F("Father's Name", p.fatherName)}{F("Nationality", value("nationality") || "Indian")}
+                    {F("Aadhaar", p.aadhaar)}{F("PAN", p.pan)}{F("Address", p.currentAddress)}
+                  </Grid>
                 </div>
+              </Card>
 
-                <div className="transfer-arrow">
-                  →
+              <Card kicker="ACTIONS" title="Quick Actions" className="employee-preview-quick-actions">
+                <div className="employee-preview-action-grid">
+                  <button type="button" onClick={edit}><span>✎</span>Edit Profile</button>
+                  <button type="button" onClick={transfer}><span>⇄</span>Transfer</button>
+                  <button type="button" onClick={() => setPreviewTab("Documents")}><span>▤</span>Update Documents</button>
+                  <button type="button" onClick={() => setPreviewTab("History")}><span>◷</span>View Timeline</button>
                 </div>
-
-                <div>
-                  <span>To</span>
-                  <strong>
-                    {transfer.toLocation || "—"}
-                  </strong>
-                </div>
-
-              </div>
-
-
-              <div className="transfer-history-reason">
-
-                <span>Reason</span>
-
-                <strong>
-                  {transfer.reason || "—"}
-                </strong>
-
-              </div>
-
+              </Card>
             </div>
 
-          ))}
+            <Card kicker="DATA QUALITY" title="HR Data Quality Check" className="employee-preview-quality-card">
+              <div className="employee-preview-quality-summary">
+                <div className="employee-preview-quality-score">
+                  <div className="employee-preview-quality-ring" style={{ "--quality-value": `${quality.score * 3.6}deg` }}>
+                    <span>{quality.score}%</span>
+                  </div>
+                  <div><strong>Overall Data Quality</strong><small>{quality.score >= 90 ? "Excellent" : quality.score >= 70 ? "Good — Some information needs attention" : "Attention Required"}</small></div>
+                </div>
+                <div className="employee-preview-quality-grid">
+                  {quality.checks.map((check) => (
+                    <div className="employee-preview-quality-item" key={check.name}>
+                      <span className={check.complete ? "complete" : "warning"}>{check.complete ? "✓" : "!"}</span>
+                      <div><strong>{check.name}</strong><small>{check.completed}/{check.total}</small></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
 
-      </div>
+            <div className="employee-preview-two-column">
+              <Card kicker="EMPLOYMENT" title="Employment Details" action={<button type="button" className="employee-preview-link-btn" onClick={edit}>Edit</button>}>
+                <Grid wide>
+                  {F("Company", value("company", "organizationName") || "BAUER")}{F("Branch", p.branch)}
+                  {F("Department", p.department)}{F("Designation", p.designation)}{F("Employee Group", p.employeeGroup)}
+                  {F("Employment Type", p.employmentType)}{F("Job Type", p.jobType)}{F("Location", p.location)}
+                  {F("DOJ", p.doj)}{F("Confirmation Date", value("confirmationDate"))}
+                  {F("Probation Period", value("probationPeriod"))}{F("Notice Period", value("noticePeriod"))}
+                </Grid>
+              </Card>
+              <Card kicker="COMPENSATION" title="Compensation Details" action={<button type="button" className="employee-preview-link-btn" onClick={edit}>Edit</button>}>
+                <Grid>
+                  {F("Payroll Profile", value("payrollProfile", "payrollProfileName"))}
+                  {F("CTC (Annual)", money("ctc", "ctcAnnual", "annualCtc"))}
+                  {F("Basic (Monthly)", money("basic", "basicMonthly"))}{F("HRA", money("hra", "hraMonthly"))}
+                  {F("Special Allowance", money("specialAllowance"))}{F("Other Allowances", money("otherAllowances", "otherAllowance"))}
+                  {F("Deduction Profile", value("deductionProfile", "deductionProfileName"))}
+                  {F("Bank Name", p.bankName)}{F("Account Number", maskAccount(p.bankAccountNumber))}{F("IFSC Code", p.bankIfsc)}
+                </Grid>
+              </Card>
+            </div>
+          </>
+        );
 
-    ) : (
+        const renderPersonal = () => (
+          <Card kicker="PERSONAL INFORMATION" title="Personal Details" action={<button type="button" className="employee-preview-link-btn" onClick={edit}>Edit</button>}>
+            <Grid wide>
+              {F("Employee ID", p.employeeId)}{F("Full Name", p.name)}{F("Father's Name", p.fatherName)}
+              {F("Date of Birth", p.dob)}{F("Gender", p.gender)}{F("Blood Group", p.bloodGroup)}
+              {F("Marital Status", value("maritalStatus"))}{F("Mobile", p.mobile)}{F("Official Email", p.officialEmail)}
+              {F("Personal Email", p.personalEmail)}{F("Nationality", value("nationality") || "Indian")}
+              {F("PAN", p.pan)}{F("Aadhaar", p.aadhaar)}
+            </Grid>
+            <div className="employee-preview-subsection"><h4>Address Details</h4><Grid>{F("Current Address", p.currentAddress)}{F("Current State", p.currentState)}{F("Current PIN Code", p.currentPinCode)}{F("Permanent Address", p.permanentAddress)}{F("Permanent State", p.permanentState)}{F("Permanent PIN Code", p.permanentPinCode)}</Grid></div>
+            <div className="employee-preview-subsection"><h4>Education & Previous Employment</h4><Grid wide>{F("Highest Qualification", p.highestQualification)}{F("Specialization", p.qualificationSpecialization)}{F("Passing Year", p.qualificationPassingYear)}{F("Last Organization", p.lastOrganization)}{F("Last Designation", p.lastDesignation)}{F("Previous Employment", `${p.lastEmploymentStart || "—"} to ${p.lastEmploymentEnd || "—"}`)}</Grid></div>
+          </Card>
+        );
 
-      <div className="no-transfer-history">
-        No transfer history available for this employee.
-      </div>
+        const renderEmployment = () => (
+          <Card kicker="WORKFORCE DETAILS" title="Employment Details" action={<button type="button" className="employee-preview-link-btn" onClick={edit}>Edit</button>}>
+            <Grid wide>
+              {F("Company", value("company", "organizationName") || "BAUER")}{F("Branch", p.branch)}{F("Employee ID", p.employeeId)}
+              {F("Employee Group", p.employeeGroup)}{F("Employment Type", p.employmentType)}{F("Job Type", p.jobType)}
+              {F("Department", p.department)}{F("Designation", p.designation)}{F("Location", p.location)}
+              {F("Shift", p.shift)}{F("Vendor / Contractor", p.vendor)}{F("Date of Joining", p.doj)}
+              {F("Confirmation Date", value("confirmationDate"))}{F("Probation Period", value("probationPeriod"))}{F("Notice Period", value("noticePeriod"))}
+              {F("Status", p.status || "Active")}
+            </Grid>
+            <div className="employee-preview-subsection"><h4>Previous Employment</h4><Grid wide>{F("Last Organization", p.lastOrganization)}{F("Last Designation", p.lastDesignation)}{F("Start Date", p.lastEmploymentStart)}{F("End Date", p.lastEmploymentEnd)}</Grid></div>
+          </Card>
+        );
 
-    )}
+        const renderCompensation = () => (
+          <div className="employee-preview-two-column">
+            <Card kicker="SALARY" title="Compensation Details" action={<button type="button" className="employee-preview-link-btn" onClick={edit}>Edit</button>}>
+              <Grid>{F("Payroll Profile", value("payrollProfile", "payrollProfileName"))}{F("CTC (Annual)", money("ctc", "ctcAnnual", "annualCtc"))}{F("Basic (Monthly)", money("basic", "basicMonthly"))}{F("HRA", money("hra", "hraMonthly"))}{F("Special Allowance", money("specialAllowance"))}{F("Other Allowances", money("otherAllowances", "otherAllowance"))}{F("Deduction Profile", value("deductionProfile", "deductionProfileName"))}</Grid>
+            </Card>
+            <Card kicker="BANKING" title="Bank Details">
+              <Grid>{F("Account Name", p.bankAccountName)}{F("Bank Name", p.bankName)}{F("Account Number", maskAccount(p.bankAccountNumber))}{F("IFSC Code", p.bankIfsc)}{F("Bank Branch", p.bankBranch)}{F("Gratuity Category", p.gratuityCategory)}{F("Gratuity Applicable", p.gratuityApplicable ? "Yes" : "No")}{F("Gratuity Wage", money("gratuityWage"))}</Grid>
+            </Card>
+          </div>
+        );
 
-  </div>
-)}
+        const renderDocuments = () => (
+          <Card kicker="EMPLOYEE DOCUMENTS" title="Documents" action={<span className="employee-preview-count">{previewDocuments.length} Attached</span>}>
+            {previewDocuments.length ? <div className="employee-preview-doc-list">
+              {previewDocuments.map((doc) => (
+                <div className="employee-preview-doc-row" key={doc.id}>
+                  <div className="employee-preview-doc-icon">▤</div>
+                  <div className="employee-preview-doc-info"><strong>{doc.name || "Document"}</strong><span>{doc.type || "Other"} · {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString("en-IN") : "Date not available"}</span></div>
+                  <div className="employee-preview-doc-actions">
+                    <button type="button" onClick={() => downloadBlob(doc, p.employeeId, p.name)}>Download</button>
+                    <button type="button" className="danger" onClick={async () => {
+                      if (!window.confirm(`Delete ${doc.name || "this document"}?`)) return;
+                      try {
+                        await deleteDocumentBlob(doc.id, organizationId);
+                        setPreviewDocuments((current) => current.filter((item) => item.id !== doc.id));
+                      } catch (error) { window.alert(error?.message || "Unable to delete document."); }
+                    }}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div> : <div className="employee-preview-empty">No documents attached for this employee.</div>}
+            <div className="employee-preview-note">Use <b>Update Documents</b> from Quick Actions to upload or replace documents using the existing Employee Master workflow.</div>
+          </Card>
+        );
 
+        const renderHistory = () => (
+          <Card kicker="EMPLOYEE MOVEMENT" title="Transfer History" action={<span className="employee-preview-count">{Array.isArray(p.transferHistory) ? p.transferHistory.length : 0} Transfers</span>}>
+            <div className="employee-preview-stat-strip">{F("Current Location", p.location)}{F("Total Transfers", Array.isArray(p.transferHistory) ? p.transferHistory.length : 0)}{F("Current Status", p.status || "Active")}</div>
+            {Array.isArray(p.transferHistory) && p.transferHistory.length ? <div className="employee-preview-transfer-list">
+              {p.transferHistory.slice().reverse().map((t, i) => (
+                <div className="employee-preview-transfer-item" key={t.transferCode || i}>
+                  {F("Transfer ID", t.transferCode)}{F("Date", t.date)}
+                  <div className="employee-preview-transfer-route">{F("From", t.fromLocation)}<b>→</b>{F("To", t.toLocation)}</div>
+                  {F("Reason", t.reason)}
+                </div>
+              ))}
+            </div> : <div className="employee-preview-empty">No transfer history available for this employee.</div>}
+          </Card>
+        );
 
-{/* CLOSE EMPLOYEE PROFILE MODAL */}
+        const renderModule = (tab) => {
+          const [kicker, text] = moduleText[tab];
+          return <Card kicker={kicker} title={tab}>
+            <div className="employee-preview-module-note"><div className="employee-preview-module-icon">i</div><div><strong>{text}</strong><span>This preview does not create or duplicate records. The respective module remains the source of truth.</span></div></div>
+            <Grid wide>{moduleDetails[tab].map(([label, val]) => F(label, val))}</Grid>
+          </Card>;
+        };
 
-</div>
-</div>
-)}
-            {/* PHOTO PREVIEW POPUP */}
+        let content;
+        if (previewTab === "Overview") content = renderOverview();
+        else if (previewTab === "Personal") content = renderPersonal();
+        else if (previewTab === "Employment") content = renderEmployment();
+        else if (previewTab === "Compensation") content = renderCompensation();
+        else if (previewTab === "Documents") content = renderDocuments();
+        else if (["Attendance", "Leaves", "Training", "Performance"].includes(previewTab)) content = renderModule(previewTab);
+        else if (previewTab === "Payroll") content = (
+          <div className="employee-preview-two-column">
+            <Card kicker="PAYROLL" title="Payroll Details"><Grid>{F("Payroll Profile", value("payrollProfile", "payrollProfileName"))}{F("CTC (Annual)", money("ctc", "ctcAnnual", "annualCtc"))}{F("Basic (Monthly)", money("basic", "basicMonthly"))}{F("HRA", money("hra", "hraMonthly"))}{F("Special Allowance", money("specialAllowance"))}{F("Other Allowances", money("otherAllowances", "otherAllowance"))}{F("Deduction Profile", value("deductionProfile", "deductionProfileName"))}{F("Status", p.status || "Active")}</Grid></Card>
+            <Card kicker="STATUTORY / BANKING" title="Payroll Reference"><Grid>{F("PAN", p.pan)}{F("Aadhaar", p.aadhaar)}{F("UAN", value("uan"))}{F("ESIC", value("esic", "esicNumber"))}{F("Bank Name", p.bankName)}{F("Account Number", maskAccount(p.bankAccountNumber))}{F("IFSC Code", p.bankIfsc)}{F("Bank Branch", p.bankBranch)}</Grid></Card>
+          </div>
+        );
+        else content = renderHistory();
+
+        return (
+          <div className="employee-profile-overlay" onClick={(e) => e.target === e.currentTarget && closePreview()}>
+            <div className="employee-profile-modal employee-profile-modal-v2">
+              <div className="employee-preview-header">
+                <div className="employee-preview-identity">
+                  <div className={`employee-preview-avatar ${p.photo ? "photo-clickable" : ""}`} onClick={() => p.photo && setPhotoPreview(p.photo)}>
+                    {p.photo ? <img src={p.photo} alt={p.name || "Employee"} /> : <span>{(p.name || "E").charAt(0).toUpperCase()}</span>}
+                  </div>
+                  <div className="employee-preview-title-block">
+                    <div className="employee-preview-id">{p.employeeId || "—"}</div>
+                    <h2>{p.name || "—"}</h2>
+                    <div className="employee-preview-designation">{p.designation || "—"}</div>
+                    <div className="employee-preview-meta"><span>▣ {p.department || "—"}</span><span>⌖ {p.location || "—"}</span><span>▣ DOJ: {p.doj || "—"}</span></div>
+                  </div>
+                </div>
+                <div className="employee-preview-header-right">
+                  <div className="employee-preview-header-summary">
+                    {[
+                      ["Employment Type", p.employmentType],
+                      ["Employee Group", p.employeeGroup],
+                      ["Job Type", p.jobType],
+                      ["Vendor / Contractor", p.vendor],
+                    ].map(([label, val]) => <div key={label}><span>{label}</span><strong>{val || "—"}</strong></div>)}
+                  </div>
+                  <span className={`employee-preview-status ${String(p.status || "Active").toLowerCase() === "active" ? "active" : "inactive"}`}>{p.status || "Active"}</span>
+                  <button type="button" className="employee-profile-close" onClick={closePreview} aria-label="Close employee profile">×</button>
+                </div>
+              </div>
+
+              <div className="employee-preview-tabs">
+                {tabs.map(([label, icon]) => <button type="button" key={label} className={previewTab === label ? "active" : ""} onClick={() => setPreviewTab(label)}><span>{icon}</span>{label}</button>)}
+              </div>
+
+              <div className="employee-preview-content">{content}</div>
+
+              <div className="employee-preview-footer-actions">
+                <button type="button" className="secondary-btn" onClick={closePreview}>Close</button>
+                <button type="button" className="secondary-btn" onClick={transfer}>⇄ Transfer Employee</button>
+                <button type="button" className="primary-btn" onClick={edit}>✎ Edit Profile</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* PHOTO PREVIEW POPUP */}
       {photoPreview && (
         <div
           className="photo-preview-overlay"
@@ -3769,148 +3697,6 @@ const transferRecord = {
         </div>
       )}
 
-      {/* DATA QUALITY CHECK */}
-{previewEmployee && (() => {
-  const quality = calculateEmployeeQuality(previewEmployee, previewDocuments);
-
-  return (
-    <div className="employee-profile-section quality-check-section">
-
-      <div className="employee-profile-section-title">
-        HR Data Quality Check
-      </div>
-
-      <div className="quality-check-header">
-        <div className="quality-score">
-          <strong>{quality.score}%</strong>
-          <span>Overall Data Quality</span>
-        </div>
-
-        <div className="quality-summary">
-          {quality.score >= 90
-            ? "Excellent"
-            : quality.score >= 70
-            ? "Good — Some information needs attention"
-            : "Attention Required"}
-        </div>
-      </div>
-
-      <div className="quality-check-list">
-        {quality.checks.map((check) => (
-          <div
-            className={`quality-check-item ${
-              check.complete ? "quality-complete" : "quality-warning"
-            }`}
-            key={check.name}
-          >
-            <div className="quality-check-icon">
-              {check.complete ? "✓" : "!"}
-            </div>
-
-            <div className="quality-check-name">
-              {check.name}
-            </div>
-
-            <div className="quality-check-progress">
-              {check.completed}/{check.total}
-            </div>
-
-            <div className="quality-check-status">
-              {check.complete ? "Complete" : "Attention"}
-            </div>
-          </div>
-        ))}
-      </div>
-
-    </div>
-  );
-})()}
-{/* TRANSFER HISTORY */}
-{previewEmployee && (
-  <div className="employee-profile-section transfer-history-section">
-
-    <div className="employee-profile-section-title">
-      Transfer History
-    </div>
-
-    <div className="transfer-current-card">
-      <div>
-        <span>Current Location</span>
-        <strong>{previewEmployee.location || "—"}</strong>
-      </div>
-
-      <div>
-        <span>Total Transfers</span>
-        <strong>
-          {Array.isArray(previewEmployee.transferHistory)
-            ? previewEmployee.transferHistory.length
-            : 0}
-        </strong>
-      </div>
-
-      <div>
-        <span>Current Status</span>
-        <strong>{previewEmployee.status || "Active"}</strong>
-      </div>
-    </div>
-
-    {Array.isArray(previewEmployee.transferHistory) &&
-    previewEmployee.transferHistory.length > 0 ? (
-      <div className="transfer-history-list">
-
-        {previewEmployee.transferHistory
-          .slice()
-          .reverse()
-          .map((transfer, index) => (
-            <div className="transfer-history-item" key={index}>
-
-              <div className="transfer-history-date">
-  <span>Transfer ID</span>
-  <strong>
-    {transfer.transferCode || "—"}
-  </strong>
-</div>
-
-<div className="transfer-history-date">
-  <span>Date</span>
-  <strong>
-    {transfer.date || "—"}
-  </strong>
-</div>
-
-              <div className="transfer-history-route">
-                <div>
-                  <span>From</span>
-                  <strong>{transfer.fromLocation || "—"}</strong>
-                </div>
-
-                <div className="transfer-arrow">
-                  →
-                </div>
-
-                <div>
-                  <span>To</span>
-                  <strong>{transfer.toLocation || "—"}</strong>
-                </div>
-              </div>
-
-              <div className="transfer-history-reason">
-                <span>Reason</span>
-                <strong>{transfer.reason || "—"}</strong>
-              </div>
-
-            </div>
-          ))}
-
-      </div>
-    ) : (
-      <div className="no-transfer-history">
-        No transfer history available for this employee.
-      </div>
-    )}
-
-  </div>
-)}
     </section>
   );
 }
