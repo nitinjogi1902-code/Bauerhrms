@@ -95,8 +95,8 @@ const EMPTY_FORM = {
 };
 
 function readMasters() {
-  // Supabase Organization Masters are loaded by the Employee component.
-  // This constant is only a first-render fallback while that request completes.
+  // First-render fallback only. Template download and Excel import fetch
+  // the latest Organization Masters directly from Supabase.
   return INITIAL_MASTERS;
 }
 
@@ -1093,7 +1093,10 @@ function exportEmployeesToExcel(employees) {
 }
 
 async function downloadEmployeeImportTemplate() {
-  const masters = readMasters();
+  // Always fetch the latest Organization Masters from Supabase before building
+  // the template; the module-level fallback only contains default values.
+  const latestMasters = await loadOrganizationMasters(INITIAL_MASTERS);
+  const masters = { ...INITIAL_MASTERS, ...(latestMasters || {}) };
   const emptyRow = Object.fromEntries(
     EMPLOYEE_EXPORT_COLUMNS.map(([header]) => [header, ""])
   );
@@ -1172,9 +1175,10 @@ function normalizeImportedEmployee(row) {
 }
 
 async function importEmployeesFromExcel(file, employees, saveEmployees) {
-  // Read the latest Organization Masters here because this function
-  // is outside the Employees component and cannot access component state.
-  const masters = readMasters();
+  // Fetch current Organization Masters from Supabase so newly added values
+  // are also accepted during import, not only the values from first render.
+  const latestMasters = await loadOrganizationMasters(INITIAL_MASTERS);
+  const masters = { ...INITIAL_MASTERS, ...(latestMasters || {}) };
 
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
