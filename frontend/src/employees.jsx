@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import "./employees.css";
 import { createEmployeeInvitation, getEmployeeAccount, resendEmployeeInvitation } from "./auth";
 import { supabase } from "./supabaseClient";
+import { loadOrganizationMasters } from "./organizationStorage";
 
 const ORGANIZATION_STORAGE_KEY = "bauerHrmsOrganizationMasters";
 const EMPLOYEE_STORAGE_KEY = "bauerHrmsEmployees";
@@ -94,10 +95,8 @@ const EMPTY_FORM = {
 };
 
 function readMasters() {
-  try {
-    const saved = localStorage.getItem(ORGANIZATION_STORAGE_KEY);
-    if (saved) return { ...INITIAL_MASTERS, ...JSON.parse(saved) };
-  } catch {}
+  // Supabase Organization Masters are loaded by the Employee component.
+  // This constant is only a first-render fallback while that request completes.
   return INITIAL_MASTERS;
 }
 
@@ -1306,8 +1305,17 @@ const [transferForm, setTransferForm] = useState({
   const [documentUploading, setDocumentUploading] = useState(false);
 
   useEffect(() => {
-    const refreshMasters = () => setMasters(readMasters());
+    let masterLoadCancelled = false;
+    const refreshMasters = async () => {
+      try {
+        const latest = await loadOrganizationMasters(INITIAL_MASTERS);
+        if (!masterLoadCancelled && latest) setMasters({ ...INITIAL_MASTERS, ...latest });
+      } catch (error) {
+        console.error("Unable to load Organization masters in Employee Master:", error);
+      }
+    };
     const refreshHodMappings = () => setHodMappings(readHodMappings());
+    void refreshMasters();
 
     window.addEventListener("bauerHrmsMastersUpdated", refreshMasters);
     window.addEventListener("bauerHrmsOrganizationMastersUpdated", refreshMasters);
@@ -1380,9 +1388,10 @@ const [transferForm, setTransferForm] = useState({
     loadTenantEmployees();
 
     return () => {
+      masterLoadCancelled = true;
       cancelled = true;
       window.removeEventListener("bauerHrmsMastersUpdated", refreshMasters);
-    window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshMasters);
+      window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshMasters);
       window.removeEventListener("bauerHrmsHodMappingsUpdated", refreshHodMappings);
       window.removeEventListener("storage", refreshMasters);
     };

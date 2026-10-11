@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import "./Payroll.css";
 import { supabase } from "./supabaseClient";
+import { loadOrganizationMasters } from "./organizationStorage";
 import { STATUTORY_RULE_VERSION, getStatutoryCalculation } from "./statutoryEngine";
 
 const payrollMenu = [
@@ -488,6 +489,25 @@ function Payroll() {
   const [attendanceRecords, setAttendanceRecords] = useState({});
   const [forceLeaveRecords, setForceLeaveRecords] = useState([]);
   const [organizationMasters, setOrganizationMasters] = useState({});
+
+  useEffect(() => {
+    let mounted = true;
+    const refreshOrganizationMasters = async () => {
+      try {
+        const latest = await loadOrganizationMasters({});
+        if (mounted) setOrganizationMasters(latest || {});
+      } catch (error) {
+        console.error("Unable to refresh Payroll Organization Masters:", error);
+      }
+    };
+    window.addEventListener("bauerHrmsOrganizationMastersUpdated", refreshOrganizationMasters);
+    window.addEventListener("focus", refreshOrganizationMasters);
+    return () => {
+      mounted = false;
+      window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshOrganizationMasters);
+      window.removeEventListener("focus", refreshOrganizationMasters);
+    };
+  }, []);
   const getMonthlyAttendance = (employeeId, month) => {
   const monthRecords = {};
   Object.entries(attendanceRecords || {}).forEach(([date, records]) => {

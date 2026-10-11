@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import "./PMS.css";
+import { loadOrganizationMasters } from "./organizationStorage";
 
 /**
  * BAUER HRMS — PMS
@@ -280,6 +281,33 @@ export default function PMS({
   currentUserId = "",
   currentEmployeeId = "",
 }) {
+  const [organizationDepartments, setOrganizationDepartments] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const refreshOrganizationDepartments = async () => {
+      try {
+        const masters = await loadOrganizationMasters({});
+        const source = Array.isArray(masters?.departments) ? masters.departments : [];
+        const names = source
+          .filter((item) => typeof item === "string" || item?.active !== false)
+          .map((item) => String(typeof item === "string" ? item : item?.name || "").trim())
+          .filter(Boolean);
+        if (mounted) setOrganizationDepartments([...new Set(names)]);
+      } catch (error) {
+        console.error("Unable to load PMS Organization departments:", error);
+      }
+    };
+    void refreshOrganizationDepartments();
+    window.addEventListener("bauerHrmsOrganizationMastersUpdated", refreshOrganizationDepartments);
+    window.addEventListener("focus", refreshOrganizationDepartments);
+    return () => {
+      mounted = false;
+      window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshOrganizationDepartments);
+      window.removeEventListener("focus", refreshOrganizationDepartments);
+    };
+  }, []);
+
   const [activeView, setActiveView] = useState(
     role === "employee"
       ? "My Performance"
@@ -1272,6 +1300,7 @@ export default function PMS({
       {showKraModal && (
         <KraModal
           kras={kras}
+          organizationDepartments={organizationDepartments}
           departments={[...new Set(employees.map(employeeDepartment).filter(Boolean))]}
           initialKra={editingKra}
           onClose={() => {
@@ -1285,6 +1314,7 @@ export default function PMS({
       {showTemplateModal && (
         <TemplateModal
           kras={kras}
+          organizationDepartments={organizationDepartments}
           initialTemplate={editingTemplate}
           activeCycle={activeCycle}
           onClose={() => {
@@ -3445,7 +3475,7 @@ function CycleModal({ cycle, onClose, onSave }) {
   );
 }
 
-function KraModal({ kras, departments, initialKra, onClose, onSave }) {
+function KraModal({ kras, departments, organizationDepartments = [], initialKra, onClose, onSave }) {
   const empty = {
     id: makeId("KRA"),
     code: "",
@@ -3514,7 +3544,7 @@ function KraModal({ kras, departments, initialKra, onClose, onSave }) {
           {activeStep === 1 && (
             <div className="pms-builder-grid">
               <Field label="KRA Code" value={form.code} placeholder="Auto generated if blank" onChange={(v) => set({ code: v })} />
-              <Field label="Department *" type="select" value={form.department} options={departments.length ? departments : ["HR & Admin"]} onChange={(v) => set({ department: v })} />
+              <Field label="Department *" type="select" value={form.department} options={organizationDepartments.length ? organizationDepartments : departments.length ? departments : ["HR & Admin"]} onChange={(v) => set({ department: v })} />
               <Field label="Sub Department" value={form.subDepartment} placeholder="Payroll / Recruitment / Projects..." onChange={(v) => set({ subDepartment: v })} />
               <Field label="KRA Category *" type="select" value={form.category} options={["Operations","Quality","Compliance","Customer","People","Financial","Learning & Development","Safety","General"]} onChange={(v) => set({ category: v })} />
               <Field label="KRA Title *" value={form.title} wide placeholder="Example: Payroll Accuracy" onChange={(v) => set({ title: v })} />
@@ -3643,13 +3673,17 @@ function KraModal({ kras, departments, initialKra, onClose, onSave }) {
 
 function TemplateModal({
   kras,
+  organizationDepartments = [],
   initialTemplate,
   activeCycle,
   onClose,
   onSave,
   onCreateKra,
 }) {
-  const departments = [...new Set(kras.map((kra) => kra.department).filter(Boolean))];
+  const departments = [...new Set([
+    ...organizationDepartments,
+    ...kras.map((kra) => kra.department).filter(Boolean),
+  ])];
   const makeEmptyTemplate = () => ({
     id: makeId("TPL"),
     department: departments[0] || "HR & Admin",
@@ -3763,7 +3797,7 @@ function TemplateModal({
         </div>
 
         <div className="pms-template-meta">
-          <Field label="Department *" type="select" value={form.department} options={departments.length ? departments : ["HR & Admin"]} onChange={(v) => setForm({ ...form, department: v, kraIds: [], kraWeights: {} })} />
+          <Field label="Department *" type="select" value={form.department} options={organizationDepartments.length ? organizationDepartments : departments.length ? departments : ["HR & Admin"]} onChange={(v) => setForm({ ...form, department: v, kraIds: [], kraWeights: {} })} />
           <Field label="Template Name *" value={form.name} placeholder="HR & Admin — FY 2026-27" onChange={(v) => setForm({ ...form, name: v })} />
           <Field label="Financial Year" value={form.financialYear} onChange={(v) => setForm({ ...form, financialYear: v })} />
           <Field label="Status" type="select" value={form.status} options={["Draft","Active","Archived"]} onChange={(v) => setForm({ ...form, status: v })} />

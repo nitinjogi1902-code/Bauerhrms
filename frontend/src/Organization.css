@@ -8060,3 +8060,83 @@
     min-width: 0 !important;
   }
 }
+
+
+/* ORGANIZATION MASTER NAV — Leave Management inspired, no horizontal scrolling */
+.organization-page .master-tabs-shell {
+  margin-bottom: 16px !important;
+  padding: 8px 10px 10px !important;
+  border: 1px solid #e8e5f2 !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  box-shadow: 0 2px 8px rgba(45, 35, 90, 0.035) !important;
+  overflow: visible !important;
+}
+
+.organization-page .master-tabs-label {
+  padding: 2px 4px 8px !important;
+  font-size: 9px !important;
+  letter-spacing: 1.1px !important;
+}
+
+.organization-page .master-tabs {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 5px !important;
+  width: 100% !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  scrollbar-width: none !important;
+}
+
+.organization-page .master-tabs::-webkit-scrollbar {
+  display: none !important;
+}
+
+.organization-page .master-tab {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  min-height: 34px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 4px 9px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  font-size: 10px !important;
+  line-height: 1.25 !important;
+  white-space: nowrap !important;
+}
+
+.organization-page .master-tab-icon {
+  width: 23px !important;
+  height: 23px !important;
+  flex: 0 0 23px !important;
+  border-radius: 6px !important;
+}
+
+.organization-page .master-tab b {
+  min-width: 18px !important;
+  padding: 2px 4px !important;
+  font-size: 9px !important;
+}
+
+@media (max-width: 760px) {
+  .organization-page .master-tabs {
+    gap: 5px !important;
+  }
+  .organization-page .master-tab {
+    white-space: normal !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .organization-page .master-tab {
+    flex: 1 1 calc(50% - 5px) !important;
+  }
+}

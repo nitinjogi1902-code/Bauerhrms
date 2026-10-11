@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "./attendance.css";
 import * as XLSX from "xlsx-js-style";
 import { supabase } from "./supabaseClient";
+import { loadOrganizationMasters } from "./organizationStorage";
 
 const employeesData = [
   {
@@ -84,33 +85,9 @@ const ORGANIZATION_STORAGE_KEY = "bauerHrmsOrganizationMasters";
 const normalizePolicyValue = (value) =>
   String(value || "").trim().toLowerCase().replace(/[()]/g, "").replace(/\s+/g, " ");
 
-const loadWeekOffPoliciesFromStorage = () => {
-  try {
-    const saved = localStorage.getItem(ORGANIZATION_STORAGE_KEY);
-    if (!saved) return [];
-    const parsed = JSON.parse(saved);
-    return Array.isArray(parsed?.weekOffPolicies) ? parsed.weekOffPolicies : [];
-  } catch {
-    return [];
-  }
-};
+const loadWeekOffPoliciesFromStorage = () => [];
 
-const loadVendorMasterOptions = () => {
-  try {
-    const saved = localStorage.getItem(ORGANIZATION_STORAGE_KEY);
-    if (!saved) return [];
-    const parsed = JSON.parse(saved);
-    const jobRoles = Array.isArray(parsed?.jobRoles) ? parsed.jobRoles : [];
-
-    return jobRoles
-      .filter((item) => typeof item === "string" || item?.active !== false)
-      .map((item) => (typeof item === "string" ? item : item?.name))
-      .map((item) => String(item || "").trim())
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-};
+const loadVendorMasterOptions = () => [];
 
 const employeeMatchesWeekOffPolicy = (employee, policy) => {
   if (!employee || !policy || policy.active !== true) return false;
@@ -473,6 +450,8 @@ function Attendance() {
   const [employees, setEmployees] = useState(loadEmployeesFromStorage);
   const [employeeLoadError, setEmployeeLoadError] = useState("");
   const [organizationVendors, setOrganizationVendors] = useState(loadVendorMasterOptions);
+  const [organizationMasters, setOrganizationMasters] = useState({});
+  const [weekOffPolicies, setWeekOffPolicies] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -564,24 +543,31 @@ function Attendance() {
   }, []);
 
   useEffect(() => {
-    const refreshVendorMasters = () => {
-      setOrganizationVendors(loadVendorMasterOptions());
+    let mounted = true;
+    const refreshOrganizationMasters = async () => {
+      try {
+        const latest = await loadOrganizationMasters({});
+        if (!mounted) return;
+        setOrganizationMasters(latest || {});
+        const roles = Array.isArray(latest?.jobRoles) ? latest.jobRoles : [];
+        setOrganizationVendors(roles
+          .filter((item) => typeof item === "string" || item?.active !== false)
+          .map((item) => String(typeof item === "string" ? item : item?.name || "").trim())
+          .filter(Boolean));
+        setWeekOffPolicies(Array.isArray(latest?.weekOffPolicies) ? latest.weekOffPolicies.filter((item) => item?.active !== false) : []);
+      } catch (error) {
+        console.error("Unable to load Attendance Organization Masters:", error);
+      }
     };
-
-    refreshVendorMasters();
-
-    window.addEventListener("bauerHrmsOrganizationMastersUpdated", refreshVendorMasters);
-    window.addEventListener("bauerHrmsMastersUpdated", refreshVendorMasters);
-    window.addEventListener("storage", refreshVendorMasters);
-
+    void refreshOrganizationMasters();
+    window.addEventListener("bauerHrmsOrganizationMastersUpdated", refreshOrganizationMasters);
+    window.addEventListener("focus", refreshOrganizationMasters);
     return () => {
-      window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshVendorMasters);
-      window.removeEventListener("bauerHrmsMastersUpdated", refreshVendorMasters);
-      window.removeEventListener("storage", refreshVendorMasters);
+      mounted = false;
+      window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshOrganizationMasters);
+      window.removeEventListener("focus", refreshOrganizationMasters);
     };
   }, []);
-
-  const weekOffPolicies = loadWeekOffPoliciesFromStorage();
 
   const [search, setSearch] = useState("");
   const [employeeType, setEmployeeType] = useState("All");

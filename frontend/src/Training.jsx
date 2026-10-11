@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import "./Training.css";
+import { loadOrganizationMasters } from "./organizationStorage";
 
 const TRAINING_STORAGE_KEY = "bauerHrmsTrainings";
 const TRAINING_UPDATED_EVENT = "bauerHrmsTrainingUpdated";
@@ -156,20 +157,37 @@ function Training({ employees = [], masters = {} }) {
   const [tniForm, setTniForm] = useState({ employeeId: "", need: "", category: "Technical", priority: "Medium", targetDate: "", remarks: "" });
   const [planForm, setPlanForm] = useState({ year: new Date().getFullYear(), training: "", department: "All Departments", target: 0, budget: 0, status: "Planned" });
 
+  const [organizationMasters, setOrganizationMasters] = useState(masters || {});
+
+  useEffect(() => {
+    let mounted = true;
+    const refreshOrganizationMasters = async () => {
+      try {
+        const latest = await loadOrganizationMasters({});
+        if (mounted) setOrganizationMasters(latest || {});
+      } catch (error) {
+        console.error("Unable to load Training Organization Masters:", error);
+      }
+    };
+    void refreshOrganizationMasters();
+    window.addEventListener("bauerHrmsOrganizationMastersUpdated", refreshOrganizationMasters);
+    window.addEventListener("focus", refreshOrganizationMasters);
+    return () => {
+      mounted = false;
+      window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshOrganizationMasters);
+      window.removeEventListener("focus", refreshOrganizationMasters);
+    };
+  }, []);
+
   const departments = useMemo(() => {
-    const fromEmployees = employees.map(employeeDepartment).filter(Boolean);
-    const fromMasters =
-      masters?.departments ||
-      masters?.department ||
-      masters?.Department ||
-      [];
-    const masterNames = Array.isArray(fromMasters)
-      ? fromMasters
-          .map((item) => (typeof item === "string" ? item : item?.name))
+    const source = organizationMasters?.departments || organizationMasters?.department || organizationMasters?.Department || [];
+    const names = Array.isArray(source)
+      ? source.filter((item) => typeof item === "string" || item?.active !== false)
+          .map((item) => String(typeof item === "string" ? item : item?.name || "").trim())
           .filter(Boolean)
       : [];
-    return [...new Set(["All Departments", ...fromEmployees, ...masterNames])];
-  }, [employees, masters]);
+    return ["All Departments", ...new Set(names)];
+  }, [organizationMasters]);
 
   useEffect(() => {
     localStorage.setItem(TRAINING_STORAGE_KEY, JSON.stringify(trainings));
