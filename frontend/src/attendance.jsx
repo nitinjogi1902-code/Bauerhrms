@@ -3,6 +3,7 @@ import "./attendance.css";
 import * as XLSX from "xlsx-js-style";
 import { supabase } from "./supabaseClient";
 import { loadOrganizationMasters } from "./organizationStorage";
+import { loadOrganizationModuleData, saveOrganizationModuleData } from "./organizationModuleStorage";
 
 const employeesData = [
   {
@@ -72,7 +73,6 @@ const employeesData = [
     vendor: "Taurus",
   },
 ];
-const STORAGE_KEY = "bauerHrmsEmployees";
 
 const getAttendanceEmployeeCode = (employee) =>
   employee?.employeeId ||
@@ -146,18 +146,9 @@ const getPolicyAttendanceRecord = (employee, dateKey, attendanceRecords, policie
 };
 
 
-const FORCE_LEAVE_STORAGE_KEY = "bauerHrmsForceLeaveRecords";
+let attendanceForceLeaveRecords = [];
 
-const readForceLeaveRecordsForAttendance = () => {
-  try {
-    const saved = localStorage.getItem(FORCE_LEAVE_STORAGE_KEY);
-    const parsed = saved ? JSON.parse(saved) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Unable to read Force Leave records for attendance:", error);
-    return [];
-  }
-};
+const readForceLeaveRecordsForAttendance = () => attendanceForceLeaveRecords;
 
 const getEmployeeIdentityKeys = (employee) =>
   new Set(
@@ -259,7 +250,6 @@ const ATTENDANCE_STATUS_OPTIONS = [
   { value: "CL", label: "Casual Leave" },
   { value: "SL", label: "Sick Leave" },
   { value: "FL", label: "Floating Leave" },
-  { value: "CO", label: "Comp Off (Legacy)" },
   { value: "CO-E", label: "Comp Off Earned" },
   { value: "CO-U", label: "Comp Off Utilisation" },
   { value: "OD", label: "On Duty" },
@@ -374,26 +364,7 @@ const validateCompOffUpdate = (update, attendanceRecords, pendingUpdates = []) =
   return null;
 };
 
-const loadEmployeesFromStorage = () => {
-  try {
-    const storedEmployees = localStorage.getItem(STORAGE_KEY);
-
-    if (!storedEmployees) {
-      return [];
-    }
-
-    const parsedEmployees = JSON.parse(storedEmployees);
-
-    if (!Array.isArray(parsedEmployees)) {
-      return [];
-    }
-
-    return parsedEmployees;
-  } catch (error) {
-    console.error("Unable to load employees from local storage:", error);
-    return [];
-  }
-};
+const loadEmployeesFromStorage = () => [];
 
 const employeeFromDbForAttendance = (row) => {
   const metadata =
@@ -446,12 +417,39 @@ const employeeFromDbForAttendance = (row) => {
 
 function Attendance() {
   const [activeMenu, setActiveMenu] = useState("Dashboard");
+  const [attendanceStatusMenuOpen, setAttendanceStatusMenuOpen] = useState(false);
 
-  const [employees, setEmployees] = useState(loadEmployeesFromStorage);
+  const [employees, setEmployees] = useState([]);
   const [employeeLoadError, setEmployeeLoadError] = useState("");
   const [organizationVendors, setOrganizationVendors] = useState(loadVendorMasterOptions);
   const [organizationMasters, setOrganizationMasters] = useState({});
   const [weekOffPolicies, setWeekOffPolicies] = useState([]);
+  const [, setForceLeaveRecordsVersion] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadForceLeaveRecords = async () => {
+      try {
+        const records = await loadOrganizationModuleData("bauerHrmsForceLeaveRecords", []);
+        if (cancelled) return;
+        attendanceForceLeaveRecords = Array.isArray(records) ? records : [];
+        setForceLeaveRecordsVersion((version) => version + 1);
+      } catch (error) {
+        console.error("Unable to load Force Leave records from Supabase:", error);
+      }
+    };
+    void loadForceLeaveRecords();
+    const refresh = (event) => {
+      if (!event?.detail?.moduleKey || event.detail.moduleKey === "bauerHrmsForceLeaveRecords") {
+        void loadForceLeaveRecords();
+      }
+    };
+    window.addEventListener("organizationModuleDataUpdated", refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("organizationModuleDataUpdated", refresh);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -502,13 +500,8 @@ function Attendance() {
         console.error("Unable to load tenant employees for attendance:", error);
 
         if (!cancelled) {
-          const cachedEmployees = loadEmployeesFromStorage();
-          setEmployees(cachedEmployees);
-          setEmployeeLoadError(
-            cachedEmployees.length
-              ? "Live Employee Master could not be loaded. Showing cached employee data."
-              : error?.message || "Unable to load Employee Master records."
-          );
+          setEmployees([]);
+          setEmployeeLoadError(error?.message || "Unable to load Employee Master records.");
         }
       }
     };
@@ -524,19 +517,11 @@ function Attendance() {
       refreshEmployeesFromMaster
     );
 
-    window.addEventListener(
-      "storage",
-      refreshEmployeesFromMaster
-    );
 
     return () => {
       cancelled = true;
       window.removeEventListener(
         "bauerHrmsEmployeesUpdated",
-        refreshEmployeesFromMaster
-      );
-      window.removeEventListener(
-        "storage",
         refreshEmployeesFromMaster
       );
     };
@@ -587,14 +572,10 @@ function Attendance() {
   const [attendanceDate, setAttendanceDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
-  const [attendanceRecords, setAttendanceRecords] = useState(() => {
-    try {
-      const saved = localStorage.getItem("hrms_attendance");
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  const [attendanceRecords, setAttendanceRecords] = useState({});
+  const [attendanceMonthlyMeta, setAttendanceMonthlyMeta] = useState({});
+  const [attendanceCloudReady, setAttendanceCloudReady] = useState(false);
+  const [attendanceCloudError, setAttendanceCloudError] = useState("");
   const [attendanceSearch, setAttendanceSearch] = useState("");
   const [attendanceSite, setAttendanceSite] = useState("All");
   const [attendanceStatusFilter, setAttendanceStatusFilter] = useState("All");
@@ -614,6 +595,7 @@ function Attendance() {
   const [attendanceImportMode, setAttendanceImportMode] = useState("monthly");
   const [showAttendanceImport, setShowAttendanceImport] = useState(false);
   const [flConflictDialog, setFlConflictDialog] = useState(null);
+  const [attendanceEditDialog, setAttendanceEditDialog] = useState(null);
   const [attendanceImportPreview, setAttendanceImportPreview] = useState(null);
   const attendanceImportInputRef = useRef(null);
 
@@ -702,20 +684,40 @@ const [newEmployee, setNewEmployee] = useState({
   ];
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(employees));
-    } catch (error) {
-      console.error("Unable to save employees:", error);
-    }
-  }, [employees]);
+    let cancelled = false;
+    (async () => {
+      try {
+        setAttendanceCloudError("");
+        const saved = await loadOrganizationModuleData("hrmsAttendanceData", {});
+        if (cancelled) return;
+        setAttendanceRecords(saved?.records && typeof saved.records === "object" ? saved.records : {});
+        setAttendanceMonthlyMeta(saved?.monthlyMeta && typeof saved.monthlyMeta === "object" ? saved.monthlyMeta : {});
+      } catch (error) {
+        console.error("Unable to load attendance from Supabase:", error);
+        if (!cancelled) setAttendanceCloudError(error?.message || "Unable to load attendance from database.");
+      } finally {
+        if (!cancelled) setAttendanceCloudReady(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem("hrms_attendance", JSON.stringify(attendanceRecords));
-    } catch (error) {
-      console.error("Unable to save attendance:", error);
-    }
-  }, [attendanceRecords]);
+    if (!attendanceCloudReady || attendanceCloudError) return undefined;
+    const timer = setTimeout(async () => {
+      try {
+        await saveOrganizationModuleData("hrmsAttendanceData", {
+          records: attendanceRecords,
+          monthlyMeta: attendanceMonthlyMeta,
+        });
+        setAttendanceCloudError("");
+      } catch (error) {
+        console.error("Unable to save attendance to Supabase:", error);
+        setAttendanceCloudError(error?.message || "Attendance could not be saved to database.");
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [attendanceRecords, attendanceMonthlyMeta, attendanceCloudReady, attendanceCloudError]);
 
   const attendanceSites = useMemo(() => {
     return Array.from(
@@ -854,6 +856,72 @@ const [newEmployee, setNewEmployee] = useState({
     setFlConflictDialog((previous) =>
       previous ? { ...previous, resolution: decision } : previous
     );
+  };
+
+  const editReportAttendance = (employeeId, dateKey, currentStatus) => {
+    const employee = employees.find((item) => item.id === employeeId) || {};
+    setAttendanceEditDialog({
+      employeeId,
+      employeeName: employee.name || employee.employeeName || employeeId,
+      dateKey,
+      currentStatus: currentStatus || "",
+      nextStatus: currentStatus || "",
+    });
+  };
+
+  const saveReportAttendanceEdit = () => {
+    if (!attendanceEditDialog) return;
+    const { employeeId, dateKey } = attendanceEditDialog;
+    const nextStatus = String(attendanceEditDialog.nextStatus || "").trim().toUpperCase();
+    const allowedStatuses = ["P", "A", "EL", "CL", "SL", "FL", "CO-E", "CO-U", "OD", "WFH", "WO", "HO", "HD", "LOP"];
+    if (nextStatus && !allowedStatuses.includes(nextStatus)) {
+      window.alert(`Invalid attendance status: ${nextStatus}`);
+      return;
+    }
+
+    const validation = nextStatus
+      ? validateCompOffUpdate({ employeeId, dateKey, status: nextStatus }, attendanceRecords)
+      : null;
+    if (validation) {
+      window.alert(validation);
+      return;
+    }
+
+    const previousRecord = attendanceRecords[dateKey]?.[employeeId] || {};
+    const nextRecord = {
+      ...previousRecord,
+      status: nextStatus,
+      source: "Manual Report Edit",
+      lastUpdatedBy: "HR/Admin",
+      lastUpdatedAt: new Date().toISOString(),
+    };
+
+    if (!nextStatus) {
+      delete nextRecord.status;
+      delete nextRecord.compOffTransaction;
+      delete nextRecord.auditReason;
+    } else if (nextStatus === "CO-E") {
+      nextRecord.compOffTransaction = "CO-E";
+      nextRecord.auditReason = "Comp Off Earned — Sunday working";
+    } else if (nextStatus === "CO-U") {
+      nextRecord.compOffTransaction = "CO-U";
+      nextRecord.auditReason = "Comp Off Utilisation";
+    } else if (nextStatus === "P" && isSundayDate(dateKey)) {
+      nextRecord.compOffTransaction = "CO-E";
+      nextRecord.auditReason = "Sunday working — Comp Off Earned";
+    } else {
+      delete nextRecord.compOffTransaction;
+      delete nextRecord.auditReason;
+    }
+
+    setAttendanceRecords((previous) => ({
+      ...previous,
+      [dateKey]: {
+        ...(previous[dateKey] || {}),
+        [employeeId]: nextRecord,
+      },
+    }));
+    setAttendanceEditDialog(null);
   };
 
   const updateAttendance = (employeeId, field, value) => {
@@ -1289,91 +1357,80 @@ const [newEmployee, setNewEmployee] = useState({
   }, [monthDays, attendanceRecords, selectedMonthlyEmployeeId]);
 
 
-  const saveMonthlyAttendance = () => {
+  const saveMonthlyAttendance = async () => {
     if (!selectedMonthlyEmployee) {
       alert("Please select an employee first.");
-      return;
+      return false;
     }
 
+    const now = new Date();
+    const month = attendanceDate.slice(0, 7);
+    const key = `${selectedMonthlyEmployee.id}_${month}`;
+    const nextMeta = {
+      ...attendanceMonthlyMeta,
+      [key]: {
+        employeeId: selectedMonthlyEmployee.id,
+        employeeName: selectedMonthlyEmployee.name,
+        month,
+        status: "Draft Saved",
+        savedAt: now.toISOString(),
+        savedBy: "HR/Admin",
+      },
+    };
     try {
-      localStorage.setItem("hrms_attendance", JSON.stringify(attendanceRecords));
-      const now = new Date();
-      const savedText = now.toLocaleTimeString("en-IN", {
-        hour: "2-digit",
-        minute: "2-digit",
+      await saveOrganizationModuleData("hrmsAttendanceData", {
+        records: attendanceRecords,
+        monthlyMeta: nextMeta,
       });
-
-      const saveKey = `hrms_attendance_month_meta_${selectedMonthlyEmployee.id}_${attendanceDate.slice(0, 7)}`;
-      localStorage.setItem(
-        saveKey,
-        JSON.stringify({
-          employeeId: selectedMonthlyEmployee.id,
-          employeeName: selectedMonthlyEmployee.name,
-          month: attendanceDate.slice(0, 7),
-          status: "Draft Saved",
-          savedAt: now.toISOString(),
-          savedBy: "HR/Admin",
-        })
-      );
-
-      setMonthlyLastSavedAt(savedText);
+      setAttendanceMonthlyMeta(nextMeta);
+      setMonthlyLastSavedAt(now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
       setMonthlySaveState("saved");
       setMonthlySubmissionState("draft");
+      setAttendanceCloudError("");
+      return true;
     } catch (error) {
       console.error("Unable to save monthly attendance:", error);
-      alert("Unable to save attendance. Please try again.");
+      setAttendanceCloudError(error?.message || "Attendance could not be saved to database.");
+      alert("Unable to save attendance to database. Please check your connection/permissions and try again.");
+      return false;
     }
   };
 
-  const submitMonthlyAttendance = () => {
+  const submitMonthlyAttendance = async () => {
     if (!selectedMonthlyEmployee) {
       alert("Please select an employee first.");
       return;
     }
 
-    const monthLabel = new Date(`${attendanceDate.slice(0, 7)}-01T00:00:00`).toLocaleDateString(
-      "en-IN",
-      { month: "long", year: "numeric" }
-    );
-
-    if (monthlySaveState !== "saved") {
-      saveMonthlyAttendance();
-    }
-
-    const confirmed = window.confirm(
-      `Submit ${monthLabel} attendance for ${selectedMonthlyEmployee.name}?`
-    );
-
+    const month = attendanceDate.slice(0, 7);
+    const monthLabel = new Date(`${month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+    const confirmed = window.confirm(`Submit ${monthLabel} attendance for ${selectedMonthlyEmployee.name}?`);
     if (!confirmed) return;
 
+    const now = new Date();
+    const key = `${selectedMonthlyEmployee.id}_${month}`;
+    const nextMeta = {
+      ...attendanceMonthlyMeta,
+      [key]: {
+        employeeId: selectedMonthlyEmployee.id,
+        employeeName: selectedMonthlyEmployee.name,
+        month,
+        status: "Submitted",
+        submittedAt: now.toISOString(),
+        submittedBy: "HR/Admin",
+      },
+    };
     try {
-      const now = new Date();
-      const submitKey = `hrms_attendance_month_meta_${selectedMonthlyEmployee.id}_${attendanceDate.slice(0, 7)}`;
-
-      localStorage.setItem(
-        submitKey,
-        JSON.stringify({
-          employeeId: selectedMonthlyEmployee.id,
-          employeeName: selectedMonthlyEmployee.name,
-          month: attendanceDate.slice(0, 7),
-          status: "Submitted",
-          submittedAt: now.toISOString(),
-          submittedBy: "HR/Admin",
-        })
-      );
-
-      localStorage.setItem("hrms_attendance", JSON.stringify(attendanceRecords));
-      setMonthlyLastSavedAt(
-        now.toLocaleTimeString("en-IN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      );
+      await saveOrganizationModuleData("hrmsAttendanceData", { records: attendanceRecords, monthlyMeta: nextMeta });
+      setAttendanceMonthlyMeta(nextMeta);
+      setMonthlyLastSavedAt(now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
       setMonthlySaveState("saved");
       setMonthlySubmissionState("submitted");
+      setAttendanceCloudError("");
     } catch (error) {
       console.error("Unable to submit monthly attendance:", error);
-      alert("Unable to submit attendance. Please try again.");
+      setAttendanceCloudError(error?.message || "Attendance could not be saved to database.");
+      alert("Unable to submit attendance to database. Please try again.");
     }
   };
 
@@ -1450,6 +1507,40 @@ const [newEmployee, setNewEmployee] = useState({
       };
     });
     const worksheet = XLSX.utils.json_to_sheet(rows);
+    const excelStatusStyles = {
+      P: { fill: "DCFCE7", font: "166534", border: "86EFAC" },
+      A: { fill: "FEE2E2", font: "B91C1C", border: "FCA5A5" },
+      EL: { fill: "DBEAFE", font: "1D4ED8", border: "93C5FD" },
+      CL: { fill: "EDE9FE", font: "6D28D9", border: "C4B5FD" },
+      SL: { fill: "FFEDD5", font: "C2410C", border: "FDBA74" },
+      FL: { fill: "FCE7F3", font: "BE185D", border: "F9A8D4" },
+      "CO-E": { fill: "D1FAE5", font: "047857", border: "6EE7B7" },
+      "CO-U": { fill: "CFFAFE", font: "0E7490", border: "67E8F9" },
+      CO: { fill: "F1F5F9", font: "475569", border: "CBD5E1" },
+      OD: { fill: "DBEAFE", font: "1E40AF", border: "93C5FD" },
+      WFH: { fill: "E0E7FF", font: "4338CA", border: "A5B4FC" },
+      WO: { fill: "FEF3C7", font: "92400E", border: "FCD34D" },
+      HO: { fill: "FFEDD5", font: "9A3412", border: "FDBA74" },
+      HD: { fill: "FFEDD5", font: "9A3412", border: "FDBA74" },
+      LOP: { fill: "FFE4E6", font: "BE123C", border: "FDA4AF" },
+    };
+    rows.forEach((row, index) => {
+      const style = excelStatusStyles[String(row.Status || "").trim().toUpperCase()];
+      const address = XLSX.utils.encode_cell({ r: index + 1, c: 7 });
+      if (style && worksheet[address]) {
+        worksheet[address].s = {
+          fill: { patternType: "solid", fgColor: { rgb: style.fill } },
+          font: { bold: true, color: { rgb: style.font } },
+          alignment: { horizontal: "center", vertical: "center" },
+          border: {
+            top: { style: "thin", color: { rgb: style.border } },
+            bottom: { style: "thin", color: { rgb: style.border } },
+            left: { style: "thin", color: { rgb: style.border } },
+            right: { style: "thin", color: { rgb: style.border } },
+          },
+        };
+      }
+    });
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance");
     XLSX.writeFile(workbook, `HRMS_Attendance_${attendanceDate}.xlsx`);
@@ -2327,6 +2418,37 @@ const [newEmployee, setNewEmployee] = useState({
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
 
+    // Apply the same attendance status palette to date cells in the exported report.
+    const reportExcelStatusStyles = {
+      P: ["DCFCE7", "166534", "86EFAC"], A: ["FEE2E2", "B91C1C", "FCA5A5"],
+      EL: ["DBEAFE", "1D4ED8", "93C5FD"], CL: ["EDE9FE", "6D28D9", "C4B5FD"],
+      SL: ["FFEDD5", "C2410C", "FDBA74"], FL: ["FCE7F3", "BE185D", "F9A8D4"],
+      "CO-E": ["D1FAE5", "047857", "6EE7B7"], "CO-U": ["CFFAFE", "0E7490", "67E8F9"],
+      CO: ["F1F5F9", "475569", "CBD5E1"], OD: ["DBEAFE", "1E40AF", "93C5FD"],
+      WFH: ["E0E7FF", "4338CA", "A5B4FC"], WO: ["FEF3C7", "92400E", "FCD34D"],
+      HO: ["FFEDD5", "9A3412", "FDBA74"], HD: ["FFEDD5", "9A3412", "FDBA74"],
+      LOP: ["FFE4E6", "BE123C", "FDA4AF"],
+    };
+    attendanceReportData.forEach((reportRow, rowIndex) => {
+      reportRow.days.forEach((day, dayIndex) => {
+        const status = String(day.status || "").trim().toUpperCase();
+        const style = reportExcelStatusStyles[status];
+        const address = XLSX.utils.encode_cell({ r: rowIndex + 6, c: 7 + dayIndex });
+        if (!style || !ws[address]) return;
+        ws[address].s = {
+          fill: { patternType: "solid", fgColor: { rgb: style[0] } },
+          font: { bold: true, color: { rgb: style[1] } },
+          alignment: { horizontal: "center", vertical: "center" },
+          border: {
+            top: { style: "thin", color: { rgb: style[2] } },
+            bottom: { style: "thin", color: { rgb: style[2] } },
+            left: { style: "thin", color: { rgb: style[2] } },
+            right: { style: "thin", color: { rgb: style[2] } },
+          },
+        };
+      });
+    });
+
     // Merge report heading across the complete report width.
     const lastCol = columns.length - 1;
     ws["!merges"] = [
@@ -2462,8 +2584,8 @@ const [newEmployee, setNewEmployee] = useState({
       CO: { bg: "EFFAF8", fg: "08786D" },
       OD: { bg: "F0F8FE", fg: "12679A" },
       WFH: { bg: "EFFBFD", fg: "08758A" },
-      WO: { bg: "F5F7F9", fg: "5D6F80" },
-      HO: { bg: "EEF1F4", fg: "536474" },
+      WO: { bg: "FFF200", fg: "713F12" },
+      HO: { bg: "FFE8A3", fg: "7C3E00" },
       HD: { bg: "FFF6E8", fg: "9B5D08" },
     };
 
@@ -3233,6 +3355,91 @@ const handleImportExcel = (event) => {
             .fl-conflict-actions button { border-radius:9px; padding:9px 13px; cursor:pointer; font-weight:700; }
             .fl-keep-attendance { border:1px solid #cbd5e1; background:#fff; color:#334155; }
             .fl-keep-leave { border:1px solid #fb923c; background:#fff7ed; color:#c2410c; }
+
+            /* Consistent attendance status colours across daily, monthly and report views */
+            .attendance-status-select, .monthly-status-select {
+              border: 1px solid #cbd5e1;
+              border-radius: 8px;
+              padding: 6px 28px 6px 9px;
+              font-weight: 700;
+              font-size: 12px;
+              line-height: 1.35;
+              min-height: 32px;
+              transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+            }
+            .status-p, .report-status-p { background: #dcfce7 !important; color: #166534 !important; border-color: #86efac !important; }
+            .status-a, .report-status-a { background: #fee2e2 !important; color: #b91c1c !important; border-color: #fca5a5 !important; }
+            /* Harmonised pastel status palette: same strength across daily, monthly and report views */
+            /* WO and HO: explicitly target every control and report cell so global/table styles cannot hide the colours */
+            .attendance-module select.attendance-status-select.status-wo,
+            .attendance-module select.monthly-status-select.status-wo,
+            .attendance-module td.report-status-cell.report-status-wo,
+            .attendance-module td.report-status-cell.report-status-wo .report-status-edit-button {
+              background: #fef9c3 !important;
+              background-color: #fef9c3 !important;
+              color: #854d0e !important;
+              border-color: #fde047 !important;
+              font-weight: 700 !important;
+              box-shadow: inset 0 0 0 1px rgba(253, 224, 71, .12) !important;
+            }
+            .attendance-module select.attendance-status-select.status-ho,
+            .attendance-module select.monthly-status-select.status-ho,
+            .attendance-module td.report-status-cell.report-status-ho,
+            .attendance-module td.report-status-cell.report-status-ho .report-status-edit-button {
+              background: #ffedd5 !important;
+              background-color: #ffedd5 !important;
+              color: #9a3412 !important;
+              border-color: #fdba74 !important;
+              font-weight: 700 !important;
+              box-shadow: inset 0 0 0 1px rgba(253, 186, 116, .12) !important;
+            }
+            select.attendance-status-select.status-wo option,
+            select.monthly-status-select.status-wo option,
+            select.attendance-status-select.status-ho option,
+            select.monthly-status-select.status-ho option {
+              background: #ffffff !important;
+              color: #0f172a !important;
+            }
+            .status-el, .report-status-el { background: #dbeafe !important; color: #1d4ed8 !important; border-color: #93c5fd !important; }
+            .status-cl, .report-status-cl { background: #ede9fe !important; color: #6d28d9 !important; border-color: #c4b5fd !important; }
+            .status-sl, .report-status-sl { background: #ffedd5 !important; color: #c2410c !important; border-color: #fdba74 !important; }
+            .status-fl, .report-status-fl { background: #fce7f3 !important; color: #be185d !important; border-color: #f9a8d4 !important; }
+            /* Comp Off colours are deliberately applied across daily, monthly, report and export views. */
+            .attendance-module select.attendance-status-select.status-co-e,
+            .attendance-module select.monthly-status-select.status-co-e,
+            .attendance-module td.report-status-cell.report-status-co-e,
+            .attendance-module td.report-status-cell.report-status-co-e .report-status-edit-button,
+            .status-co-e, .report-status-co-e {
+              background: #d1fae5 !important; background-color: #d1fae5 !important;
+              color: #047857 !important; border-color: #6ee7b7 !important; font-weight: 700 !important;
+            }
+            .attendance-module select.attendance-status-select.status-co-u,
+            .attendance-module select.monthly-status-select.status-co-u,
+            .attendance-module td.report-status-cell.report-status-co-u,
+            .attendance-module td.report-status-cell.report-status-co-u .report-status-edit-button,
+            .status-co-u, .report-status-co-u {
+              background: #cffafe !important; background-color: #cffafe !important;
+              color: #0e7490 !important; border-color: #67e8f9 !important; font-weight: 700 !important;
+            }
+            .status-co, .report-status-co { background: #f1f5f9 !important; color: #475569 !important; border-color: #cbd5e1 !important; }
+            .status-od, .report-status-od { background: #dbeafe !important; color: #1e40af !important; border-color: #93c5fd !important; }
+            .status-wfh, .report-status-wfh { background: #e0e7ff !important; color: #4338ca !important; border-color: #a5b4fc !important; }
+            .status-hd, .report-status-hd { background: #ffedd5 !important; color: #9a3412 !important; border-color: #fdba74 !important; }
+            .status-lop, .report-status-lop { background: #ffe4e6 !important; color: #be123c !important; border-color: #fda4af !important; }
+            .status-unmarked, .status-blank, .report-status-blank { background: #f8fafc !important; color: #64748b !important; border-color: #cbd5e1 !important; }
+            .report-status-cell {
+              text-align: center;
+              border: 1px solid #e2e8f0;
+              font-weight: 700;
+              transition: filter .15s ease, box-shadow .15s ease;
+            }
+            .report-status-cell:hover { filter: saturate(1.12) brightness(.98); box-shadow: inset 0 0 0 1px currentColor; }
+            .report-status-edit-button { border-radius: 4px; }
+            .attendance-status-select:focus, .monthly-status-select:focus, .report-status-cell:focus-visible {
+              outline: 2px solid #2563eb;
+              outline-offset: 1px;
+            }
+            .attendance-status-select option, .monthly-status-select option { background: #fff; color: #0f172a; }
           `}</style>
           <input ref={attendanceImportInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleAttendanceImportFile} style={{ display: "none" }} />
         <section className="attendance-module">
@@ -3263,7 +3470,7 @@ const handleImportExcel = (event) => {
               <div><label>Department</label><select value={attendanceDepartment} onChange={(e) => setAttendanceDepartment(e.target.value)}><option value="All">All Departments</option>{attendanceDepartments.map((item) => <option key={item}>{item}</option>)}</select></div>
               <div><label>Employee Type</label><select value={employeeType} onChange={(e) => setEmployeeType(e.target.value)}><option value="All">All Types</option><option value="On-Roll">On-Roll</option><option value="Third Party">Third Party</option></select></div>
               <div><label>Vendor</label><select value={attendanceVendor} onChange={(e) => setAttendanceVendor(e.target.value)}><option value="All">All Vendors</option>{attendanceVendors.map((item) => <option key={item}>{item}</option>)}</select></div>
-              <div><label>Status</label><select value={attendanceStatusFilter} onChange={(e) => setAttendanceStatusFilter(e.target.value)}><option value="All">All Status</option>{ATTENDANCE_STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.value} — {item.label}</option>)}<option value="-">Unmarked</option></select></div>
+              <div><label>Status</label><select value={attendanceStatusFilter} onChange={(e) => setAttendanceStatusFilter(e.target.value)}><option value="All">All Status</option>{ATTENDANCE_STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value} className={`status-option-${item.value.toLowerCase()}`}>{item.value} — {item.label}</option>)}<option value="-">Unmarked</option></select></div>
             </div>
           </div>
 
@@ -3326,8 +3533,8 @@ const handleImportExcel = (event) => {
                   <td>{employee.site||"-"}</td><td><span className="type-badge">{employee.type||"-"}</span></td>
                   <td><div className="attendance-status-cell">
                     <div className="attendance-status-control">
-                      <select title={getStatusLabel(record.status)} className={`attendance-status-select status-${String(record.status||"unmarked").toLowerCase()}`} value={record.status||"-"} onChange={e=>updateAttendance(employee.id,"status",e.target.value)}>
-                        <option value="-">Select</option>{ATTENDANCE_STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.value} — {item.label}</option>)}
+                      <select title={getStatusLabel(record.status)} className={`attendance-status-select status-${String(record.status||"unmarked").toLowerCase()}`} style={String(record.status || "").toUpperCase() === "CO-E" ? { backgroundColor: "#d1fae5", color: "#047857", borderColor: "#6ee7b7", fontWeight: 700 } : String(record.status || "").toUpperCase() === "CO-U" ? { backgroundColor: "#cffafe", color: "#0e7490", borderColor: "#67e8f9", fontWeight: 700 } : {}} value={record.status||"-"} onChange={e=>updateAttendance(employee.id,"status",e.target.value)}>
+                        <option value="-">Select</option>{ATTENDANCE_STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value} className={`status-option-${item.value.toLowerCase()}`}>{item.value} — {item.label}</option>)}
                       </select>
                       {flInfo.conflict && <button type="button" className="fl-conflict-badge" title="Force Leave conflict — click to review" onClick={() => openForceLeaveConflict(employee, attendanceDate)}>⚠ FL Conflict</button>}
                     </div>
@@ -3392,14 +3599,44 @@ const handleImportExcel = (event) => {
                   </div>
                   <div className="attendance-report-table-wrap">
                     <table className="attendance-report-table">
-                      <thead><tr><th className="report-sticky">Employee</th><th>Designation</th><th>Site</th>{reportMonthDays.map((dateKey) => <th key={dateKey}>{dateKey.slice(8,10)}</th>)}<th>P</th><th>A</th><th>EL</th><th>CL</th><th>SL</th><th>FL</th><th>CO</th><th>OD</th><th>WFH</th><th>WO</th><th>HO</th><th>HD</th><th className="lop-head">LOP</th><th className="paid-head">Paid Days</th></tr></thead>
+                      <thead><tr><th className="report-sticky">Employee</th><th>Designation</th><th>Site</th>{reportMonthDays.map((dateKey) => <th key={dateKey}>{dateKey.slice(8,10)}</th>)}<th>P</th><th>A</th><th>EL</th><th>CL</th><th>SL</th><th>FL</th><th>CO-E</th><th>CO-U</th><th>OD</th><th>WFH</th><th>WO</th><th>HO</th><th>HD</th><th className="lop-head">LOP</th><th className="paid-head">Paid Days</th></tr></thead>
                       <tbody>
                         {attendanceReportData.map((row) => (
                           <tr key={row.employee.id}>
                             <td className="report-sticky"><strong>{row.employee.name}</strong><small>{getAttendanceEmployeeCode(row.employee) || "-"} · {row.employee.department || "-"}</small></td>
                             <td>{row.employee.designation || "-"}</td><td>{row.employee.site || "-"}</td>
-                            {row.days.map((day) => <td key={day.dateKey} className={`report-status-cell report-status-${String(day.status || "blank").toLowerCase()}`}>{day.status || ""}</td>)}
-                            <td className="count-p">{row.counts.P}</td><td className="count-a">{row.counts.A}</td><td>{row.counts.EL}</td><td>{row.counts.CL}</td><td>{row.counts.SL}</td><td>{row.counts.FL}</td><td>{row.counts.CO}</td><td>{row.counts.OD}</td><td>{row.counts.WFH}</td><td>{row.counts.WO}</td><td>{row.counts.HO}</td><td>{row.counts.HD}</td><td className="count-lop">{row.counts.LOP}</td><td className={`count-paid${row.paidDaysNeedsReview ? " paid-days-warning" : ""}`} title={row.paidDaysNeedsReview ? `Paid Days ${row.paidDays.toFixed(1)} is below ${row.totalCalendarDays} calendar days — please review attendance.` : `Paid Days ${row.paidDays.toFixed(1)} of ${row.totalCalendarDays} — OK.`}>{row.paidDays.toFixed(1)}{row.paidDaysNeedsReview && <span className="paid-days-alert" aria-label="Review required">!</span>}</td>
+                            {row.days.map((day) => (
+                              <td
+                                key={day.dateKey}
+                                className={`report-status-cell report-status-${String(day.status || "blank").toLowerCase()}`}
+                                role="button"
+                                tabIndex={0}
+                                title={`Click to edit attendance for ${day.dateKey}`}
+                                aria-label={`Edit ${row.employee.name} attendance on ${day.dateKey}`}
+                                style={{ cursor: "pointer", position: "relative", zIndex: 1, pointerEvents: "auto", ...(String(day.status || "").trim().toUpperCase() === "WO" ? { backgroundColor: "#fef9c3", color: "#854d0e", borderColor: "#fde047", fontWeight: 700 } : String(day.status || "").trim().toUpperCase() === "HO" ? { backgroundColor: "#ffedd5", color: "#9a3412", borderColor: "#fdba74", fontWeight: 700 } : String(day.status || "").trim().toUpperCase() === "CO-E" ? { backgroundColor: "#d1fae5", color: "#047857", borderColor: "#6ee7b7", fontWeight: 700 } : String(day.status || "").trim().toUpperCase() === "CO-U" ? { backgroundColor: "#cffafe", color: "#0e7490", borderColor: "#67e8f9", fontWeight: 700 } : {}) }}
+                                onClick={() => editReportAttendance(row.employee.id, day.dateKey, day.status)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    editReportAttendance(row.employee.id, day.dateKey, day.status);
+                                  }
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="report-status-edit-button"
+                                  style={{ border: 0, background: "transparent", color: "inherit", font: "inherit", fontWeight: 700, width: "100%", minWidth: "24px", padding: "4px 2px", cursor: "pointer", pointerEvents: "auto" }}
+                                  tabIndex={-1}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    editReportAttendance(row.employee.id, day.dateKey, day.status);
+                                  }}
+                                >
+                                  {day.status || "—"}
+                                </button>
+                              </td>
+                            ))}
+                            <td className="count-p">{row.counts.P}</td><td className="count-a">{row.counts.A}</td><td>{row.counts.EL}</td><td>{row.counts.CL}</td><td>{row.counts.SL}</td><td>{row.counts.FL}</td><td>{row.counts["CO-E"]}</td><td>{row.counts["CO-U"]}</td><td>{row.counts.OD}</td><td>{row.counts.WFH}</td><td>{row.counts.WO}</td><td>{row.counts.HO}</td><td>{row.counts.HD}</td><td className="count-lop">{row.counts.LOP}</td><td className={`count-paid${row.paidDaysNeedsReview ? " paid-days-warning" : ""}`} title={row.paidDaysNeedsReview ? `Paid Days ${row.paidDays.toFixed(1)} is below ${row.totalCalendarDays} calendar days — please review attendance.` : `Paid Days ${row.paidDays.toFixed(1)} of ${row.totalCalendarDays} — OK.`}>{row.paidDays.toFixed(1)}{row.paidDaysNeedsReview && <span className="paid-days-alert" aria-label="Review required">!</span>}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -3617,12 +3854,13 @@ const handleImportExcel = (event) => {
                                   <div className="monthly-status-with-conflict">
                                     <select
                                       className={`monthly-status-select status-${String(record.status || "unmarked").toLowerCase()}`}
+                                      style={String(record.status || "").toUpperCase() === "CO-E" ? { backgroundColor: "#d1fae5", color: "#047857", borderColor: "#6ee7b7", fontWeight: 700 } : String(record.status || "").toUpperCase() === "CO-U" ? { backgroundColor: "#cffafe", color: "#0e7490", borderColor: "#67e8f9", fontWeight: 700 } : {}}
                                       value={record.status || "-"}
                                       onChange={(e) => updateMonthlyAttendance(dateKey, "status", e.target.value)}
                                     >
                                     <option value="-">Select</option>
                                     {ATTENDANCE_STATUS_OPTIONS.map((item) => (
-                                      <option key={item.value} value={item.value}>
+                                      <option key={item.value} value={item.value} className={`status-option-${item.value.toLowerCase()}`}>
                                         {item.value} — {item.label}
                                       </option>
                                     ))}
@@ -3954,6 +4192,94 @@ const handleImportExcel = (event) => {
                 >
                   ✓ Import {attendanceImportPreview.updates.length} Entries
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {attendanceEditDialog && (
+          <div
+            className="attendance-edit-modal-overlay"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) { setAttendanceEditDialog(null); setAttendanceStatusMenuOpen(false); }
+            }}
+            style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.48)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000, padding: 16 }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="attendance-edit-title"
+              style={{ width: "min(500px, 100%)", maxHeight: "calc(100dvh - 24px)", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 14, boxShadow: "0 20px 60px rgba(15,23,42,.25)", overflow: "visible", fontFamily: "Inter, system-ui, sans-serif" }}
+            >
+              <div style={{ flex: "0 0 auto", padding: "16px 22px", borderRadius: "14px 14px 0 0", background: "linear-gradient(135deg, #123d70, #1769aa)", color: "#fff" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, opacity: .85 }}>ATTENDANCE MANAGEMENT</div>
+                <div id="attendance-edit-title" style={{ fontSize: 19, fontWeight: 750, marginTop: 5 }}>Edit Attendance</div>
+                <div style={{ fontSize: 12, marginTop: 5, opacity: .9 }}>{attendanceEditDialog.employeeName} · {attendanceEditDialog.dateKey}</div>
+              </div>
+              <div style={{ padding: "12px 18px 8px", flex: "0 0 auto", minHeight: 0, overflow: "visible" }}>
+                <label htmlFor="attendance-report-status-select" style={{ display: "block", fontSize: 13, fontWeight: 650, color: "#334155", marginBottom: 8 }}>Attendance Status</label>
+                {(() => {
+                  const statusOptions = [
+                    { value: "", label: "Clear attendance status", color: "#64748b", bg: "#f8fafc", border: "#e2e8f0" },
+                    { value: "P", label: "Present", color: "#047857", bg: "#ecfdf5", border: "#a7f3d0" },
+                    { value: "A", label: "Absent", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+                    { value: "EL", label: "Earned Leave", color: "#92400e", bg: "#fffbeb", border: "#fde68a" },
+                    { value: "CL", label: "Casual Leave", color: "#6d28d9", bg: "#f5f3ff", border: "#ddd6fe" },
+                    { value: "SL", label: "Sick Leave", color: "#7e22ce", bg: "#faf5ff", border: "#e9d5ff" },
+                    { value: "FL", label: "Floating Leave", color: "#be185d", bg: "#fdf2f8", border: "#fbcfe8" },
+                    { value: "CO-E", label: "Comp Off Earned", color: "#047857", bg: "#ecfdf5", border: "#a7f3d0" },
+                    { value: "CO-U", label: "Comp Off Utilisation", color: "#0e7490", bg: "#ecfeff", border: "#a5f3fc" },
+                    { value: "OD", label: "On Duty", color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
+                    { value: "WFH", label: "Work From Home", color: "#4338ca", bg: "#eef2ff", border: "#c7d2fe" },
+                    { value: "WO", label: "Weekly Off", color: "#854d0e", bg: "#fefce8", border: "#fde68a" },
+                    { value: "HO", label: "Holiday", color: "#9a3412", bg: "#fff7ed", border: "#fed7aa" },
+                    { value: "HD", label: "Half Day", color: "#c2410c", bg: "#fff7ed", border: "#fed7aa" },
+                    { value: "LOP", label: "Loss of Pay", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+                  ];
+                  const selected = statusOptions.find((option) => option.value === attendanceEditDialog.nextStatus) || statusOptions[0];
+                  return (
+                    <div style={{ position: "relative" }}>
+                      <button
+                        id="attendance-report-status-select"
+                        type="button"
+                        autoFocus
+                        aria-haspopup="listbox"
+                        aria-expanded={attendanceStatusMenuOpen}
+                        onClick={() => setAttendanceStatusMenuOpen((open) => !open)}
+                        style={{ width: "100%", minHeight: 46, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 13px", border: `1px solid ${selected.border}`, borderRadius: 10, background: selected.bg, color: selected.color, fontSize: 14, fontWeight: 650, cursor: "pointer", textAlign: "left", transition: "border-color .15s ease, box-shadow .15s ease" }}
+                      >
+                        <span>{selected.value ? `${selected.value} — ${selected.label}` : `— ${selected.label} —`}</span>
+                        <span aria-hidden="true" style={{ fontSize: 12, color: "#64748b" }}>{attendanceStatusMenuOpen ? "▲" : "▼"}</span>
+                      </button>
+                      {attendanceStatusMenuOpen && (
+                        <div role="listbox" aria-label="Attendance status options" style={{ position: "relative", zIndex: 10010, marginTop: 7, width: "100%", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 5, maxHeight: "none", overflow: "visible", padding: 6, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 8px 22px rgba(15,23,42,.08)" }}>
+                          {statusOptions.map((option) => {
+                            const isSelected = option.value === attendanceEditDialog.nextStatus;
+                            return (
+                              <button key={option.value || "clear"} type="button" role="option" aria-selected={isSelected}
+                                onClick={() => {
+                                  setAttendanceEditDialog((previous) => previous ? { ...previous, nextStatus: option.value } : previous);
+                                  setAttendanceStatusMenuOpen(false);
+                                }}
+                                style={{ width: "100%", minWidth: 0, minHeight: 30, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 5, padding: "6px 7px", margin: 0, boxSizing: "border-box", border: `1px solid ${isSelected ? option.border : "#edf1f5"}`, borderRadius: 7, background: isSelected ? option.bg : "#fff", color: option.color, textAlign: "left", fontSize: 11, lineHeight: 1.25, fontWeight: isSelected ? 700 : 550, cursor: "pointer" }}
+                                onMouseEnter={(event) => { if (!isSelected) event.currentTarget.style.background = "#f8fafc"; }}
+                                onMouseLeave={(event) => { if (!isSelected) event.currentTarget.style.background = "#fff"; }}
+                              >
+                                <span>{option.value ? `${option.value} — ${option.label}` : `— ${option.label} —`}</span>
+                                {isSelected && <span aria-hidden="true">✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                <div style={{ marginTop: 7, fontSize: 11, color: "#64748b" }}>Select the correct status. The attendance record and report totals will update.</div>
+              </div>
+              <div style={{ display: "flex", flex: "0 0 auto", justifyContent: "flex-end", gap: 10, padding: "8px 18px 14px", borderRadius: "0 0 14px 14px", background: "#fff" }}>
+                <button type="button" onClick={() => { setAttendanceEditDialog(null); setAttendanceStatusMenuOpen(false); }} style={{ border: "1px solid #cbd5e1", background: "#fff", color: "#334155", borderRadius: 9, padding: "10px 16px", fontWeight: 650, cursor: "pointer" }}>Cancel</button>
+                <button type="button" onClick={saveReportAttendanceEdit} style={{ border: 0, background: "#1769aa", color: "#fff", borderRadius: 9, padding: "10px 18px", fontWeight: 700, cursor: "pointer" }}>Save Attendance</button>
               </div>
             </div>
           </div>

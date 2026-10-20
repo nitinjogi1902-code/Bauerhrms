@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./SelfService.css";
+import { loadOrganizationModuleData, saveOrganizationModuleData } from "./organizationModuleStorage";
 
 /*
  * BAUER HRMS - Employee self service
  *
- * This module intentionally reads the same localStorage sources used by:
- * Employee Master, Attendance, Leave, Payroll and Organization.
+ * Employee and module data are loaded from Supabase-backed organization storage.
+ * Employee documents currently use the existing browser IndexedDB store.
  *
  * IMPORTANT ID RULE:
  * - employee.id = internal HRMS key used by Attendance / Leave / Payroll.
@@ -14,9 +15,10 @@ import "./SelfService.css";
  */
 
 const EMPLOYEE_KEY = "bauerHrmsEmployees";
-const ATTENDANCE_KEY = "hrms_attendance";
+const ATTENDANCE_KEY = "hrmsAttendanceData";
 const BALANCE_KEY = "hrms_leave_balances";
-const REQUEST_KEY = "hrms_leave_requests";
+const REQUEST_KEY = "leaveManagement";
+const LEGACY_REQUEST_KEY = "hrms_leave_requests";
 const ORG_KEY = "bauerHrmsOrganizationMasters";
 const HOD_MAPPING_KEY = "hrms_hod_mappings";
 
@@ -105,17 +107,6 @@ const DEFAULT_LEAVE_CONFIG = {
     },
   },
 };
-
-function readJSON(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    return parsed ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 function employeeName(employee) {
   return (
@@ -733,44 +724,27 @@ export default function SelfService({
     new Date().toISOString().slice(0, 7)
   );
 
-  const [employeeList, setEmployeeList] = useState(() =>
-    readJSON(EMPLOYEE_KEY, employees)
-  );
+  const [employeeList, setEmployeeList] = useState(() => employees);
 
-  const [attendance, setAttendance] = useState(() =>
-    readJSON(ATTENDANCE_KEY, {})
-  );
+  const [attendance, setAttendance] = useState({});
 
-  const [balances, setBalances] = useState(() =>
-    readJSON(BALANCE_KEY, {})
-  );
+  const [balances, setBalances] = useState({});
 
-  const [requests, setRequests] = useState(() =>
-    readJSON(REQUEST_KEY, [])
-  );
+  const [requests, setRequests] = useState([]);
 
-  const [organization, setOrganization] = useState(() =>
-    readJSON(ORG_KEY, {})
-  );
-  const [hodMappings, setHodMappings] = useState(() =>
-    readJSON(HOD_MAPPING_KEY, [])
-  );
+  const [leaveStore, setLeaveStore] = useState({ policies: [], openingBalances: {}, adjustments: [], requests: [], audit: [] });
+  const migrationRef = useRef(false);
 
-  const [processedPayroll, setProcessedPayroll] = useState(() =>
-    readJSON(PAYROLL_RESULT_KEY, [])
-  );
+  const [organization, setOrganization] = useState({});
+  const [hodMappings, setHodMappings] = useState([]);
 
-  const [processedPayrollMonth, setProcessedPayrollMonth] = useState(() =>
-    localStorage.getItem(PAYROLL_RESULT_MONTH_KEY) || ""
-  );
+  const [processedPayroll, setProcessedPayroll] = useState([]);
 
-  const [payrollStatus, setPayrollStatus] = useState(() =>
-    localStorage.getItem(PAYROLL_STATUS_KEY) || "Pending"
-  );
+  const [processedPayrollMonth, setProcessedPayrollMonth] = useState("");
 
-  const [salaryStructures, setSalaryStructures] = useState(() =>
-    readJSON(SALARY_STRUCTURE_KEY, {})
-  );
+  const [payrollStatus, setPayrollStatus] = useState("Pending");
+
+  const [salaryStructures, setSalaryStructures] = useState({});
 
   const [documents, setDocuments] = useState([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
@@ -785,45 +759,130 @@ export default function SelfService({
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const refresh = () => {
-      setEmployeeList(readJSON(EMPLOYEE_KEY, employees));
-      setAttendance(readJSON(ATTENDANCE_KEY, {}));
-      setBalances(readJSON(BALANCE_KEY, {}));
-      setRequests(readJSON(REQUEST_KEY, []));
-      setOrganization(readJSON(ORG_KEY, {}));
-       setHodMappings(readJSON(HOD_MAPPING_KEY, []));
-      setProcessedPayroll(readJSON(PAYROLL_RESULT_KEY, []));
-      setProcessedPayrollMonth(
-        localStorage.getItem(PAYROLL_RESULT_MONTH_KEY) || ""
-      );
-      setPayrollStatus(
-        localStorage.getItem(PAYROLL_STATUS_KEY) || "Pending"
-      );
-      setSalaryStructures(readJSON(SALARY_STRUCTURE_KEY, {}));
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        const keys = [
+          ATTENDANCE_KEY,
+          BALANCE_KEY,
+          LEGACY_REQUEST_KEY,
+          ORG_KEY,
+          "employeeHodMappings",
+          PAYROLL_RESULT_KEY,
+          PAYROLL_RESULT_MONTH_KEY,
+          PAYROLL_STATUS_KEY,
+          SALARY_STRUCTURE_KEY,
+          REQUEST_KEY,
+        ];
+        const values = await Promise.all(
+          keys.map((key) => loadOrganizationModuleData(key, null))
+        );
+        if (cancelled) return;
+
+        const rawAttendance = values[0] && typeof values[0] === "object" ? values[0] : {};
+        const attendanceRecords = rawAttendance.records && typeof rawAttendance.records === "object"
+          ? rawAttendance.records
+          : rawAttendance;
+        const rawLeaveStore = values[9] && typeof values[9] === "object" ? values[9] : {};
+        const canonicalRequests = Array.isArray(rawLeaveStore.requests) ? rawLeaveStore.requests : [];
+        const legacyRequests = Array.isArray(values[2]) ? values[2] : [];
+        const requestMap = new Map();
+        [...legacyRequests, ...canonicalRequests].forEach((request) => {
+          if (!request || !request.id) return;
+          const existing = requestMap.get(String(request.id));
+          const candidate = {
+            ...request,
+            source: /employee self service/i.test(String(request.source || ""))
+              ? "Employee Self Service"
+              : (request.source || "HR/Admin"),
+          };
+          // Canonical Leave Management records take precedence over legacy ESS copies.
+          if (!existing || canonicalRequests.some((item) => String(item?.id) === String(request.id))) {
+            requestMap.set(String(request.id), candidate);
+          }
+        });
+        const mergedRequests = Array.from(requestMap.values());
+        const normalizedLeaveStore = {
+          policies: Array.isArray(rawLeaveStore.policies) ? rawLeaveStore.policies : [],
+          openingBalances: rawLeaveStore.openingBalances && typeof rawLeaveStore.openingBalances === "object" ? rawLeaveStore.openingBalances : {},
+          adjustments: Array.isArray(rawLeaveStore.adjustments) ? rawLeaveStore.adjustments : [],
+          requests: mergedRequests,
+          audit: Array.isArray(rawLeaveStore.audit) ? rawLeaveStore.audit : [],
+        };
+
+        setEmployeeList(Array.isArray(employees) ? employees : []);
+        setAttendance(attendanceRecords);
+        setBalances(values[1] && typeof values[1] === "object" ? values[1] : {});
+        setRequests(mergedRequests);
+        setLeaveStore(normalizedLeaveStore);
+        setOrganization(values[3] && typeof values[3] === "object" ? values[3] : {});
+        setHodMappings(Array.isArray(values[4]) ? values[4] : []);
+        setProcessedPayroll(Array.isArray(values[5]) ? values[5] : []);
+        setProcessedPayrollMonth(typeof values[6] === "string" ? values[6] : "");
+        setPayrollStatus(typeof values[7] === "string" ? values[7] : "Pending");
+        setSalaryStructures(values[8] && typeof values[8] === "object" ? values[8] : {});
+
+        // One-time, non-destructive migration: copy legacy ESS requests into the canonical
+        // Leave Management store, merging against a fresh read so policy/balance data survives.
+        const hasLegacyOnlyRequests = legacyRequests.some((item) =>
+          item?.id && !canonicalRequests.some((canonical) => String(canonical?.id) === String(item.id))
+        );
+        if (hasLegacyOnlyRequests && !migrationRef.current) {
+          migrationRef.current = true;
+          try {
+            const latestRaw = await loadOrganizationModuleData(REQUEST_KEY, {});
+            const latest = latestRaw && typeof latestRaw === "object" ? latestRaw : {};
+            const latestRequests = Array.isArray(latest.requests) ? latest.requests : [];
+            const latestIds = new Set(latestRequests.map((item) => String(item?.id || "")));
+            const legacyToAdd = legacyRequests
+              .filter((item) => item?.id && !latestIds.has(String(item.id)))
+              .map((item) => ({
+                ...item,
+                source: /employee self service/i.test(String(item.source || "")) ? "Employee Self Service" : (item.source || "HR/Admin"),
+              }));
+            if (legacyToAdd.length) {
+              const migratedStore = {
+                policies: Array.isArray(latest.policies) ? latest.policies : normalizedLeaveStore.policies,
+                openingBalances: latest.openingBalances && typeof latest.openingBalances === "object" ? latest.openingBalances : normalizedLeaveStore.openingBalances,
+                adjustments: Array.isArray(latest.adjustments) ? latest.adjustments : normalizedLeaveStore.adjustments,
+                requests: [...legacyToAdd, ...latestRequests],
+                audit: Array.isArray(latest.audit) ? latest.audit : normalizedLeaveStore.audit,
+              };
+              await saveOrganizationModuleData(REQUEST_KEY, migratedStore);
+              if (!cancelled) {
+                setLeaveStore(migratedStore);
+                setRequests(migratedStore.requests);
+              }
+            }
+          } catch (migrationError) {
+            console.error("Legacy leave-request migration did not complete:", migrationError);
+            migrationRef.current = false;
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Unable to load Self Service data from Supabase:", error);
+          setMessage("Unable to load Self Service data from Supabase. Please refresh or contact HR/Admin.");
+        }
+      }
     };
 
-    window.addEventListener("storage", refresh);
-
-    // Same-tab custom events are used by the HRMS modules.
+    refresh();
     const events = [
+      "organizationModuleDataUpdated",
       "bauerHrmsEmployeesUpdated",
       "bauerHrmsMastersUpdated",
       "bauerHrmsLeaveRequestsUpdated",
       "bauerHrmsOrganizationUpdated",
-       "bauerHrmsHodMappingsUpdated",
+      "bauerHrmsHodMappingsUpdated",
     ];
-
-    events.forEach((eventName) =>
-      window.addEventListener(eventName, refresh)
-    );
-
-    const timer = window.setInterval(refresh, 1000);
+    events.forEach((eventName) => window.addEventListener(eventName, refresh));
+    const timer = window.setInterval(refresh, 30000);
 
     return () => {
-      window.removeEventListener("storage", refresh);
-      events.forEach((eventName) =>
-        window.removeEventListener(eventName, refresh)
-      );
+      cancelled = true;
+      events.forEach((eventName) => window.removeEventListener(eventName, refresh));
       window.clearInterval(timer);
     };
   }, [employees]);
@@ -863,10 +922,11 @@ export default function SelfService({
       return Boolean(mappedHod && isSameEmployee(mappedHod, employee));
     });
 
-  const policies = useMemo(
-    () => getConfiguredLeaveTypes(organization),
-    [organization]
-  );
+  const policies = useMemo(() => {
+    const canonical = Array.isArray(leaveStore?.policies) ? leaveStore.policies : [];
+    if (!canonical.length) return getConfiguredLeaveTypes(organization);
+    return canonical;
+  }, [leaveStore, organization]);
 
   const attendanceRows = useMemo(() => {
     if (!internalId || !employee) return [];
@@ -1097,46 +1157,120 @@ export default function SelfService({
   };
 
   /*
-   * Leave balance intentionally mirrors Leave.jsx:
-   * opening balance + policy accrual - attendance usage,
-   * with carry-forward maximum applied.
+   * Shared Leave Management ledger calculation:
+   * opening balance + applicable policy accrual + HR adjustments - attendance usage
+   * - approved requests not yet reflected in Attendance. CO-E earns Comp-Off; CO-U uses it.
    */
   const leaveBalances = useMemo(() => {
-    const result = {};
+    const result = { EL: 0, CL: 0, SL: 0, FL: 0, CO: 0, COEarned: 0, COUsed: 0, FLMarked: 0 };
+    if (!employee || !internalId) return result;
 
     const year = new Date().getFullYear();
-
-    LEAVE_TYPES.forEach((type) => {
-      const opening = Number(balances?.[internalId]?.[type] || 0);
-
-      const earned = employee
-        ? calculateAccrual(
-            employee,
-            type,
-            year,
-            attendance,
-            policies
-          )
-        : 0;
-
-      const used = employee
-        ? countUsed(attendance, internalId, year, type)
-        : 0;
-
-      const policy = getPolicy(policies, type);
-      const carryForward = policy?.carryForward || {};
-      const maximum = Number(carryForward.maximum || 0);
-
-      const raw = opening + earned - used;
-
-      result[type] =
-        carryForward.enabled && maximum > 0
-          ? Math.min(Math.max(0, raw), maximum)
-          : Math.max(0, raw);
+    const employeeKeys = [employee.id, employee.employeeId, employee.employeeCode, employee.empCode, employee.code]
+      .filter((value) => value !== undefined && value !== null && String(value) !== "")
+      .map(String);
+    const findRow = (day) => {
+      if (!day || typeof day !== "object") return null;
+      for (const key of employeeKeys) if (day[key]) return day[key];
+      return Object.values(day).find((row) => [row?.employeeId, row?.employeeCode, row?.empCode, row?.id]
+        .filter(Boolean).map(String).some((key) => employeeKeys.includes(key))) || null;
+    };
+    const normalizedStatus = (row) => String(row?.status || "").trim().toUpperCase().replace(/\s+[—-]\s+.*/, "");
+    const stats = { EL: 0, CL: 0, SL: 0, FL: 0, COEarned: 0, COUsed: 0, legacyCOUsed: 0, presentDays: 0, monthlyPresentDays: {} };
+    Object.entries(attendance || {}).forEach(([dateKey, day]) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || Number(dateKey.slice(0, 4)) !== year) return;
+      const row = findRow(day);
+      if (!row) return;
+      const status = normalizedStatus(row);
+      const month = Number(dateKey.slice(5, 7));
+      const fraction = status === "HD" || status === "HALF DAY" ? 0.5 : 1;
+      if (["P", "PRESENT", "OD", "WFH"].includes(status)) {
+        stats.presentDays += fraction;
+        stats.monthlyPresentDays[month] = (stats.monthlyPresentDays[month] || 0) + fraction;
+      } else if (status === "HD" || status === "HALF DAY") {
+        stats.presentDays += 0.5;
+        stats.monthlyPresentDays[month] = (stats.monthlyPresentDays[month] || 0) + 0.5;
+      }
+      if (["EL", "CL", "SL", "FL"].includes(status)) stats[status] += fraction;
+      const transaction = String(row?.compOffTransaction || row?.compOffType || "").trim().toUpperCase();
+      if (status === "CO-E" || transaction === "CO-E" || row?.compOffEarned === true || Number(row?.compOffEarned || 0) > 0) {
+        stats.COEarned += status === "CO-E" || transaction === "CO-E" ? 1 : (row?.compOffEarned === true ? 1 : Number(row?.compOffEarned || 0));
+      }
+      if (status === "CO-U" || transaction === "CO-U") stats.COUsed += 1;
+      else if (status === "CO") stats.legacyCOUsed += 1;
     });
 
+    const applicablePolicy = [...(leaveStore.policies || [])]
+      .filter((policy) => {
+        if (policy?.status !== "Active") return false;
+        if (policy.effectiveFrom && `${year}-12-31` < policy.effectiveFrom) return false;
+        if (policy.effectiveTo && `${year}-01-01` > policy.effectiveTo) return false;
+        const applicability = policy.applicability || {};
+        const match = (selected, actual) => !Array.isArray(selected) || selected.length === 0 || selected.includes(String(actual || "").trim());
+        const group = employee.employeeGroup ?? employee.group ?? employee.employeeType ?? "";
+        const category = employee.workforceCategory ?? employee.category ?? employee.rollCategory ?? employee.type ?? "";
+        const department = employee.department ?? employee.departmentName ?? "";
+        const location = employee.site ?? employee.location ?? employee.branch ?? "";
+        return match(applicability.workforceCategories, category) && match(applicability.employeeGroups, group) && match(applicability.departments, department) && match(applicability.locations, location);
+      })
+      .sort((a, b) => String(b.effectiveFrom || "").localeCompare(String(a.effectiveFrom || "")))[0] || null;
+
+    const opening = leaveStore.openingBalances?.[`${year}:${internalId}`] || leaveStore.openingBalances?.[internalId] || balances?.[internalId] || {};
+    const adjustments = (leaveStore.adjustments || []).filter((item) => employeeKeys.includes(String(item.employeeId)) && Number(item.year) === year);
+    const approvedRequests = (requests || []).filter((request) => employeeKeys.includes(String(request.employeeId)) && request.status === "Approved");
+
+    ["EL", "CL", "SL", "CO"].forEach((type) => {
+      const rule = (applicablePolicy?.leaveTypes || []).find((item) => String(item.code || "").toUpperCase() === type);
+      let accrued = 0;
+      const frequency = String(rule?.accrualFrequency || "NONE").toUpperCase();
+      const credit = Number(rule?.credit || 0);
+      if (rule?.enabled) {
+        if (frequency === "MONTHLY") {
+          const lastMonth = year === new Date().getFullYear() ? new Date().getMonth() + 1 : 12;
+          for (let month = 1; month <= lastMonth; month += 1) {
+            if ((stats.monthlyPresentDays[month] || 0) >= Number(rule.minimumPresentDays || 0)) accrued += credit;
+          }
+          if (Number(rule.annualLimit || 0) > 0) accrued = Math.min(accrued, Number(rule.annualLimit));
+        } else if (frequency === "YEARLY" && rule.accrualBasis === "FIXED") {
+          if (year < new Date().getFullYear()) accrued = Number(rule.annualLimit || 0) > 0 ? Math.min(credit, Number(rule.annualLimit)) : credit;
+          else if (year === new Date().getFullYear()) {
+            accrued = credit * ((new Date().getMonth() + 1) / 12);
+            if (Number(rule.annualLimit || 0) > 0) accrued = Math.min(accrued, Number(rule.annualLimit));
+          }
+        } else if (frequency === "ON_EVENT" && type === "CO") accrued = stats.COEarned * (credit || 1);
+      }
+
+      let attendanceUsed = type === "CO" ? stats.COUsed + stats.legacyCOUsed : stats[type] || 0;
+      let approvedUsed = 0;
+      approvedRequests.filter((request) => String(request.type || "").toUpperCase() === type).forEach((request) => {
+        if (!request.from || !request.to) return;
+        const startDate = new Date(`${request.from}T00:00:00`);
+        const endDate = new Date(`${request.to}T00:00:00`);
+        for (const date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+          if (date.getFullYear() !== year) continue;
+          const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+          const row = findRow(attendance?.[dateKey]);
+          const status = normalizedStatus(row);
+          const alreadyMarked = type === "CO"
+            ? ["CO-U", "CO"].includes(status) || ["CO-U", "CO"].includes(String(row?.compOffTransaction || "").toUpperCase())
+            : status === type;
+          if (!alreadyMarked) approvedUsed += 1;
+        }
+      });
+      const adjustment = adjustments.filter((item) => String(item.type || "").toUpperCase() === type).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const raw = Number(opening[type] || 0) + accrued + adjustment - attendanceUsed - approvedUsed;
+      const maximum = Number(rule?.carryForwardLimit || 0);
+      const capped = rule?.carryForwardEnabled && maximum > 0 ? Math.min(raw, maximum) : raw;
+      result[type] = Math.max(0, capped);
+      result[`${type}Earned`] = accrued + Math.max(0, adjustment);
+      result[`${type}Used`] = attendanceUsed + approvedUsed;
+    });
+    result.FL = stats.FL;
+    result.FLMarked = stats.FL;
+    result.COEarned = stats.COEarned;
+    result.COUsed = stats.COUsed + stats.legacyCOUsed;
     return result;
-  }, [balances, internalId, employee, attendance, policies]);
+  }, [leaveStore, internalId, employee, attendance, balances, requests]);
 
   const myRequests = useMemo(
     () =>
@@ -1296,7 +1430,7 @@ export default function SelfService({
     };
   }, [internalId]);
 
-  const submitLeave = (event) => {
+  const submitLeave = async (event) => {
     event.preventDefault();
 
     if (!employee || !internalId) {
@@ -1352,16 +1486,23 @@ export default function SelfService({
       hrAdminStatus: "CC",
       hrAdminRole: "HR/Admin",
       createdAt: new Date().toISOString(),
-      source: "Employee self service",
+      source: "Employee Self Service",
       attendanceImpact: "None - HR/Admin controls final attendance",
     };
 
-    const next = [request, ...(Array.isArray(requests) ? requests : [])];
+    const nextRequests = [request, ...(Array.isArray(requests) ? requests : []).filter((item) => String(item?.id) !== String(request.id))];
+    const nextStore = { ...leaveStore, requests: nextRequests, audit: [{ id: `LAUD-${Date.now()}`, action: "LEAVE_REQUEST_CREATED", requestId: request.id, employeeId: internalId, timestamp: new Date().toISOString() }, ...(leaveStore.audit || [])] };
 
-    setRequests(next);
-    localStorage.setItem(REQUEST_KEY, JSON.stringify(next));
-
-    window.dispatchEvent(new Event("bauerHrmsLeaveRequestsUpdated"));
+    try {
+      await saveOrganizationModuleData(REQUEST_KEY, nextStore);
+      setLeaveStore(nextStore);
+      setRequests(nextRequests);
+      window.dispatchEvent(new Event("bauerHrmsLeaveRequestsUpdated"));
+    } catch (error) {
+      console.error("Unable to save leave request:", error);
+      setMessage("Leave request could not be saved to Supabase. Please try again.");
+      return;
+    }
 
     setLeaveForm({
       type: "EL",
@@ -1373,7 +1514,7 @@ export default function SelfService({
     setMessage(`Leave request sent to HOD (${employeeName(hodEmployee)}). HR/Admin is kept in CC.`);
   };
 
-  const updateHodRequest = (requestId, decision) => {
+  const updateHodRequest = async (requestId, decision) => {
     const normalized = String(decision || "").toLowerCase();
     const approved = normalized === "approve";
 
@@ -1403,9 +1544,17 @@ export default function SelfService({
       };
     });
 
-    setRequests(next);
-    localStorage.setItem(REQUEST_KEY, JSON.stringify(next));
-    window.dispatchEvent(new Event("bauerHrmsLeaveRequestsUpdated"));
+    try {
+      const nextStore = { ...leaveStore, requests: next, audit: [{ id: `LAUD-${Date.now()}`, action: approved ? "HOD_LEAVE_REQUEST_APPROVED" : "HOD_LEAVE_REQUEST_REJECTED", requestId, employeeId: internalId, timestamp: new Date().toISOString() }, ...(leaveStore.audit || [])] };
+      await saveOrganizationModuleData(REQUEST_KEY, nextStore);
+      setLeaveStore(nextStore);
+      setRequests(next);
+      window.dispatchEvent(new Event("bauerHrmsLeaveRequestsUpdated"));
+      setMessage(approved ? "Leave request approved and forwarded to HR/Admin." : "Leave request rejected.");
+    } catch (error) {
+      console.error("Unable to update leave request:", error);
+      setMessage("Leave decision could not be saved to Supabase. Please try again.");
+    }
   };
 
   const downloadDocument = (documentRecord) => {
@@ -1630,11 +1779,16 @@ export default function SelfService({
           <div className="ess-balance-grid">
             {LEAVE_TYPES.map((type) => (
               <div key={type}>
-                <small>{type === "CO" ? "COMP OFF" : type}</small>
+                <small>{type === "CO" ? "COMP OFF AVAILABLE" : type === "FL" ? "FL MARKED" : type}</small>
                 <strong>{Number(leaveBalances[type] || 0).toFixed(2)}</strong>
-                <span>days</span>
+                <span>{type === "FL" ? "marked days" : "days available"}</span>
               </div>
             ))}
+          </div>
+          <div className="ess-balance-ledger-note">
+            <span><strong>FL marked:</strong> {Number(leaveBalances.FLMarked || 0).toFixed(2)}</span>
+            <span><strong>CO-E earned:</strong> {Number(leaveBalances.COEarned || 0).toFixed(2)}</span>
+            <span><strong>CO-U used:</strong> {Number(leaveBalances.COUsed || 0).toFixed(2)}</span>
           </div>
         </section>
 
@@ -1980,7 +2134,9 @@ export default function SelfService({
               <div key={type}>
                 <small>
                   {type === "CO"
-                    ? "COMP OFF"
+                    ? "COMP OFF AVAILABLE"
+                    : type === "FL"
+                    ? "FL MARKED"
                     : policy?.name || type}
                 </small>
 
@@ -1988,10 +2144,15 @@ export default function SelfService({
                   {Number(leaveBalances[type] || 0).toFixed(2)}
                 </strong>
 
-                <span>days</span>
+                <span>{type === "FL" ? "marked days" : "days available"}</span>
               </div>
             );
           })}
+        </div>
+        <div className="ess-balance-ledger-note">
+          <span><strong>FL marked:</strong> {Number(leaveBalances.FLMarked || 0).toFixed(2)} day(s)</span>
+          <span><strong>CO-E earned:</strong> {Number(leaveBalances.COEarned || 0).toFixed(2)} day(s)</span>
+          <span><strong>CO-U used:</strong> {Number(leaveBalances.COUsed || 0).toFixed(2)} day(s)</span>
         </div>
       </section>
 

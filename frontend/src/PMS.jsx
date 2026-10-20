@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import "./PMS.css";
 import { loadOrganizationMasters } from "./organizationStorage";
+import { loadOrganizationModuleData, saveOrganizationModuleData } from "./organizationModuleStorage";
 
 /**
  * BAUER HRMS — PMS
@@ -108,20 +109,16 @@ const DEFAULT_KRAS = [
   },
 ];
 
-function readJSON(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    const parsed = JSON.parse(raw);
-    return parsed ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
+const PMS_STORAGE_KEYS = {
+  [CYCLES_KEY]: "hrmsPmsCycles",
+  [ELIGIBILITY_KEY]: "hrmsPmsEligibility",
+  [KRA_KEY]: "hrmsPmsKraLibrary",
+  [TEMPLATE_KEY]: "hrmsPmsTemplates",
+  [ASSIGNMENT_KEY]: "hrmsPmsAssignments",
+  [EVALUATION_KEY]: "hrmsPmsEvaluations",
+  [SETTINGS_KEY]: "hrmsPmsSettings",
+};
 
-function writeJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
 
 function makeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -316,30 +313,16 @@ export default function PMS({
       : "Dashboard"
   );
 
-  const [employees, setEmployees] = useState(() =>
-    readJSON(EMPLOYEE_KEY, [])
-  );
-  const [cycles, setCycles] = useState(() =>
-    readJSON(CYCLES_KEY, DEFAULT_CYCLES)
-  );
-  const [eligibility, setEligibility] = useState(() =>
-    readJSON(ELIGIBILITY_KEY, [])
-  );
-  const [kras, setKras] = useState(() =>
-    readJSON(KRA_KEY, DEFAULT_KRAS)
-  );
-  const [templates, setTemplates] = useState(() =>
-    readJSON(TEMPLATE_KEY, [])
-  );
-  const [assignments, setAssignments] = useState(() =>
-    readJSON(ASSIGNMENT_KEY, [])
-  );
-  const [evaluations, setEvaluations] = useState(() =>
-    readJSON(EVALUATION_KEY, [])
-  );
-  const [settings, setSettings] = useState(() =>
-    readJSON(SETTINGS_KEY, DEFAULT_SETTINGS)
-  );
+  const [employees, setEmployees] = useState([]);
+  const [cycles, setCycles] = useState(DEFAULT_CYCLES);
+  const [eligibility, setEligibility] = useState([]);
+  const [kras, setKras] = useState(DEFAULT_KRAS);
+  const [templates, setTemplates] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [evaluations, setEvaluations] = useState([]);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [pmsCloudReady, setPmsCloudReady] = useState(false);
+  const [pmsCloudError, setPmsCloudError] = useState("");
 
   const [selectedCycleId, setSelectedCycleId] = useState(
     cycles[0]?.id || ""
@@ -362,9 +345,51 @@ export default function PMS({
   const activeCycle =
     cycles.find((cycle) => cycle.id === selectedCycleId) || cycles[0] || null;
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPmsData() {
+      try {
+        setPmsCloudError("");
+        const keys = Object.entries(PMS_STORAGE_KEYS);
+        const values = await Promise.all(keys.map(async ([legacyKey, cloudKey]) => [
+          legacyKey,
+          await loadOrganizationModuleData(cloudKey, null),
+        ]));
+        if (cancelled) return;
+        const loaded = Object.fromEntries(values);
+        if (Array.isArray(loaded[CYCLES_KEY])) setCycles(loaded[CYCLES_KEY]);
+        if (Array.isArray(loaded[ELIGIBILITY_KEY])) setEligibility(loaded[ELIGIBILITY_KEY]);
+        if (Array.isArray(loaded[KRA_KEY])) setKras(loaded[KRA_KEY]);
+        if (Array.isArray(loaded[TEMPLATE_KEY])) setTemplates(loaded[TEMPLATE_KEY]);
+        if (Array.isArray(loaded[ASSIGNMENT_KEY])) setAssignments(loaded[ASSIGNMENT_KEY]);
+        if (Array.isArray(loaded[EVALUATION_KEY])) setEvaluations(loaded[EVALUATION_KEY]);
+        if (loaded[SETTINGS_KEY] && typeof loaded[SETTINGS_KEY] === "object") setSettings(loaded[SETTINGS_KEY]);
+      } catch (error) {
+        console.error("Unable to load PMS data from Supabase:", error);
+        if (!cancelled) setPmsCloudError(error?.message || "Unable to load PMS data from database.");
+      } finally {
+        if (!cancelled) setPmsCloudReady(true);
+      }
+    }
+    void loadPmsData();
+    return () => { cancelled = true; };
+  }, []);
+
   const persist = (key, value, setter, message) => {
     setter(value);
-    writeJSON(key, value);
+    if (pmsCloudReady) {
+      const cloudKey = PMS_STORAGE_KEYS[key];
+      if (!cloudKey) {
+        setPmsCloudError(`No database key configured for ${key}.`);
+      } else {
+        void saveOrganizationModuleData(cloudKey, value)
+          .then(() => setPmsCloudError(""))
+          .catch((error) => {
+            console.error("Unable to save PMS data to Supabase:", error);
+            setPmsCloudError(error?.message || "Unable to save PMS data to database.");
+          });
+      }
+    }
     if (message) {
       setToast(message);
       window.setTimeout(() => setToast(""), 2600);
@@ -372,14 +397,25 @@ export default function PMS({
   };
 
   useEffect(() => {
-    const refresh = () => {
-      setEmployees(readJSON(EMPLOYEE_KEY, []));
-    };
-    window.addEventListener("bauerHrmsEmployeesUpdated", refresh);
-    window.addEventListener("storage", refresh);
+    let mounted = true;
+    async function refreshEmployees() {
+      try {
+        const masters = await loadOrganizationMasters({});
+        const source = Array.isArray(masters?.employees) ? masters.employees : [];
+        if (mounted) setEmployees(source);
+      } catch (error) {
+        console.error("Unable to load PMS employees:", error);
+      }
+    }
+    void refreshEmployees();
+    window.addEventListener("bauerHrmsEmployeesUpdated", refreshEmployees);
+    window.addEventListener("bauerHrmsOrganizationMastersUpdated", refreshEmployees);
+    window.addEventListener("focus", refreshEmployees);
     return () => {
-      window.removeEventListener("bauerHrmsEmployeesUpdated", refresh);
-      window.removeEventListener("storage", refresh);
+      mounted = false;
+      window.removeEventListener("bauerHrmsEmployeesUpdated", refreshEmployees);
+      window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshEmployees);
+      window.removeEventListener("focus", refreshEmployees);
     };
   }, []);
 
@@ -1083,9 +1119,16 @@ export default function PMS({
     });
 
     setEvaluations(next);
-    writeJSON(EVALUATION_KEY, next);
     setAssignments(updatedAssignments);
-    writeJSON(ASSIGNMENT_KEY, updatedAssignments);
+    if (pmsCloudReady) {
+      Promise.all([
+        saveOrganizationModuleData(PMS_STORAGE_KEYS[EVALUATION_KEY], next),
+        saveOrganizationModuleData(PMS_STORAGE_KEYS[ASSIGNMENT_KEY], updatedAssignments),
+      ]).catch((error) => {
+        console.error("Unable to save PMS evaluation:", error);
+        setPmsCloudError(error?.message || "Unable to save evaluation to database.");
+      });
+    }
     window.dispatchEvent(
       new CustomEvent("bauerHrmsPmsUpdated", {
         detail: { cycleId: activeCycle.id, employeeId, role: evalRole },
@@ -1098,6 +1141,7 @@ export default function PMS({
 
   return (
     <div className="pms-page">
+      {pmsCloudError ? <div role="alert" className="pms-error-banner">PMS database error: {pmsCloudError}</div> : null}
       <div className="pms-page-head">
         <div>
           <span className="pms-eyebrow">PEOPLE • PERFORMANCE</span>

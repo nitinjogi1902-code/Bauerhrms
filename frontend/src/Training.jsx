@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import "./Training.css";
 import { loadOrganizationMasters } from "./organizationStorage";
+import { loadOrganizationModuleData, saveOrganizationModuleData } from "./organizationModuleStorage";
 
-const TRAINING_STORAGE_KEY = "bauerHrmsTrainings";
+const TRAINING_MODULE_KEY = "hrmsTrainingData";
 const TRAINING_UPDATED_EVENT = "bauerHrmsTrainingUpdated";
-const TRAINING_MASTER_KEY = "bauerHrmsTrainingMasters";
-const TRAINER_MASTER_KEY = "bauerHrmsTrainingTrainers";
-const TNI_KEY = "bauerHrmsTrainingTNI";
-const ANNUAL_PLAN_KEY = "bauerHrmsTrainingAnnualPlan";
 
 const STATUS_OPTIONS = [
   "Draft",
@@ -53,28 +50,6 @@ const emptyForm = {
   status: "Scheduled",
   description: "",
 };
-
-function readTrainingData() {
-  try {
-    const saved = localStorage.getItem(TRAINING_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
-function readTrainingStore(key, fallback = []) {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveTrainingStore(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
 
 function makeId() {
   return `TRN-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -133,7 +108,7 @@ function getDaysInMonth(viewDate) {
 }
 
 function Training({ employees = [], masters = {} }) {
-  const [trainings, setTrainings] = useState(readTrainingData);
+  const [trainings, setTrainings] = useState([]);
   const [view, setView] = useState("Dashboard");
   const [calendarView, setCalendarView] = useState("Month");
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -144,10 +119,10 @@ function Training({ employees = [], masters = {} }) {
   const [statusFilter, setStatusFilter] = useState("All");
   const [typeFilter, setTypeFilter] = useState("All");
   const [departmentFilter, setDepartmentFilter] = useState("All");
-  const [trainingMasters, setTrainingMasters] = useState(() => readTrainingStore(TRAINING_MASTER_KEY));
-  const [trainers, setTrainers] = useState(() => readTrainingStore(TRAINER_MASTER_KEY));
-  const [tniRecords, setTniRecords] = useState(() => readTrainingStore(TNI_KEY));
-  const [annualPlans, setAnnualPlans] = useState(() => readTrainingStore(ANNUAL_PLAN_KEY));
+  const [trainingMasters, setTrainingMasters] = useState([]);
+  const [trainers, setTrainers] = useState([]);
+  const [tniRecords, setTniRecords] = useState([]);
+  const [annualPlans, setAnnualPlans] = useState([]);
   const [masterForm, setMasterForm] = useState({ name: "", category: "Technical", frequency: "Annual", duration: 3, mandatory: false, mode: "Classroom", department: "All Departments", designation: "", description: "", status: "Active" });
   const [masterSearch, setMasterSearch] = useState("");
   const [masterCategoryFilter, setMasterCategoryFilter] = useState("All");
@@ -189,23 +164,72 @@ function Training({ employees = [], masters = {} }) {
     return ["All Departments", ...new Set(names)];
   }, [organizationMasters]);
 
-  useEffect(() => {
-    localStorage.setItem(TRAINING_STORAGE_KEY, JSON.stringify(trainings));
-  }, [trainings]);
-  useEffect(() => saveTrainingStore(TRAINING_MASTER_KEY, trainingMasters), [trainingMasters]);
-  useEffect(() => saveTrainingStore(TRAINER_MASTER_KEY, trainers), [trainers]);
-  useEffect(() => saveTrainingStore(TNI_KEY, tniRecords), [tniRecords]);
-  useEffect(() => saveTrainingStore(ANNUAL_PLAN_KEY, annualPlans), [annualPlans]);
+  const [trainingCloudReady, setTrainingCloudReady] = useState(false);
+  const [trainingCloudError, setTrainingCloudError] = useState("");
 
   useEffect(() => {
-    const refresh = () => setTrainings(readTrainingData());
-    window.addEventListener("storage", refresh);
+    let cancelled = false;
+    (async () => {
+      try {
+        setTrainingCloudError("");
+        const saved = await loadOrganizationModuleData(TRAINING_MODULE_KEY, {});
+        if (cancelled) return;
+        setTrainings(Array.isArray(saved?.trainings) ? saved.trainings : []);
+        setTrainingMasters(Array.isArray(saved?.trainingMasters) ? saved.trainingMasters : []);
+        setTrainers(Array.isArray(saved?.trainers) ? saved.trainers : []);
+        setTniRecords(Array.isArray(saved?.tniRecords) ? saved.tniRecords : []);
+        setAnnualPlans(Array.isArray(saved?.annualPlans) ? saved.annualPlans : []);
+      } catch (error) {
+        console.error("Unable to load Training data from Supabase:", error);
+        if (!cancelled) setTrainingCloudError(error?.message || "Unable to load Training data.");
+      } finally {
+        if (!cancelled) setTrainingCloudReady(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!trainingCloudReady || trainingCloudError) return;
+    const timer = setTimeout(async () => {
+      try {
+        await saveOrganizationModuleData(TRAINING_MODULE_KEY, {
+          trainings, trainingMasters, trainers, tniRecords, annualPlans,
+        });
+        setTrainingCloudError("");
+        window.dispatchEvent(new CustomEvent(TRAINING_UPDATED_EVENT));
+      } catch (error) {
+        console.error("Unable to save Training data to Supabase:", error);
+        setTrainingCloudError(error?.message || "Unable to save Training data.");
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [trainings, trainingMasters, trainers, tniRecords, annualPlans, trainingCloudReady, trainingCloudError]);
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const saved = await loadOrganizationModuleData(TRAINING_MODULE_KEY, {});
+        setTrainings(Array.isArray(saved?.trainings) ? saved.trainings : []);
+        setTrainingMasters(Array.isArray(saved?.trainingMasters) ? saved.trainingMasters : []);
+        setTrainers(Array.isArray(saved?.trainers) ? saved.trainers : []);
+        setTniRecords(Array.isArray(saved?.tniRecords) ? saved.tniRecords : []);
+        setAnnualPlans(Array.isArray(saved?.annualPlans) ? saved.annualPlans : []);
+      } catch (error) {
+        console.error("Unable to refresh Training data:", error);
+      }
+    };
     window.addEventListener(TRAINING_UPDATED_EVENT, refresh);
+    window.addEventListener("focus", refresh);
     return () => {
-      window.removeEventListener("storage", refresh);
       window.removeEventListener(TRAINING_UPDATED_EVENT, refresh);
+      window.removeEventListener("focus", refresh);
     };
   }, []);
+
+  if (trainingCloudError) {
+    console.error("Training database status:", trainingCloudError);
+  }
 
   const today = new Date();
   const currentMonth = calendarDate.getMonth();
@@ -357,14 +381,12 @@ function Training({ employees = [], masters = {} }) {
 
     setModalOpen(false);
     setForm(emptyForm);
-    window.dispatchEvent(new Event(TRAINING_UPDATED_EVENT));
   };
 
   const deleteTraining = (id) => {
     if (!window.confirm("Delete this training record?")) return;
     setTrainings((current) => current.filter((item) => item.id !== id));
     setDetails(null);
-    window.dispatchEvent(new Event(TRAINING_UPDATED_EVENT));
   };
 
   const moveMonth = (amount) => {

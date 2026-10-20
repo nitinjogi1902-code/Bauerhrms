@@ -1,17 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import "./VendorAgreements.css";
+
 import { loadOrganizationMasters, saveOrganizationMasters } from "./organizationStorage";
-
-
-
-const AGREEMENT_KEY = "bauerHrmsVendorAgreements";
-
-const PO_KEY = "bauerHrmsVendorPOs";
-
-const ORG_KEY = "bauerHrmsOrganizationMasters";
-
-
+import { loadOrganizationModuleData, saveOrganizationModuleData } from "./organizationModuleStorage";
 
 const EMPTY_PO = {
 
@@ -40,8 +32,6 @@ const EMPTY_PO = {
   pos: [],
 
 };
-
-
 
 const EMPTY_FORM = {
 
@@ -73,8 +63,6 @@ const EMPTY_FORM = {
 
 };
 
-
-
 const FALLBACK_VENDORS = ["BAUER", "Conzept", "AlignPro", "Taurus"];
 
 const FALLBACK_LOCATIONS = [
@@ -91,44 +79,6 @@ const FALLBACK_LOCATIONS = [
 
 ];
 
-
-
-function readAgreements() {
-
-  try {
-
-    const saved = localStorage.getItem(AGREEMENT_KEY);
-
-    return saved ? JSON.parse(saved) : [];
-
-  } catch {
-
-    return [];
-
-  }
-
-}
-
-
-
-function readOrganization() {
-
-  try {
-
-    const saved = localStorage.getItem(ORG_KEY);
-
-    return saved ? JSON.parse(saved) : {};
-
-  } catch {
-
-    return {};
-
-  }
-
-}
-
-
-
 function activeNames(items, fallback) {
 
   if (!Array.isArray(items) || !items.length) return fallback;
@@ -143,28 +93,6 @@ function activeNames(items, fallback) {
 
 }
 
-
-
-
-
-function readPOs() {
-
-  try {
-
-    const saved = localStorage.getItem(PO_KEY);
-
-    return saved ? JSON.parse(saved) : [];
-
-  } catch {
-
-    return [];
-
-  }
-
-}
-
-
-
 function statusForPO(po) {
 
   if (po.manualStatus === "On Hold") return "On Hold";
@@ -173,15 +101,11 @@ function statusForPO(po) {
 
   if (!po.poStart || !po.poEnd) return "Draft";
 
-
-
   const today = new Date();
 
   const start = new Date(`${po.poStart}T00:00:00`);
 
   const end = new Date(`${po.poEnd}T23:59:59`);
-
-
 
   if (today < start) return "Future";
 
@@ -190,8 +114,6 @@ function statusForPO(po) {
   return "Active";
 
 }
-
-
 
 function daysRemainingPO(po) {
 
@@ -203,15 +125,11 @@ function daysRemainingPO(po) {
 
 }
 
-
-
 function formatNumber(value) {
 
   return Number(value || 0).toLocaleString("en-IN");
 
 }
-
-
 
 function statusForAgreement(agreement) {
 
@@ -221,19 +139,13 @@ function statusForAgreement(agreement) {
 
   if (agreement.manualStatus === "Cancelled") return "Cancelled";
 
-
-
   if (!agreement.agreementStart || !agreement.agreementEnd) return "Draft";
-
-
 
   const today = new Date();
 
   const start = new Date(`${agreement.agreementStart}T00:00:00`);
 
   const end = new Date(`${agreement.agreementEnd}T23:59:59`);
-
-
 
   if (today < start) return "Future";
 
@@ -242,8 +154,6 @@ function statusForAgreement(agreement) {
   return "Active";
 
 }
-
-
 
 function daysRemaining(agreement) {
 
@@ -254,8 +164,6 @@ function daysRemaining(agreement) {
   return Math.ceil((end - new Date()) / 86400000);
 
 }
-
-
 
 function formatDate(value) {
 
@@ -273,15 +181,15 @@ function formatDate(value) {
 
 }
 
-
-
 export default function VendorAgreements() {
 
-  const [agreements, setAgreements] = useState(readAgreements);
+  const [agreements, setAgreements] = useState([]);
 
-  const [pos, setPos] = useState(readPOs);
+  const [pos, setPos] = useState([]);
 
-  const [org, setOrg] = useState(readOrganization);
+  const [org, setOrg] = useState({});
+  const [cloudReady, setCloudReady] = useState(false);
+  const [cloudError, setCloudError] = useState("");
 
   const [search, setSearch] = useState("");
 
@@ -299,42 +207,47 @@ export default function VendorAgreements() {
 
   const [poForm, setPoForm] = useState(EMPTY_PO);
 
-
-
   useEffect(() => {
     let mounted = true;
 
     const refresh = async () => {
       try {
-        const savedMasters = await loadOrganizationMasters({});
-        if (mounted && savedMasters && typeof savedMasters === "object") {
-          setOrg(savedMasters);
-        }
+        const [savedMasters, savedAgreements, savedPOs] = await Promise.all([
+          loadOrganizationMasters({}),
+          loadOrganizationModuleData("bauerHrmsVendorAgreements", []),
+          loadOrganizationModuleData("bauerHrmsVendorPOs", []),
+        ]);
+        if (!mounted) return;
+        setOrg(savedMasters && typeof savedMasters === "object" ? savedMasters : {});
+        setAgreements(Array.isArray(savedAgreements) ? savedAgreements : []);
+        setPos(Array.isArray(savedPOs) ? savedPOs : []);
+        setCloudError("");
+        setCloudReady(true);
       } catch (error) {
-        console.error("Unable to load shared organization masters:", error);
-        if (mounted) setOrg(readOrganization());
-      }
-
-      if (mounted) {
-        setAgreements(readAgreements());
-        setPos(readPOs());
+        console.error("Unable to load vendor agreement data from Supabase:", error);
+        if (mounted) {
+          setCloudError(error?.message || "Unable to load vendor agreement data from Supabase.");
+          setCloudReady(false);
+        }
       }
     };
 
     refresh();
-    window.addEventListener("storage", refresh);
+    const onModuleUpdate = (event) => {
+      const key = event?.detail?.moduleKey;
+      if (!key || key === "bauerHrmsVendorAgreements" || key === "bauerHrmsVendorPOs") refresh();
+    };
+    window.addEventListener("organizationModuleDataUpdated", onModuleUpdate);
     window.addEventListener("organizationMastersUpdated", refresh);
     window.addEventListener("bauerHrmsMastersUpdated", refresh);
 
     return () => {
       mounted = false;
-      window.removeEventListener("storage", refresh);
+      window.removeEventListener("organizationModuleDataUpdated", onModuleUpdate);
       window.removeEventListener("organizationMastersUpdated", refresh);
       window.removeEventListener("bauerHrmsMastersUpdated", refresh);
     };
   }, []);
-
-
 
   const vendors = activeNames(org.jobRoles, FALLBACK_VENDORS);
 
@@ -342,35 +255,19 @@ export default function VendorAgreements() {
 
   const groups = activeNames(org.employeeGroups, ["Third Party (Associates)"]);
 
-
-
-  const save = (next) => {
-
+  const save = async (next) => {
+    await saveOrganizationModuleData("bauerHrmsVendorAgreements", next);
     setAgreements(next);
-
-    localStorage.setItem(AGREEMENT_KEY, JSON.stringify(next));
-
     window.dispatchEvent(new Event("bauerHrmsAgreementsUpdated"));
-
   };
 
-
-
-  const savePOs = (next) => {
-
+  const savePOs = async (next) => {
+    await saveOrganizationModuleData("bauerHrmsVendorPOs", next);
     setPos(next);
-
-    localStorage.setItem(PO_KEY, JSON.stringify(next));
-
     window.dispatchEvent(new Event("bauerHrmsPOsUpdated"));
-
   };
-
-
 
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-
-
 
   const openAdd = () => {
 
@@ -382,8 +279,6 @@ export default function VendorAgreements() {
 
   };
 
-
-
   const openEdit = (item) => {
 
     setEditingId(item.id);
@@ -393,10 +288,6 @@ export default function VendorAgreements() {
     setShowModal(true);
 
   };
-
-
-
-
 
   const openAddPO = (agreementId) => {
 
@@ -418,8 +309,6 @@ export default function VendorAgreements() {
 
   };
 
-
-
   const editPO = (po) => {
 
     setPoAgreementId(po.agreementId);
@@ -430,13 +319,9 @@ export default function VendorAgreements() {
 
   };
 
-
-
-  const submitPO = (e) => {
+  const submitPO = async (e) => {
 
     e.preventDefault();
-
-
 
     if (!poAgreementId || !poForm.poNumber || !poForm.poStart || !poForm.poEnd) {
 
@@ -446,8 +331,6 @@ export default function VendorAgreements() {
 
     }
 
-
-
     if (new Date(poForm.poEnd) < new Date(poForm.poStart)) {
 
       window.alert("PO End Date cannot be before PO Start Date.");
@@ -455,8 +338,6 @@ export default function VendorAgreements() {
       return;
 
     }
-
-
 
     const duplicate = pos.some(
 
@@ -468,8 +349,6 @@ export default function VendorAgreements() {
 
     );
 
-
-
     if (duplicate) {
 
       window.alert("This PO Number already exists.");
@@ -477,8 +356,6 @@ export default function VendorAgreements() {
       return;
 
     }
-
-
 
     const clean = {
 
@@ -504,13 +381,15 @@ export default function VendorAgreements() {
 
     };
 
-
-
     const exists = pos.some((item) => item.id === clean.id);
 
-    savePOs(exists ? pos.map((item) => item.id === clean.id ? clean : item) : [...pos, clean]);
-
-
+    try {
+      await savePOs(exists ? pos.map((item) => item.id === clean.id ? clean : item) : [...pos, clean]);
+    } catch (error) {
+      console.error("Unable to save PO to Supabase:", error);
+      window.alert(error?.message || "Unable to save PO. Please try again.");
+      return;
+    }
 
     setShowPOModal(false);
 
@@ -520,23 +399,17 @@ export default function VendorAgreements() {
 
   };
 
-
-
-  const deletePO = (id) => {
+  const deletePO = async (id) => {
 
     if (!window.confirm("Delete this PO record?")) return;
 
-    savePOs(pos.filter((item) => item.id !== id));
+    savePOs(pos.filter((item) => item.id !== id)).catch((error) => window.alert(error?.message || "Unable to delete PO."));
 
   };
-
-
 
   const submit = async (e) => {
 
     e.preventDefault();
-
-
 
     if (!form.vendor || !form.agreementNo || !form.agreementStart || !form.agreementEnd) {
 
@@ -546,8 +419,6 @@ export default function VendorAgreements() {
 
     }
 
-
-
     if (new Date(form.agreementEnd) < new Date(form.agreementStart)) {
 
       window.alert("Agreement End Date cannot be before Start Date.");
@@ -555,8 +426,6 @@ export default function VendorAgreements() {
       return;
 
     }
-
-
 
     const duplicate = agreements.some(
 
@@ -568,8 +437,6 @@ export default function VendorAgreements() {
 
     );
 
-
-
     if (duplicate) {
 
       window.alert("This Agreement No. already exists.");
@@ -578,50 +445,83 @@ export default function VendorAgreements() {
 
     }
 
-
-
     const clean = {
+
       ...form,
+
       vendor: form.vendor.trim(),
+
       agreementNo: form.agreementNo.trim(),
+
       documentName: form.documentName.trim(),
+
     };
 
     // Keep the vendor directory centralized in Organization Masters (Supabase).
+
     try {
+
       const latestMasters = await loadOrganizationMasters(org || {});
+
       const jobRoles = Array.isArray(latestMasters?.jobRoles) ? latestMasters.jobRoles : [];
+
       const alreadyExists = jobRoles.some((item) => {
+
         const name = typeof item === "string" ? item : item?.name;
+
         return String(name || "").trim().toLowerCase() === clean.vendor.toLowerCase();
+
       });
 
       if (!alreadyExists) {
+
         const vendorMaster = {
+
           id: `vendor-${Date.now()}`,
+
           name: clean.vendor,
+
           active: true,
+
           source: "vendor-agreements",
+
         };
+
         const nextMasters = { ...latestMasters, jobRoles: [...jobRoles, vendorMaster] };
+
         await saveOrganizationMasters(nextMasters);
+
         setOrg(nextMasters);
+
         window.dispatchEvent(new Event("organizationMastersUpdated"));
+
         window.dispatchEvent(new Event("bauerHrmsMastersUpdated"));
+
       } else {
+
         setOrg(latestMasters);
+
       }
+
     } catch (error) {
+
       console.error("Unable to sync vendor to Organization Masters:", error);
+
       window.alert("Agreement was not saved because the vendor could not be synced to Organization Masters. Please retry.");
+
       return;
+
     }
-
-
 
     if (editingId) {
 
-      save(agreements.map((item) => item.id === editingId ? { ...clean, id: editingId } : item));
+      try {
+        await save(agreements.map((item) => item.id === editingId ? { ...clean, id: editingId } : item));
+      } catch (error) {
+        console.error("Unable to save agreement to Supabase:", error);
+        window.alert(error?.message || "Unable to save agreement. Please try again.");
+        return;
+      }
 
     } else {
 
@@ -633,11 +533,15 @@ export default function VendorAgreements() {
 
           : `${Date.now()}`;
 
-      save([...agreements, { ...clean, id }]);
+      try {
+        await save([...agreements, { ...clean, id }]);
+      } catch (error) {
+        console.error("Unable to save agreement to Supabase:", error);
+        window.alert(error?.message || "Unable to save agreement. Please try again.");
+        return;
+      }
 
     }
-
-
 
     setShowModal(false);
 
@@ -647,23 +551,17 @@ export default function VendorAgreements() {
 
   };
 
-
-
-  const remove = (id) => {
+  const remove = async (id) => {
 
     if (!window.confirm("Delete this agreement record?")) return;
 
-    save(agreements.filter((item) => item.id !== id));
+    save(agreements.filter((item) => item.id !== id)).catch((error) => window.alert(error?.message || "Unable to delete agreement."));
 
   };
-
-
 
   const filtered = useMemo(() => {
 
     const q = search.trim().toLowerCase();
-
-
 
     return agreements
 
@@ -683,21 +581,15 @@ export default function VendorAgreements() {
 
             .includes(q);
 
-
-
         const matchesStatus =
 
           statusFilter === "ALL" || item.calculatedStatus === statusFilter;
-
-
 
         return matchesSearch && matchesStatus;
 
       });
 
   }, [agreements, search, statusFilter]);
-
-
 
   const activeCount = agreements.filter((x) => statusForAgreement(x) === "Active").length;
 
@@ -717,10 +609,6 @@ export default function VendorAgreements() {
 
   const holdCount = agreements.filter((x) => statusForAgreement(x) === "On Hold").length;
 
-
-
-
-
   const activePOs = pos.filter((x) => statusForPO(x) === "Active").length;
 
   const expiringPOs = pos.filter((x) => {
@@ -732,8 +620,6 @@ export default function VendorAgreements() {
     return days !== null && days >= 0 && days <= 60;
 
   }).length;
-
-
 
   return (
 
@@ -761,7 +647,11 @@ export default function VendorAgreements() {
 
       </div>
 
-
+      {!cloudReady && (
+        <div className="va-note" role="status">
+          {cloudError ? `Supabase data load failed: ${cloudError}` : "Loading vendor agreements and purchase orders from Supabase…"}
+        </div>
+      )}
 
       <div className="va-summary">
 
@@ -776,8 +666,6 @@ export default function VendorAgreements() {
         <div><span>On Hold</span><strong>{holdCount}</strong></div>
 
       </div>
-
-
 
       <div className="va-toolbar">
 
@@ -815,8 +703,6 @@ export default function VendorAgreements() {
 
       </div>
 
-
-
       <div className="va-card">
 
         <div className="va-card-head">
@@ -830,8 +716,6 @@ export default function VendorAgreements() {
           </div>
 
         </div>
-
-
 
         {filtered.length === 0 ? (
 
@@ -907,9 +791,7 @@ export default function VendorAgreements() {
 
                     <td>
 
-                      
                       <span className={`va-status ${item.calculatedStatus.toLowerCase().replace(/\s+/g, "-")}`}>
-
 
                         {item.calculatedStatus}
 
@@ -973,8 +855,6 @@ export default function VendorAgreements() {
 
       </div>
 
-
-
       <div className="va-card va-po-card">
 
         <div className="va-card-head va-po-head">
@@ -988,8 +868,6 @@ export default function VendorAgreements() {
           </div>
 
         </div>
-
-
 
         {pos.length === 0 ? (
 
@@ -1042,8 +920,6 @@ export default function VendorAgreements() {
                   const poStatus = statusForPO(po);
 
                   const remaining = daysRemainingPO(po);
-
-
 
                   return (
 
@@ -1109,8 +985,6 @@ export default function VendorAgreements() {
 
       </div>
 
-
-
       {showModal && (
 
         <div className="va-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setShowModal(false)}>
@@ -1131,8 +1005,6 @@ export default function VendorAgreements() {
 
             </div>
 
-
-
             <div className="va-section">
 
               <div className="va-section-title">Agreement Details</div>
@@ -1142,19 +1014,28 @@ export default function VendorAgreements() {
                 <label>Vendor / Contractor Name *
 
                   <input
+
                     list="organization-vendor-master-options"
+
                     value={form.vendor}
+
                     onChange={(e) => update("vendor", e.target.value)}
+
                     placeholder="Select an existing vendor or type a new vendor name"
+
                     required
+
                   />
+
                   <datalist id="organization-vendor-master-options">
+
                     {vendors.map((x) => <option key={x} value={x} />)}
+
                   </datalist>
+
                   <small className="va-field-hint">New vendor names are added to Organization → Job Role / Vendor when you save the agreement.</small>
+
                 </label>
-
-
 
                 <label>Agreement No. *
 
@@ -1162,23 +1043,17 @@ export default function VendorAgreements() {
 
                 </label>
 
-
-
                 <label>Agreement Start Date *
 
                   <input type="date" value={form.agreementStart} onChange={(e) => update("agreementStart", e.target.value)} />
 
                 </label>
 
-
-
                 <label>Agreement End Date *
 
                   <input type="date" value={form.agreementEnd} onChange={(e) => update("agreementEnd", e.target.value)} />
 
                 </label>
-
-
 
                 <label>Agreement Type
 
@@ -1198,8 +1073,6 @@ export default function VendorAgreements() {
 
                 </label>
 
-
-
                 <label>Site / Location
 
                   <select value={form.location} onChange={(e) => update("location", e.target.value)}>
@@ -1212,8 +1085,6 @@ export default function VendorAgreements() {
 
                 </label>
 
-
-
                 <label>Manpower Category
 
                   <select value={form.manpowerCategory} onChange={(e) => update("manpowerCategory", e.target.value)}>
@@ -1223,8 +1094,6 @@ export default function VendorAgreements() {
                   </select>
 
                 </label>
-
-
 
                 <label>HR Status Control
 
@@ -1243,8 +1112,6 @@ export default function VendorAgreements() {
               </div>
 
             </div>
-
-
 
             <div className="va-section">
 
@@ -1268,8 +1135,6 @@ export default function VendorAgreements() {
 
                 </label>
 
-
-
                 <label>Gratuity Responsibility
 
                   <select value={form.gratuityResponsibility} onChange={(e) => update("gratuityResponsibility", e.target.value)}>
@@ -1283,8 +1148,6 @@ export default function VendorAgreements() {
                   </select>
 
                 </label>
-
-
 
                 <label className="va-wide">Better Terms / Special Provision
 
@@ -1303,8 +1166,6 @@ export default function VendorAgreements() {
               </div>
 
             </div>
-
-
 
             <div className="va-section">
 
@@ -1328,8 +1189,6 @@ export default function VendorAgreements() {
 
                 </label>
 
-
-
                 <label className="va-wide">Remarks
 
                   <textarea value={form.remarks} onChange={(e) => update("remarks", e.target.value)} />
@@ -1339,8 +1198,6 @@ export default function VendorAgreements() {
               </div>
 
             </div>
-
-
 
             <div className="va-note">
 
@@ -1353,8 +1210,6 @@ export default function VendorAgreements() {
               become Active just by changing a status dropdown.
 
             </div>
-
-
 
             <div className="va-modal-actions">
 
@@ -1369,8 +1224,6 @@ export default function VendorAgreements() {
         </div>
 
       )}
-
-
 
       {showPOModal && (
 
@@ -1392,8 +1245,6 @@ export default function VendorAgreements() {
 
             </div>
 
-
-
             <div className="va-section">
 
               <div className="va-section-title">PO Details</div>
@@ -1406,15 +1257,11 @@ export default function VendorAgreements() {
 
                 </label>
 
-
-
                 <label>PO Start Date *
 
                   <input type="date" value={poForm.poStart} onChange={(e) => setPoForm((p) => ({ ...p, poStart: e.target.value }))} />
 
                 </label>
-
-
 
                 <label>PO End Date *
 
@@ -1422,15 +1269,11 @@ export default function VendorAgreements() {
 
                 </label>
 
-
-
                 <label>PO Value
 
                   <input type="number" min="0" value={poForm.poValue} onChange={(e) => setPoForm((p) => ({ ...p, poValue: e.target.value }))} placeholder="₹" />
 
                 </label>
-
-
 
                 <label>Site / Location
 
@@ -1444,8 +1287,6 @@ export default function VendorAgreements() {
 
                 </label>
 
-
-
                 <label>Manpower Category
 
                   <select value={poForm.manpowerCategory} onChange={(e) => setPoForm((p) => ({ ...p, manpowerCategory: e.target.value }))}>
@@ -1456,23 +1297,17 @@ export default function VendorAgreements() {
 
                 </label>
 
-
-
                 <label>Approved Manpower / Headcount
 
                   <input type="number" min="0" value={poForm.approvedManpower} onChange={(e) => setPoForm((p) => ({ ...p, approvedManpower: e.target.value }))} placeholder="e.g. 25" />
 
                 </label>
 
-
-
                 <label>Manpower Type / Designation
 
                   <input value={poForm.manpowerType} onChange={(e) => setPoForm((p) => ({ ...p, manpowerType: e.target.value }))} placeholder="e.g. Civil Engineer / Helper" />
 
                 </label>
-
-
 
                 <label>HR Status Control
 
@@ -1488,15 +1323,11 @@ export default function VendorAgreements() {
 
                 </label>
 
-
-
                 <label>PO Document / Reference
 
                   <input value={poForm.documentName} onChange={(e) => setPoForm((p) => ({ ...p, documentName: e.target.value }))} placeholder="Document name / reference" />
 
                 </label>
-
-
 
                 <label className="va-wide">Remarks
 
@@ -1508,8 +1339,6 @@ export default function VendorAgreements() {
 
             </div>
 
-
-
             <div className="va-note">
 
               <b>PO status:</b> Auto mode calculates Future / Active / Expired from PO dates.
@@ -1517,8 +1346,6 @@ export default function VendorAgreements() {
               HR can manually put a PO On Hold or Cancelled. Multiple POs can exist for the same vendor and agreement.
 
             </div>
-
-
 
             <div className="va-modal-actions">
 

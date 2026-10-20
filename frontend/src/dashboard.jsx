@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./dashboard.css";
 import { supabase } from "./supabaseClient";
+import { loadOrganizationModuleData } from "./organizationModuleStorage";
 
 import Attendance from "./attendance";
 import Employees from "./employees";
@@ -57,7 +58,6 @@ const shifts = [
 ];
 
 
-const EMPLOYEE_STORAGE_KEY = "bauerHrmsEmployees";
 const AGREEMENT_STORAGE_KEY = "bauerHrmsVendorAgreements";
 const PO_STORAGE_KEY = "bauerHrmsVendorPOs";
 const ORG_STORAGE_KEY = "bauerHrmsOrganizationMasters";
@@ -66,63 +66,13 @@ const RECRUITMENT_CANDIDATE_KEY = "bauerHrmsRecruitmentCandidates";
 const RECRUITMENT_INTERVIEW_KEY = "bauerHrmsRecruitmentInterviews";
 const RECRUITMENT_OFFER_KEY = "bauerHrmsRecruitmentOffers";
 
-function readDashboardData(key) {
+async function readDashboardModuleData(key, fallback = []) {
   try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
-function readDashboardEmployeeRecords() {
-  const candidateKeys = [
-    EMPLOYEE_STORAGE_KEY,
-    "employees",
-    "employeeRecords",
-    "employeeMaster",
-    "bauerHrmsEmployeeMaster",
-  ];
-
-  for (const key of candidateKeys) {
-    try {
-      const saved = localStorage.getItem(key);
-      if (!saved) continue;
-
-      const parsed = JSON.parse(saved);
-      if (!Array.isArray(parsed)) continue;
-
-      // Accept only records that look like employee master records.
-      const employeeRecords = parsed.filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          (
-            item.employeeId ||
-            item.employeeCode ||
-            item.name ||
-            item.employeeName ||
-            item.fullName
-          )
-      );
-
-      if (employeeRecords.length || key === EMPLOYEE_STORAGE_KEY) {
-        return employeeRecords;
-      }
-    } catch {
-      // Try the next supported storage key.
-    }
-  }
-
-  return [];
-}
-
-function readRecruitmentJSON(key) {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
+    const saved = await loadOrganizationModuleData(key, fallback);
+    return saved ?? fallback;
+  } catch (error) {
+    console.error(`Unable to load dashboard module data (${key}):`, error);
+    return fallback;
   }
 }
 
@@ -595,9 +545,22 @@ function Dashboard({ onLogout, currentUser = null }) {
     isPlatformSuperAdmin,
   ]);
 
-  const [activeMenu, setActiveMenu] = useState(
-    firstAllowedMenu
-  );
+  const menuNameFromHash = (hashValue) => {
+    const slug = String(hashValue || "").replace(/^#\/?/, "").trim().toLowerCase();
+    if (!slug) return null;
+    const allMenuNames = [...menuItems.map((item) => item.name), "Force Leave"];
+    return allMenuNames.find(
+      (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") === slug
+    ) || null;
+  };
+
+  const menuHashFromName = (name) =>
+    `#${String(name || "Dashboard").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+
+  const [activeMenu, setActiveMenu] = useState(() => {
+    const requestedMenu = menuNameFromHash(window.location.hash);
+    return requestedMenu || firstAllowedMenu;
+  });
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -707,18 +670,10 @@ function Dashboard({ onLogout, currentUser = null }) {
   const [agreements, setAgreements] = useState([]);
   const [pos, setPos] = useState([]);
   const [organization, setOrganization] = useState({});
-  const [recruitmentRequirements, setRecruitmentRequirements] = useState(() =>
-    readRecruitmentJSON(RECRUITMENT_REQ_KEY)
-  );
-  const [recruitmentCandidates, setRecruitmentCandidates] = useState(() =>
-    readRecruitmentJSON(RECRUITMENT_CANDIDATE_KEY)
-  );
-  const [recruitmentInterviews, setRecruitmentInterviews] = useState(() =>
-    readRecruitmentJSON(RECRUITMENT_INTERVIEW_KEY)
-  );
-  const [recruitmentOffers, setRecruitmentOffers] = useState(() =>
-    readRecruitmentJSON(RECRUITMENT_OFFER_KEY)
-  );
+  const [recruitmentRequirements, setRecruitmentRequirements] = useState([]);
+  const [recruitmentCandidates, setRecruitmentCandidates] = useState([]);
+  const [recruitmentInterviews, setRecruitmentInterviews] = useState([]);
+  const [recruitmentOffers, setRecruitmentOffers] = useState([]);
 
   const loadTenantEmployees = async () => {
     try {
@@ -790,40 +745,50 @@ function Dashboard({ onLogout, currentUser = null }) {
     }
   };
 
-  const loadVendorDashboardData = () => {
-    // Employee Master is authoritative in Supabase. Do not overwrite the
-    // dashboard employee state with legacy localStorage records.
-    setAgreements(readDashboardData(AGREEMENT_STORAGE_KEY));
-    setPos(readDashboardData(PO_STORAGE_KEY));
-    setOrganization(readDashboardData(ORG_STORAGE_KEY));
+  const loadVendorDashboardData = async () => {
+    const [savedAgreements, savedPOs, savedOrganization] = await Promise.all([
+      readDashboardModuleData(AGREEMENT_STORAGE_KEY, []),
+      readDashboardModuleData(PO_STORAGE_KEY, []),
+      readDashboardModuleData(ORG_STORAGE_KEY, {}),
+    ]);
+
+    setAgreements(Array.isArray(savedAgreements) ? savedAgreements : []);
+    setPos(Array.isArray(savedPOs) ? savedPOs : []);
+    setOrganization(
+      savedOrganization && typeof savedOrganization === "object" && !Array.isArray(savedOrganization)
+        ? savedOrganization
+        : {}
+    );
   };
 
   useEffect(() => {
-    const refresh = () => {
-      loadVendorDashboardData();
-      loadTenantEmployees();
-      setRecruitmentRequirements(readRecruitmentJSON(RECRUITMENT_REQ_KEY));
-      setRecruitmentCandidates(readRecruitmentJSON(RECRUITMENT_CANDIDATE_KEY));
-      setRecruitmentInterviews(readRecruitmentJSON(RECRUITMENT_INTERVIEW_KEY));
-      setRecruitmentOffers(readRecruitmentJSON(RECRUITMENT_OFFER_KEY));
+    const refresh = async () => {
+      await Promise.all([
+        loadVendorDashboardData(),
+        loadTenantEmployees(),
+        readDashboardModuleData(RECRUITMENT_REQ_KEY, []).then((value) => setRecruitmentRequirements(Array.isArray(value) ? value : [])),
+        readDashboardModuleData(RECRUITMENT_CANDIDATE_KEY, []).then((value) => setRecruitmentCandidates(Array.isArray(value) ? value : [])),
+        readDashboardModuleData(RECRUITMENT_INTERVIEW_KEY, []).then((value) => setRecruitmentInterviews(Array.isArray(value) ? value : [])),
+        readDashboardModuleData(RECRUITMENT_OFFER_KEY, []).then((value) => setRecruitmentOffers(Array.isArray(value) ? value : [])),
+      ]);
     };
 
     refresh();
 
-    window.addEventListener("storage", refresh);
     window.addEventListener("bauerHrmsEmployeesUpdated", refresh);
     window.addEventListener("bauerHrmsAgreementsUpdated", refresh);
     window.addEventListener("bauerHrmsPOsUpdated", refresh);
     window.addEventListener("bauerHrmsOrganizationUpdated", refresh);
     window.addEventListener("bauerHrmsRecruitmentUpdated", refresh);
+    window.addEventListener("organizationModuleDataUpdated", refresh);
 
     return () => {
-      window.removeEventListener("storage", refresh);
       window.removeEventListener("bauerHrmsEmployeesUpdated", refresh);
       window.removeEventListener("bauerHrmsAgreementsUpdated", refresh);
       window.removeEventListener("bauerHrmsPOsUpdated", refresh);
       window.removeEventListener("bauerHrmsOrganizationUpdated", refresh);
       window.removeEventListener("bauerHrmsRecruitmentUpdated", refresh);
+      window.removeEventListener("organizationModuleDataUpdated", refresh);
     };
   }, []);
 
@@ -850,6 +815,10 @@ function Dashboard({ onLogout, currentUser = null }) {
     }
 
     setActiveMenu(name);
+    const nextHash = menuHashFromName(name);
+    if (window.location.hash !== nextHash) {
+      window.history.pushState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+    }
     if (window.innerWidth < 900) setSidebarOpen(false);
   };
 
@@ -1203,9 +1172,32 @@ function Dashboard({ onLogout, currentUser = null }) {
 
   const isEmployee = currentUser?.role === "Employee";
 
+  // Keep the selected module in the URL so browser refresh/back/forward
+  // restores the same screen instead of resetting to Dashboard.
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const requestedMenu = menuNameFromHash(window.location.hash);
+      if (requestedMenu && canAccessMenu(requestedMenu)) {
+        setActiveMenu(requestedMenu);
+      } else if (!window.location.hash) {
+        setActiveMenu(firstAllowedMenu);
+      }
+    };
+
+    window.addEventListener("hashchange", syncFromUrl);
+    return () => window.removeEventListener("hashchange", syncFromUrl);
+  }, [firstAllowedMenu, permissionsResolved, resolvedPermissions, currentUser]);
+
   useEffect(() => {
     if (!canAccessMenu(activeMenu)) {
       setActiveMenu(firstAllowedMenu);
+      window.location.hash = menuHashFromName(firstAllowedMenu);
+      return;
+    }
+
+    const expectedHash = menuHashFromName(activeMenu);
+    if (window.location.hash !== expectedHash) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${expectedHash}`);
     }
   }, [activeMenu, firstAllowedMenu]);
 

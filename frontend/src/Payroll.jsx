@@ -395,29 +395,28 @@ async function loadPayrollModuleState() {
 }
 
 async function savePayrollModuleState(patch) {
-  const organization = await getPayrollOrganization();
-  const currentSettings = organization?.settings || {};
-  const currentModule = normalizePayrollModule(
-    currentSettings?.[PAYROLL_MODULE_SETTINGS_KEY]
-  );
-
-  const nextModule = {
+  // Read the latest Payroll module snapshot, merge only the requested fields,
+  // then save through the organization-scoped RPC. This avoids replacing the
+  // entire organizations.settings JSON and accidentally overwriting unrelated
+  // modules such as Employee Master, Attendance, or Organization Masters.
+  const { module: currentModule } = await loadPayrollModuleState();
+  const nextModule = normalizePayrollModule({
     ...currentModule,
     ...patch,
-  };
+  });
 
-  const { error } = await supabase
-    .from("organizations")
-    .update({
-      settings: {
-        ...currentSettings,
-        [PAYROLL_MODULE_SETTINGS_KEY]: nextModule,
-      },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", organization.id);
+  const organization = await getPayrollOrganization();
+  const { error } = await supabase.rpc("save_organization_module_data", {
+    target_organization_id: organization.id,
+    module_key: PAYROLL_MODULE_SETTINGS_KEY,
+    module_data: nextModule,
+  });
 
-  if (error) throw error;
+  if (error) {
+    console.error("Unable to save Payroll module data to Supabase:", error);
+    throw error;
+  }
+
   return nextModule;
 }
 

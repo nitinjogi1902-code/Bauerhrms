@@ -5,10 +5,9 @@ import "./employees.css";
 import { createEmployeeInvitation, getEmployeeAccount, resendEmployeeInvitation } from "./auth";
 import { supabase } from "./supabaseClient";
 import { loadOrganizationMasters } from "./organizationStorage";
+import { loadOrganizationModuleData, saveOrganizationModuleData } from "./organizationModuleStorage";
 
-const ORGANIZATION_STORAGE_KEY = "bauerHrmsOrganizationMasters";
-const EMPLOYEE_STORAGE_KEY = "bauerHrmsEmployees";
-const HOD_MAPPING_STORAGE_KEY = "hrms_hod_mappings";
+const HOD_MAPPING_MODULE_KEY = "employeeHodMappings";
 const DOCUMENT_DB_NAME = "bauerHrmsEmployeeDocuments";
 const DOCUMENT_STORE = "documents";
 
@@ -98,28 +97,6 @@ function readMasters() {
   // First-render fallback only. Template download and Excel import fetch
   // the latest Organization Masters directly from Supabase.
   return INITIAL_MASTERS;
-}
-
-function readEmployees() {
-  // Employee master is now stored in Supabase and isolated by organization_id.
-  // Keep this helper only for backwards compatibility with old browser data.
-  try {
-    const saved = localStorage.getItem(EMPLOYEE_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
-function syncEmployeeCache(employeeList) {
-  try {
-    localStorage.setItem(
-      EMPLOYEE_STORAGE_KEY,
-      JSON.stringify(Array.isArray(employeeList) ? employeeList : [])
-    );
-  } catch (error) {
-    console.error("Unable to sync employee cache:", error);
-  }
 }
 
 function employeeFromDb(row) {
@@ -220,18 +197,16 @@ function employeeToDbRow(employee, organizationId) {
   };
 }
 
-function readHodMappings() {
-  try {
-    const saved = localStorage.getItem(HOD_MAPPING_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
+async function loadHodMappingsFromCloud() {
+  const saved = await loadOrganizationModuleData(HOD_MAPPING_MODULE_KEY, []);
+  return Array.isArray(saved) ? saved : [];
 }
 
-function saveHodMappings(next) {
-  localStorage.setItem(HOD_MAPPING_STORAGE_KEY, JSON.stringify(next));
+async function saveHodMappingsToCloud(next) {
+  const safeMappings = Array.isArray(next) ? next : [];
+  await saveOrganizationModuleData(HOD_MAPPING_MODULE_KEY, safeMappings);
   window.dispatchEvent(new Event("bauerHrmsHodMappingsUpdated"));
+  return safeMappings;
 }
 
 function downloadHodMappingTemplate() {
@@ -1290,7 +1265,7 @@ export default function Employees({ employees: initialEmployees = [], currentUse
   const [accessAccount, setAccessAccount] = useState(null);
   const [accessMessage, setAccessMessage] = useState("");
   const [accessLoading, setAccessLoading] = useState(false);
-  const [hodMappings, setHodMappings] = useState(readHodMappings);
+  const [hodMappings, setHodMappings] = useState([]);
   const [showHodMappingModal, setShowHodMappingModal] = useState(false);
   const [hodMappingImporting, setHodMappingImporting] = useState(false);
 
@@ -1318,7 +1293,15 @@ const [transferForm, setTransferForm] = useState({
         console.error("Unable to load Organization masters in Employee Master:", error);
       }
     };
-    const refreshHodMappings = () => setHodMappings(readHodMappings());
+    let hodLoadCancelled = false;
+    const refreshHodMappings = async () => {
+      try {
+        const latestMappings = await loadHodMappingsFromCloud();
+        if (!hodLoadCancelled) setHodMappings(latestMappings);
+      } catch (error) {
+        console.error("Unable to load HOD mappings from Supabase:", error);
+      }
+    };
     void refreshMasters();
 
     window.addEventListener("bauerHrmsMastersUpdated", refreshMasters);
@@ -1373,7 +1356,7 @@ const [transferForm, setTransferForm] = useState({
           const mappedEmployees = (rows || []).map(employeeFromDb);
           setOrganizationId(resolvedOrganizationId);
           setEmployees(mappedEmployees);
-          syncEmployeeCache(mappedEmployees);
+          void refreshHodMappings();
         }
       } catch (error) {
         console.error("Unable to load tenant employees:", error);
@@ -1393,6 +1376,7 @@ const [transferForm, setTransferForm] = useState({
 
     return () => {
       masterLoadCancelled = true;
+      hodLoadCancelled = true;
       cancelled = true;
       window.removeEventListener("bauerHrmsMastersUpdated", refreshMasters);
       window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshMasters);
@@ -1444,7 +1428,6 @@ const [transferForm, setTransferForm] = useState({
       }));
 
       setEmployees(refreshed);
-      syncEmployeeCache(refreshed);
       window.dispatchEvent(new Event("bauerHrmsEmployeesUpdated"));
       return refreshed;
     } catch (error) {
@@ -1615,7 +1598,7 @@ const transferRecord = {
         hodMappings
       );
 
-      saveHodMappings(result.next);
+      await saveHodMappingsToCloud(result.next);
       setHodMappings(result.next);
 
       const message = [
@@ -1922,7 +1905,7 @@ const transferRecord = {
     }
   };
 
-  const cleanupHodMappingsForEmployees = (employeesToDelete) => {
+  const cleanupHodMappingsForEmployees = async (employeesToDelete) => {
     const deletedCodes = new Set(
       employeesToDelete
         .map((employee) => String(employee?.employeeId || "").trim().toLowerCase())
@@ -1931,7 +1914,7 @@ const transferRecord = {
 
     if (!deletedCodes.size) return;
 
-    const currentMappings = readHodMappings();
+    const currentMappings = await loadHodMappingsFromCloud();
     const nextMappings = currentMappings.filter((mapping) => {
       const employeeCode = String(mapping?.employeeCode || "").trim().toLowerCase();
       const hodEmployeeCode = String(mapping?.hodEmployeeCode || "").trim().toLowerCase();
@@ -1939,7 +1922,8 @@ const transferRecord = {
     });
 
     if (nextMappings.length !== currentMappings.length) {
-      saveHodMappings(nextMappings);
+      await saveHodMappingsToCloud(nextMappings);
+      setHodMappings(nextMappings);
     }
   };
 
@@ -1980,13 +1964,9 @@ const transferRecord = {
     setBusyAction("Deleting employee...");
     try {
       await deleteEmployeesFromDatabase([employee]);
-      cleanupHodMappingsForEmployees([employee]);
+      await cleanupHodMappingsForEmployees([employee]);
 
-      setEmployees((current) => {
-        const next = current.filter((item) => item.id !== id);
-        syncEmployeeCache(next);
-        return next;
-      });
+      setEmployees((current) => current.filter((item) => item.id !== id));
       setSelectedEmployeeIds((current) => {
         const next = new Set(current);
         next.delete(id);
@@ -2063,13 +2043,9 @@ const transferRecord = {
     setBusyAction(`Deleting ${selectedEmployees.length} employee${selectedEmployees.length === 1 ? "" : "s"}...`);
     try {
       await deleteEmployeesFromDatabase(selectedEmployees);
-      cleanupHodMappingsForEmployees(selectedEmployees);
+      await cleanupHodMappingsForEmployees(selectedEmployees);
 
-      setEmployees((current) => {
-        const next = current.filter((item) => !selectedIds.includes(item.id));
-        syncEmployeeCache(next);
-        return next;
-      });
+      setEmployees((current) => current.filter((item) => !selectedIds.includes(item.id)));
       setSelectedEmployeeIds(new Set());
       window.dispatchEvent(new Event("bauerHrmsEmployeesUpdated"));
 

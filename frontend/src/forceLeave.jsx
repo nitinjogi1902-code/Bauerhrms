@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
-const FORCE_LEAVE_STORAGE_KEY = "bauerHrmsForceLeaveRecords";
+import { loadOrganizationModuleData, saveOrganizationModuleData } from "./organizationModuleStorage";
 
 const EMPTY_FORCE_LEAVE = {
   id: "",
@@ -28,25 +28,9 @@ const EMPTY_FORCE_LEAVE = {
   updatedAt: "",
 };
 
-function readForceLeaveRecords() {
-  try {
-    const saved = localStorage.getItem(FORCE_LEAVE_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
-  } catch (error) {
-    console.error("Unable to read Force Leave records:", error);
-    return [];
-  }
-}
-
-function saveForceLeaveRecords(records) {
-  localStorage.setItem(
-    FORCE_LEAVE_STORAGE_KEY,
-    JSON.stringify(records)
-  );
-
-  window.dispatchEvent(
-    new Event("bauerHrmsForceLeaveUpdated")
-  );
+async function saveForceLeaveRecords(records) {
+  await saveOrganizationModuleData("hrmsForceLeaveRecords", records);
+  window.dispatchEvent(new Event("bauerHrmsForceLeaveUpdated"));
 }
 
 function generateForceLeaveId(records) {
@@ -63,12 +47,9 @@ function generateForceLeaveId(records) {
   return `FL-${String(lastNumber + 1).padStart(4, "0")}`;
 }
 
-function getAttendanceForceLeaveStartDate(employee) {
+async function getAttendanceForceLeaveStartDate(employee) {
   try {
-    const saved = localStorage.getItem("hrms_attendance");
-    if (!saved) return "";
-
-    const attendance = JSON.parse(saved);
+    const attendance = await loadOrganizationModuleData("hrms_attendance", {});
     if (!attendance || typeof attendance !== "object") return "";
 
     const employeeKeys = new Set(
@@ -287,56 +268,8 @@ async function transferEmployeeForForceLeave(
 
   if (updateError) throw updateError;
 
-  try {
-    const cached =
-      localStorage.getItem("bauerHrmsEmployees");
-
-    if (cached) {
-      const employees = JSON.parse(cached);
-
-      if (Array.isArray(employees)) {
-        const updatedEmployees = employees.map(
-          (employee) => {
-            const sameEmployee =
-              String(
-                employee?.employeeId ||
-                  employee?.id ||
-                  ""
-              ) === String(record.employeeId);
-
-            if (!sameEmployee) return employee;
-
-            return {
-              ...employee,
-              location: toLocation.trim(),
-              transferHistory: [
-                ...(Array.isArray(
-                  employee.transferHistory
-                )
-                  ? employee.transferHistory
-                  : []),
-                transferRecord,
-              ],
-            };
-          }
-        );
-
-        localStorage.setItem(
-          "bauerHrmsEmployees",
-          JSON.stringify(updatedEmployees)
-        );
-
-        window.dispatchEvent(
-          new Event("bauerHrmsEmployeesUpdated")
-        );
-      }
-    }
-  } catch (cacheError) {
-    console.warn(
-      "Employee cache could not be refreshed:",
-      cacheError
-    );
-  }
+  // Employee transfer has already been committed to Supabase above.
+  // Avoid maintaining a separate browser-local employee cache.
 
   return {
     transferCode,
@@ -348,7 +281,9 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
   const [employees, setEmployees] = useState(dashboardEmployees);
   const [employeeLoading, setEmployeeLoading] = useState(false);
   const [employeeError, setEmployeeError] = useState("");
-  const [records, setRecords] = useState(readForceLeaveRecords);
+  const [records, setRecords] = useState([]);
+  const [forceLeaveCloudReady, setForceLeaveCloudReady] = useState(false);
+  const [forceLeaveCloudError, setForceLeaveCloudError] = useState("");
 
   const [showForm, setShowForm] = useState(false);
 
@@ -368,6 +303,30 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
     rejoiningType: "Same Site",
     remarks: "",
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadForceLeaveRecords() {
+      try {
+        setForceLeaveCloudError("");
+        const saved = await loadOrganizationModuleData("hrmsForceLeaveRecords", []);
+        if (!cancelled) {
+          setRecords(Array.isArray(saved) ? saved : []);
+        }
+      } catch (error) {
+        console.error("Unable to load Force Leave records from Supabase:", error);
+        if (!cancelled) {
+          setForceLeaveCloudError(error?.message || "Unable to load Force Leave records.");
+        }
+      } finally {
+        if (!cancelled) setForceLeaveCloudReady(true);
+      }
+    }
+
+    loadForceLeaveRecords();
+    return () => { cancelled = true; };
+  }, []);
 
   const filteredEmployees = useMemo(() => {
     const search = employeeSearch.trim().toLowerCase();
@@ -578,100 +537,53 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
   }, [dashboardEmployees]);
 
   useEffect(() => {
-    const loadRejoiningSites = () => {
+    let cancelled = false;
+
+    const loadRejoiningSites = async () => {
       try {
         const names = new Map();
-
-        const organizationRaw = localStorage.getItem(
-          "bauerHrmsOrganizationMasters"
+        const organizationMasters = await loadOrganizationModuleData(
+          "bauerHrmsOrganizationMasters",
+          {}
         );
+        const locations = Array.isArray(organizationMasters?.locations)
+          ? organizationMasters.locations
+          : [];
 
-        if (organizationRaw) {
-          const organizationMasters = JSON.parse(
-            organizationRaw
-          );
+        locations.forEach((site) => {
+          if (site?.active === false) return;
+          const name = String(site?.name || "").trim();
+          if (name) names.set(name.toLowerCase(), name);
+        });
 
-          const locations = Array.isArray(
-            organizationMasters?.locations
-          )
-            ? organizationMasters.locations
-            : [];
-
-          locations.forEach((site) => {
-            if (site?.active === false) return;
-
+        const sites = await loadOrganizationModuleData("bauerHrmsSites", []);
+        if (Array.isArray(sites)) {
+          sites.forEach((site) => {
+            if (site?.status && String(site.status).toLowerCase() !== "active") return;
             const name = String(site?.name || "").trim();
-
-            if (name) {
-              names.set(name.toLowerCase(), name);
-            }
+            if (name) names.set(name.toLowerCase(), name);
           });
         }
 
-        const sitesRaw = localStorage.getItem(
-          "bauerHrmsSites"
-        );
-
-        if (sitesRaw) {
-          const sites = JSON.parse(sitesRaw);
-
-          if (Array.isArray(sites)) {
-            sites.forEach((site) => {
-              if (
-                site?.status &&
-                String(site.status).toLowerCase() !== "active"
-              ) {
-                return;
-              }
-
-              const name = String(
-                site?.name || ""
-              ).trim();
-
-              if (name) {
-                names.set(name.toLowerCase(), name);
-              }
-            });
-          }
+        if (!cancelled) {
+          setRejoiningSites(Array.from(names.values()).sort((a, b) => a.localeCompare(b)));
         }
-
-        setRejoiningSites(
-          Array.from(names.values()).sort(
-            (a, b) => a.localeCompare(b)
-          )
-        );
       } catch (error) {
-        console.error(
-          "Unable to load site master:",
-          error
-        );
-
-        setRejoiningSites([]);
+        console.error("Unable to load site master from Supabase:", error);
+        if (!cancelled) setRejoiningSites([]);
       }
     };
 
     loadRejoiningSites();
-
-    window.addEventListener(
-      "storage",
-      loadRejoiningSites
-    );
-
-    window.addEventListener(
-      "bauerHrmsSitesUpdated",
-      loadRejoiningSites
-    );
+    window.addEventListener("organizationModuleDataUpdated", loadRejoiningSites);
+    window.addEventListener("bauerHrmsSitesUpdated", loadRejoiningSites);
+    window.addEventListener("focus", loadRejoiningSites);
 
     return () => {
-      window.removeEventListener(
-        "storage",
-        loadRejoiningSites
-      );
-
-      window.removeEventListener(
-        "bauerHrmsSitesUpdated",
-        loadRejoiningSites
-      );
+      cancelled = true;
+      window.removeEventListener("organizationModuleDataUpdated", loadRejoiningSites);
+      window.removeEventListener("bauerHrmsSitesUpdated", loadRejoiningSites);
+      window.removeEventListener("focus", loadRejoiningSites);
     };
   }, []);
 
@@ -692,16 +604,17 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
           ).trim() === String(form.employeeId).trim()
       );
 
-      const detectedDate = getAttendanceForceLeaveStartDate(employee);
-      setAttendanceFLDate(detectedDate);
+      getAttendanceForceLeaveStartDate(employee).then((detectedDate) => {
+        setAttendanceFLDate(detectedDate);
+      }).catch((error) => console.error("Unable to load attendance Force Leave date:", error));
     };
 
     refreshAttendanceFLDate();
-    window.addEventListener("storage", refreshAttendanceFLDate);
+    window.addEventListener("organizationModuleDataUpdated", refreshAttendanceFLDate);
     window.addEventListener("bauerHrmsAttendanceUpdated", refreshAttendanceFLDate);
 
     return () => {
-      window.removeEventListener("storage", refreshAttendanceFLDate);
+      window.removeEventListener("organizationModuleDataUpdated", refreshAttendanceFLDate);
       window.removeEventListener("bauerHrmsAttendanceUpdated", refreshAttendanceFLDate);
     };
   }, [employees, form.employeeId]);
@@ -713,7 +626,7 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
     }));
   };
 
-  const handleEmployeeChange = (employeeId) => {
+  const handleEmployeeChange = async (employeeId) => {
     const employee = employees.find(
       (item) =>
         String(
@@ -759,7 +672,7 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
     const salaryTreatment =
       isThirdParty ? "Salary Hold" : "Paid";
 
-    const detectedFLDate = getAttendanceForceLeaveStartDate(employee);
+    const detectedFLDate = await getAttendanceForceLeaveStartDate(employee);
     setAttendanceFLDate(detectedFLDate);
 
     setForm((previous) => ({
@@ -805,13 +718,14 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
       ...EMPTY_FORCE_LEAVE,
       ...record,
     });
-    setAttendanceFLDate(
-      getAttendanceForceLeaveStartDate({
-        id: record.employeeId,
-        employeeId: record.employeeId,
-        employeeCode: record.employeeId,
-      })
-    );
+    getAttendanceForceLeaveStartDate({
+      id: record.employeeId,
+      employeeId: record.employeeId,
+      employeeCode: record.employeeId,
+    }).then(setAttendanceFLDate).catch((error) => {
+      console.error("Unable to load attendance Force Leave date:", error);
+      setAttendanceFLDate("");
+    });
     setEmployeeSearch("");
     setEmployeeDropdownOpen(false);
     setShowForm(true);
@@ -928,7 +842,7 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
             : record
       );
 
-      saveForceLeaveRecords(updatedRecords);
+      saveForceLeaveRecords(updatedRecords).catch((error) => { console.error("Force Leave save failed:", error); setForceLeaveCloudError(error?.message || "Force Leave save failed."); alert("Force Leave could not be saved to the database. Please try again."); });
       setRecords(updatedRecords);
       closeRejoin();
 
@@ -979,7 +893,7 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
         : item
     );
 
-    saveForceLeaveRecords(updatedRecords);
+    saveForceLeaveRecords(updatedRecords).catch((error) => { console.error("Force Leave save failed:", error); setForceLeaveCloudError(error?.message || "Force Leave save failed."); alert("Force Leave could not be saved to the database. Please try again."); });
     setRecords(updatedRecords);
   };
 
@@ -1033,7 +947,7 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
           : record
       );
 
-      saveForceLeaveRecords(updatedRecords);
+      saveForceLeaveRecords(updatedRecords).catch((error) => { console.error("Force Leave save failed:", error); setForceLeaveCloudError(error?.message || "Force Leave save failed."); alert("Force Leave could not be saved to the database. Please try again."); });
       setRecords(updatedRecords);
       resetForm();
 
@@ -1071,9 +985,14 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
       updatedAt: now,
     };
 
+    if (!forceLeaveCloudReady || forceLeaveCloudError) {
+      alert("Force Leave database is not ready. Please reload and try again.");
+      return;
+    }
+
     const nextRecords = [...records, newRecord];
 
-    saveForceLeaveRecords(nextRecords);
+    saveForceLeaveRecords(nextRecords).catch((error) => { console.error("Force Leave save failed:", error); setForceLeaveCloudError(error?.message || "Force Leave save failed."); alert("Force Leave could not be saved to the database. Please try again."); });
 
     setRecords(nextRecords);
 
@@ -1093,15 +1012,16 @@ export default function ForceLeave({ employees: dashboardEmployees = [], current
       return;
     }
 
-    localStorage.removeItem(
-      FORCE_LEAVE_STORAGE_KEY
-    );
-
-    setRecords([]);
-
-    window.dispatchEvent(
-      new Event("bauerHrmsForceLeaveUpdated")
-    );
+    saveForceLeaveRecords([])
+      .then(() => {
+        setRecords([]);
+        setForceLeaveCloudError("");
+      })
+      .catch((error) => {
+        console.error("Unable to clear Force Leave records:", error);
+        setForceLeaveCloudError(error?.message || "Unable to clear Force Leave records.");
+        alert("Unable to delete Force Leave records from the database. Please try again.");
+      });
   };
 
   return (
