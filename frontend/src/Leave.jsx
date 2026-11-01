@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx-js-style";
 
 
 
@@ -34,6 +35,10 @@ const LEAVE_TYPES = [
 
 
 
+  { code: "PL", name: "Privilege Leave", short: "PL", description: "Privilege / planned leave marked through Attendance." },
+
+
+
   { code: "CL", name: "Casual Leave", short: "CL", description: "Personal or short-duration leave." },
 
 
@@ -54,11 +59,11 @@ const LEAVE_TYPES = [
 
 
 
-const BALANCE_TYPES = ["EL", "CL", "SL", "CO"];
+const BALANCE_TYPES = ["EL", "PL", "CL", "SL", "CO"];
 
 
 
-const ATTENDANCE_LEAVE_STATUSES = ["EL", "CL", "SL"];
+const ATTENDANCE_LEAVE_STATUSES = ["EL", "PL", "CL", "SL"];
 
 
 
@@ -67,6 +72,10 @@ const DEFAULT_POLICY_TYPES = [
 
 
   { code: "EL", enabled: true, accrualFrequency: "MONTHLY", accrualBasis: "PRESENT_DAYS", credit: 1.25, minimumPresentDays: 21, annualLimit: 0, carryForwardEnabled: true, carryForwardLimit: 30, expiryEnabled: false, expiryMonths: 0, allowRequest: true, paid: true },
+
+
+
+  { code: "PL", enabled: true, accrualFrequency: "NONE", accrualBasis: "FIXED", credit: 0, minimumPresentDays: 0, annualLimit: 0, carryForwardEnabled: true, carryForwardLimit: 0, expiryEnabled: false, expiryMonths: 0, allowRequest: true, paid: true },
 
 
 
@@ -278,7 +287,7 @@ function getAttendanceStats(attendance, employee, year) {
 
 
 
-  const stats = { EL: 0, CL: 0, SL: 0, FL: 0, COEarned: 0, COUsed: 0, legacyCOUsed: 0, presentDays: 0, absentDays: 0, forceLeavePaid: 0, forceLeaveUnpaid: 0 };
+  const stats = { EL: 0, PL: 0, CL: 0, SL: 0, FL: 0, COEarned: 0, COUsed: 0, legacyCOUsed: 0, presentDays: 0, absentDays: 0, forceLeavePaid: 0, forceLeaveUnpaid: 0 };
 
 
 
@@ -354,6 +363,52 @@ function getAttendanceStats(attendance, employee, year) {
 
 
 
+}
+
+
+
+const LEAVE_MUSTER_CODES = ["EL", "PL", "CL", "SL", "FL", "CO-E", "CO-U"];
+
+
+
+function getAttendanceLeaveMuster(attendance, employee, year) {
+  const months = Array.from({ length: 12 }, (_, index) => ({
+    month: index + 1,
+    EL: 0,
+    PL: 0,
+    CL: 0,
+    SL: 0,
+    FL: 0,
+    "CO-E": 0,
+    "CO-U": 0,
+    total: 0,
+  }));
+
+  Object.entries(attendance || {}).forEach(([dateKey, day]) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || Number(dateKey.slice(0, 4)) !== Number(year)) return;
+    const row = findAttendanceRow(day, employee);
+    if (!row) return;
+
+    const status = normalizeStatus(row.status);
+    const transaction = String(row.compOffTransaction || row.compOffType || "").trim().toUpperCase();
+    const code = LEAVE_MUSTER_CODES.includes(status)
+      ? status
+      : (status === "CO" ? "CO-U" : (transaction === "CO-E" || transaction === "CO-U" ? transaction : ""));
+    if (!code) return;
+
+    const month = months[Number(dateKey.slice(5, 7)) - 1];
+    if (!month) return;
+    const fraction = /HALF DAY|^HD$/.test(status) ? 0.5 : 1;
+    month[code] += fraction;
+    month.total += fraction;
+  });
+
+  const totals = LEAVE_MUSTER_CODES.reduce((result, code) => {
+    result[code] = months.reduce((sum, month) => sum + asNumber(month[code]), 0);
+    return result;
+  }, {});
+
+  return { months, totals, total: Object.values(totals).reduce((sum, value) => sum + value, 0) };
 }
 
 
@@ -730,6 +785,10 @@ export default function Leave({ employees = [] }) {
 
 
 
+  const [musterEmployeeId, setMusterEmployeeId] = useState("");
+
+
+
   const [search, setSearch] = useState("");
 
 
@@ -750,11 +809,15 @@ export default function Leave({ employees = [] }) {
 
 
 
-  const [openingDraft, setOpeningDraft] = useState({ EL: "0", CL: "0", SL: "0", CO: "0" });
+  const [openingDraft, setOpeningDraft] = useState({ EL: "0", PL: "0", CL: "0", SL: "0", CO: "0" });
 
 
 
   const [adjustmentDraft, setAdjustmentDraft] = useState({ employeeId: "", type: "EL", amount: "", reason: "" });
+
+  const [reportEmployeeId, setReportEmployeeId] = useState("");
+  const [reportLeaveType, setReportLeaveType] = useState("ALL");
+  const [reportMonth, setReportMonth] = useState("ALL");
 
 
 
@@ -1060,6 +1123,20 @@ export default function Leave({ employees = [] }) {
 
 
 
+  const musterEmployee = useMemo(() => {
+    const selected = employees.find((employee) => getEmployeeKey(employee) === String(musterEmployeeId));
+    return selected || filteredEmployees[0] || employees[0] || null;
+  }, [employees, filteredEmployees, musterEmployeeId]);
+
+
+
+  const attendanceLeaveMuster = useMemo(
+    () => musterEmployee ? getAttendanceLeaveMuster(attendance, musterEmployee, selectedYear) : null,
+    [attendance, musterEmployee, selectedYear]
+  );
+
+
+
 
 
 
@@ -1188,7 +1265,9 @@ export default function Leave({ employees = [] }) {
 
 
 
-      balances[type] = { opening: asNumber(opening[type]), accrued, used, adjustment, available: Math.max(0, raw) };
+      // Keep the real signed balance. HR needs to see a negative balance
+      // instead of silently converting an over-utilised leave type to zero.
+      balances[type] = { opening: asNumber(opening[type]), accrued, used, adjustment, available: raw };
 
 
 
@@ -1248,7 +1327,7 @@ export default function Leave({ employees = [] }) {
 
 
 
-      if (["EL", "CL", "SL", "FL"].includes(normalizeStatus(row?.status))) onLeaveToday += 1;
+      if (["EL", "PL", "CL", "SL", "FL"].includes(normalizeStatus(row?.status))) onLeaveToday += 1;
 
 
 
@@ -1295,6 +1374,65 @@ export default function Leave({ employees = [] }) {
 
 
 
+
+  const reportMonthOptions = useMemo(() => Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(Number(selectedYear), index, 1);
+    return { value: String(index + 1).padStart(2, "0"), label: date.toLocaleDateString("en-IN", { month: "long" }) };
+  }), [selectedYear]);
+
+  const leaveReportRows = useMemo(() => {
+    const rows = [];
+    const reportCodes = ["EL", "PL", "CL", "SL", "FL", "CO-E", "CO-U", "CO"];
+    Object.entries(attendance || {}).forEach(([dateKey, day]) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || Number(dateKey.slice(0, 4)) !== Number(selectedYear)) return;
+      if (reportMonth !== "ALL" && dateKey.slice(5, 7) !== reportMonth) return;
+      employees.forEach((employee) => {
+        if (reportEmployeeId && getEmployeeKey(employee) !== String(reportEmployeeId)) return;
+        const row = findAttendanceRow(day, employee);
+        if (!row) return;
+        const status = normalizeStatus(row.status);
+        const transaction = String(row.compOffTransaction || row.compOffType || "").trim().toUpperCase();
+        const code = reportCodes.includes(status) ? (status === "CO" ? "CO-U" : status) : (transaction === "CO-E" || transaction === "CO-U" ? transaction : "");
+        if (!code || (reportLeaveType !== "ALL" && code !== reportLeaveType)) return;
+        const days = /HALF DAY|^HD$/.test(status) ? 0.5 : 1;
+        const leaveName = code === "CO-E" ? "Comp-Off Earned" : code === "CO-U" ? "Comp-Off Utilised" : (LEAVE_TYPES.find((item) => item.code === code)?.name || code);
+        rows.push({ id: `${dateKey}-${getEmployeeKey(employee)}-${code}`, date: dateKey, employee: employee.name || "Unnamed employee", employeeId: employee.employeeId || employee.id || "—", department: getDepartment(employee) || "—", site: getLocation(employee) || "—", code, leaveName, days, source: row.source || "Attendance", remarks: row.remarks || "" });
+      });
+    });
+    return rows.sort((a, b) => b.date.localeCompare(a.date) || a.employee.localeCompare(b.employee));
+  }, [attendance, employees, reportEmployeeId, reportLeaveType, reportMonth, selectedYear]);
+
+  const leaveReportSummary = useMemo(() => leaveReportRows.reduce((summary, row) => {
+    summary.total += row.days;
+    summary[row.code] = (summary[row.code] || 0) + row.days;
+    return summary;
+  }, { total: 0, EL: 0, PL: 0, CL: 0, SL: 0, FL: 0, "CO-E": 0, "CO-U": 0 }), [leaveReportRows]);
+
+  const exportLeaveReportExcel = () => {
+    if (!leaveReportRows.length) { window.alert("No leave data matches the selected filters."); return; }
+    const rows = leaveReportRows.map((row) => ({ Date: row.date, Employee: row.employee, "Employee ID": row.employeeId, Department: row.department, "Project / Site": row.site, Code: row.code, "Leave Type": row.leaveName, Days: row.days, Source: row.source, Remarks: row.remarks }));
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet["!cols"] = [{ wch: 13 }, { wch: 24 }, { wch: 16 }, { wch: 20 }, { wch: 20 }, { wch: 10 }, { wch: 22 }, { wch: 8 }, { wch: 16 }, { wch: 30 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Leave Report");
+    XLSX.writeFile(workbook, `Leave_Report_${selectedYear}.xlsx`);
+  };
+
+  const exportLeaveReportPdf = () => {
+    if (!leaveReportRows.length) { window.alert("No leave data matches the selected filters."); return; }
+    const escapeHtml = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#039;");
+    const employeeName = reportEmployeeId ? (employees.find((employee) => getEmployeeKey(employee) === String(reportEmployeeId))?.name || "Selected employee") : "All employees";
+    const leaveName = reportLeaveType === "ALL" ? "All leave types" : reportLeaveType === "CO-E" ? "Comp-Off Earned" : reportLeaveType === "CO-U" ? "Comp-Off Utilised" : (LEAVE_TYPES.find((item) => item.code === reportLeaveType)?.name || reportLeaveType);
+    const monthName = reportMonth === "ALL" ? "All months" : (reportMonthOptions.find((item) => item.value === reportMonth)?.label || reportMonth);
+    const popup = window.open("", "_blank", "width=1280,height=850");
+    if (!popup) { window.alert("Please allow pop-ups to generate the PDF report."); return; }
+    const tableRows = leaveReportRows.map((row) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.employee)}</td><td>${escapeHtml(row.employeeId)}</td><td>${escapeHtml(row.department)}</td><td>${escapeHtml(row.site)}</td><td>${escapeHtml(row.code)}</td><td>${escapeHtml(row.leaveName)}</td><td>${escapeHtml(formatDays(row.days))}</td><td>${escapeHtml(row.source)}</td><td>${escapeHtml(row.remarks || "—")}</td></tr>`).join("");
+    const html = `<!doctype html><html><head><title>Leave Report ${selectedYear}</title><style>@page{size:landscape;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#183b60;margin:0}h1{font-size:22px;margin:0 0 4px}p{margin:0 0 12px;color:#6f8493;font-size:11px}.meta{display:flex;gap:18px;flex-wrap:wrap;padding:10px 12px;margin-bottom:14px;border:1px solid #dbe8f0;border-radius:8px;background:#f4f9fc;font-size:11px}.meta b{color:#123d62}table{width:100%;border-collapse:collapse;font-size:9px}th{padding:8px;text-align:left;background:#f0f6fa;color:#537084;text-transform:uppercase}td{padding:7px;border-bottom:1px solid #e4edf2;color:#38566b}tfoot td{font-weight:bold;background:#eef7fb;color:#123d62}</style></head><body><h1>BAUER HRMS — Leave Report</h1><p>Attendance-linked leave report generated on ${escapeHtml(new Date().toLocaleString("en-IN"))}</p><div class="meta"><span><b>Year:</b> ${selectedYear}</span><span><b>Employee:</b> ${escapeHtml(employeeName)}</span><span><b>Leave:</b> ${escapeHtml(leaveName)}</span><span><b>Month:</b> ${escapeHtml(monthName)}</span></div><table><thead><tr><th>Date</th><th>Employee</th><th>Employee ID</th><th>Department</th><th>Site</th><th>Code</th><th>Leave Type</th><th>Days</th><th>Source</th><th>Remarks</th></tr></thead><tbody>${tableRows}</tbody><tfoot><tr><td colspan="7">Total leave marks</td><td>${escapeHtml(formatDays(leaveReportSummary.total))}</td><td colspan="2"></td></tr></tfoot></table></body></html>`;
+    popup.document.write(html);
+    popup.document.close();
+    popup.focus();
+    popup.setTimeout(() => popup.print(), 250);
+  };
 
   const showSuccess = (message) => {
 
@@ -1832,7 +1970,7 @@ export default function Leave({ employees = [] }) {
 
 
 
-        {[ ["overview", "Overview"], ["policies", "Leave Policies"], ["balances", "Employee Balances"], ["requests", "Leave Requests"], ["compoff", "Comp-Off Ledger"], ["calendar", "Leave Calendar"], ["reports", "Reports & Audit"] ].map(([key, label]) => <button type="button" key={key} className={activeTab === key ? "active" : ""} onClick={() => setActiveTab(key)}>{label}{key === "requests" && stats.pendingRequests > 0 && <span className="leave-nav-count">{stats.pendingRequests}</span>}</button>)}
+        {[ ["overview", "Overview"], ["policies", "Leave Policies"], ["balances", "Employee Balances"], ["muster", "Leave Muster"], ["requests", "Leave Requests"], ["compoff", "Comp-Off Ledger"], ["calendar", "Leave Calendar"], ["reports", "Reports & Audit"] ].map(([key, label]) => <button type="button" key={key} className={activeTab === key ? "active" : ""} onClick={() => setActiveTab(key)}>{label}{key === "requests" && stats.pendingRequests > 0 && <span className="leave-nav-count">{stats.pendingRequests}</span>}</button>)}
 
 
 
@@ -1856,7 +1994,7 @@ export default function Leave({ employees = [] }) {
 
 
 
-          <article className="leave-kpi"><span>On Leave Today</span><strong>{stats.onLeaveToday}</strong><small>EL, CL, SL and Force Leave marks</small><i className="kpi-icon purple">▦</i></article>
+          <article className="leave-kpi"><span>On Leave Today</span><strong>{stats.onLeaveToday}</strong><small>EL, PL, CL, SL and Force Leave marks</small><i className="kpi-icon purple">▦</i></article>
 
 
 
@@ -1952,13 +2090,60 @@ export default function Leave({ employees = [] }) {
 
 
 
-      {activeTab === "balances" && <article className="leave-card"><div className="leave-card-header"><div><span className="leave-eyebrow">EMPLOYEE LEAVE LEDGER</span><h2>Employee balances</h2><p>Opening + accrual + adjustments − Attendance usage. FL is reported separately and never deducted from EL/CL/SL.</p></div><div className="leave-inline-actions"><select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>{[selectedYear - 1, selectedYear, selectedYear + 1].map((year) => <option key={year}>{year}</option>)}</select><button className="leave-btn leave-btn-secondary" onClick={() => setActiveTab("reports")}>View ledger</button><button className="leave-btn leave-btn-primary" onClick={() => setActiveTab("opening")}>Set opening balance</button></div></div><div className="leave-toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employee, department, site…" /><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option>All</option><option>Policy Assigned</option><option>Policy Missing</option></select></div><div className="leave-table-wrap"><table className="leave-table leave-balance-table"><thead><tr><th>Employee</th><th>Group / Category</th><th>Policy</th><th>EL Available</th><th>CL Available</th><th>SL Available</th><th>CO Available</th><th>FL Days</th><th>FL Treatment</th></tr></thead><tbody>{filteredEmployees.filter((employee) => statusFilter === "All" || (statusFilter === "Policy Assigned" ? !!getBalance(employee).policy : !getBalance(employee).policy)).map((employee) => { const result = getBalance(employee); return <tr key={getEmployeeKey(employee)}><td><div className="leave-employee-cell"><span className="leave-avatar">{String(employee.name || "E").split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</span><div><strong>{employee.name || "Unnamed employee"}</strong><small>{employee.employeeId || employee.id || "—"} · {employee.designation || "—"}</small></div></div></td><td><strong>{getEmployeeGroup(employee) || "—"}</strong><small>{getWorkforceCategory(employee) || "—"}</small></td><td>{result.policy ? <><strong>{result.policy.name}</strong><small>v{result.policy.version || 1}</small></> : <span className="leave-status leave-status-warning">Not assigned</span>}</td>{["EL", "CL", "SL", "CO"].map((type) => <td key={type}><strong>{formatDays(result.balances[type].available)}</strong><small>Used {formatDays(result.balances[type].used)}</small></td>)}<td><strong>{formatDays(result.attendanceStats.FL)}</strong></td><td><span className={`leave-status ${result.forceLeaveTreatment === "PAID" ? "leave-status-active" : result.forceLeaveTreatment === "UNPAID" ? "leave-status-warning" : "leave-status-draft"}`}>{result.forceLeaveTreatment === "PAID" ? "Paid" : result.forceLeaveTreatment === "UNPAID" ? "Unpaid" : "Follow contract"}</span></td></tr>; })}</tbody></table>{filteredEmployees.length === 0 && <div className="leave-empty-state">No employees match your search.</div>}</div></article>}
+      {activeTab === "balances" && <article className="leave-card"><div className="leave-card-header"><div><span className="leave-eyebrow">EMPLOYEE LEAVE LEDGER</span><h2>Employee balances</h2><p>Opening + accrual + adjustments − Attendance usage. FL is reported separately and never deducted from EL/CL/SL.</p></div><div className="leave-inline-actions"><select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>{[selectedYear - 1, selectedYear, selectedYear + 1].map((year) => <option key={year}>{year}</option>)}</select><button className="leave-btn leave-btn-secondary" onClick={() => setActiveTab("reports")}>View ledger</button><button className="leave-btn leave-btn-primary" onClick={() => setActiveTab("opening")}>Set opening balance</button></div></div><div className="leave-toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employee, department, site…" /><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option>All</option><option>Policy Assigned</option><option>Policy Missing</option></select></div><div className="leave-table-wrap"><table className="leave-table leave-balance-table"><thead><tr><th>Employee</th><th>Group / Category</th><th>Policy</th><th>EL Available</th><th>PL Available</th><th>CL Available</th><th>SL Available</th><th>CO Available</th><th>FL Days</th><th>FL Treatment</th></tr></thead><tbody>{filteredEmployees.filter((employee) => statusFilter === "All" || (statusFilter === "Policy Assigned" ? !!getBalance(employee).policy : !getBalance(employee).policy)).map((employee) => { const result = getBalance(employee); return <tr key={getEmployeeKey(employee)}><td><div className="leave-employee-cell"><span className="leave-avatar">{String(employee.name || "E").split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</span><div><strong>{employee.name || "Unnamed employee"}</strong><small>{employee.employeeId || employee.id || "—"} · {employee.designation || "—"}</small></div></div></td><td><strong>{getEmployeeGroup(employee) || "—"}</strong><small>{getWorkforceCategory(employee) || "—"}</small></td><td>{result.policy ? <><strong>{result.policy.name}</strong><small>v{result.policy.version || 1}</small></> : <span className="leave-status leave-status-warning">Not assigned</span>}</td>{["EL", "PL", "CL", "SL", "CO"].map((type) => <td key={type}><strong className={result.balances[type].available < 0 ? "leave-balance-negative" : ""}>{formatDays(result.balances[type].available)}</strong><small>Used {formatDays(result.balances[type].used)}</small></td>)}<td><strong>{formatDays(result.attendanceStats.FL)}</strong></td><td><span className={`leave-status ${result.forceLeaveTreatment === "PAID" ? "leave-status-active" : result.forceLeaveTreatment === "UNPAID" ? "leave-status-warning" : "leave-status-draft"}`}>{result.forceLeaveTreatment === "PAID" ? "Paid" : result.forceLeaveTreatment === "UNPAID" ? "Unpaid" : "Follow contract"}</span></td></tr>; })}</tbody></table>{filteredEmployees.length === 0 && <div className="leave-empty-state">No employees match your search.</div>}</div></article>}
 
 
 
 
 
 
+
+
+
+      {activeTab === "muster" && (() => {
+        const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const muster = attendanceLeaveMuster || { months: [], totals: {}, total: 0 };
+        const balance = musterEmployee ? getBalance(musterEmployee) : null;
+        const musterCodes = ["EL", "PL", "CL", "SL", "FL", "CO-E", "CO-U"];
+        const displayCount = (value) => value ? formatDays(value) : "—";
+
+        return <article className="leave-card leave-muster-card">
+          <div className="leave-card-header">
+            <div>
+              <span className="leave-eyebrow">ATTENDANCE-LINKED LEAVE MUSTER</span>
+              <h2>Monthly leave muster</h2>
+              <p>Imported Attendance marks are grouped month-wise for the selected employee. Opening balance and signed available balance remain separate.</p>
+            </div>
+            <div className="leave-inline-actions">
+              <select aria-label="Muster year" value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))}>
+                {[selectedYear - 1, selectedYear, selectedYear + 1].map((year) => <option key={year} value={year}>{year}</option>)}
+              </select>
+              <select aria-label="Muster employee" value={musterEmployee ? getEmployeeKey(musterEmployee) : ""} onChange={(event) => setMusterEmployeeId(event.target.value)}>
+                <option value="">Select employee</option>
+                {employees.map((employee) => <option key={getEmployeeKey(employee)} value={getEmployeeKey(employee)}>{employee.name || "Unnamed"} · {employee.employeeId || employee.id}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {musterEmployee && balance ? <>
+            <div className="leave-muster-employee-bar">
+              <div><strong>{musterEmployee.name || "Unnamed employee"}</strong><small>{musterEmployee.employeeId || musterEmployee.id || "—"} · {musterEmployee.department || "—"} · {musterEmployee.designation || "—"}</small></div>
+              <div className="leave-muster-balance-strip">
+                {BALANCE_TYPES.map((type) => <span key={type}><small>{type} available</small><strong className={balance.balances[type].available < 0 ? "leave-balance-negative" : ""}>{formatDays(balance.balances[type].available)}</strong></span>)}
+              </div>
+            </div>
+
+            <div className="leave-table-wrap">
+              <table className="leave-table leave-muster-table">
+                <thead><tr><th>Month</th>{musterCodes.map((code) => <th key={code}>{code}</th>)}<th>Total Marks</th></tr></thead>
+                <tbody>{muster.months.map((month) => <tr key={month.month}><td><strong>{monthLabels[month.month - 1]}</strong><small>{selectedYear}</small></td>{musterCodes.map((code) => <td key={code}><span style={{ fontWeight: month[code] ? 800 : 500, color: month[code] ? "#1b5f88" : "#9aabb8" }}>{displayCount(month[code])}</span></td>)}<td><strong>{displayCount(month.total)}</strong></td></tr>)}</tbody>
+                <tfoot><tr><th>Year total</th>{musterCodes.map((code) => <th key={code}>{displayCount(muster.totals[code])}</th>)}<th>{displayCount(muster.total)}</th></tr></tfoot>
+              </table>
+            </div>
+            <div className="leave-muster-note">Source: Attendance import and manual Attendance marks for {selectedYear}. Negative balances are intentionally shown with a minus sign so over-utilisation is visible.</div>
+          </> : <div className="leave-empty-state"><strong>Select an employee to view the Leave Muster.</strong><p>Attendance entries with EL, PL, CL, SL, FL, CO-E and CO-U will appear month-wise here.</p></div>}
+        </article>;
+      })()}
 
       {activeTab === "opening" && <article className="leave-card leave-narrow-card"><div className="leave-card-header"><div><span className="leave-eyebrow">BALANCE SETUP</span><h2>Opening balance</h2><p>Enter opening entitlement by leave type. Every save is recorded in the organization database.</p></div></div><label className="leave-field-full">Employee<select value={balanceEmployee} onChange={(e) => { const id = e.target.value; setBalanceEmployee(id); setOpeningDraft(Object.fromEntries(BALANCE_TYPES.map((type) => [type, String((store.openingBalances[`${selectedYear}:${id}`] || store.openingBalances[id] || {})[type] ?? 0)]))); }}><option value="">Select employee</option>{employees.map((employee) => <option key={getEmployeeKey(employee)} value={getEmployeeKey(employee)}>{employee.name} · {employee.employeeId || employee.id}</option>)}</select></label><div className="leave-form-grid leave-opening-grid">{BALANCE_TYPES.map((type) => <label key={type}>{LEAVE_TYPES.find((item) => item.code === type)?.name}<input type="number" min="0" step="0.5" value={openingDraft[type]} onChange={(e) => setOpeningDraft((previous) => ({ ...previous, [type]: e.target.value }))} /></label>)}</div><div className="leave-editor-footer"><span className="leave-help-text">FL is excluded from leave balance by design.</span><button className="leave-btn leave-btn-primary" disabled={saving} onClick={saveOpeningBalance}>{saving ? "Saving…" : "Save opening balance"}</button></div></article>}
 
@@ -1968,7 +2153,7 @@ export default function Leave({ employees = [] }) {
 
 
 
-      {activeTab === "requests" && <div className="leave-content-grid leave-request-layout"><article className="leave-card"><div className="leave-card-header"><div><span className="leave-eyebrow">LEAVE REQUESTS</span><h2>Create request</h2><p>Requests are validated against the employee’s active applicable policy and available balance.</p></div></div><form className="leave-request-form" onSubmit={submitRequest}><label>Employee<select value={requestDraft.employeeId} onChange={(e) => setRequestDraft((previous) => ({ ...previous, employeeId: e.target.value }))} required><option value="">Select employee</option>{employees.map((employee) => <option key={getEmployeeKey(employee)} value={getEmployeeKey(employee)}>{employee.name} · {employee.employeeId || employee.id}</option>)}</select></label><label>Leave type<select value={requestDraft.type} onChange={(e) => setRequestDraft((previous) => ({ ...previous, type: e.target.value }))}>{["EL", "CL", "SL", "CO"].map((type) => <option key={type} value={type}>{LEAVE_TYPES.find((item) => item.code === type)?.name}</option>)}</select></label><label>From<input type="date" value={requestDraft.from} onChange={(e) => setRequestDraft((previous) => ({ ...previous, from: e.target.value }))} required /></label><label>To<input type="date" min={requestDraft.from || undefined} value={requestDraft.to} onChange={(e) => setRequestDraft((previous) => ({ ...previous, to: e.target.value }))} required /></label><label className="leave-field-full">Reason<textarea rows="3" value={requestDraft.reason} onChange={(e) => setRequestDraft((previous) => ({ ...previous, reason: e.target.value }))} placeholder="Enter reason" /></label><button className="leave-btn leave-btn-primary leave-field-full" disabled={saving}>{saving ? "Submitting…" : "Submit leave request"}</button><small className="leave-help-text leave-field-full">Force Leave is company-marked in Attendance and cannot be requested by an employee.</small></form></article><article className="leave-card"><div className="leave-card-header"><div><span className="leave-eyebrow">WORKFLOW</span><h2>Request register</h2><p>Approve or reject requests and retain decision history.</p></div><span className="leave-status-count">{stats.pendingRequests} pending</span></div><div className="leave-request-list">{store.requests.length === 0 ? <div className="leave-empty-state"><strong>No leave requests yet</strong><p>Submitted requests will appear here.</p></div> : store.requests.map((request) => { const employee = employees.find((item) => getEmployeeKey(item) === String(request.employeeId)); const canAct = ["Pending", "Pending HR/Admin"].includes(request.status) && !(/employee self service/i.test(String(request.source || "")) && String(request.approvalStage || "").toUpperCase() === "HOD"); return <div className="leave-request-row" key={request.id}><div className="leave-request-main"><strong>{employee?.name || request.employeeName || request.employeeId}</strong><span>{LEAVE_TYPES.find((item) => item.code === request.type)?.name || request.type} · {request.from} → {request.to} · {request.days} day(s)</span><small>{request.reason || "No reason provided"}</small>{/employee self service/i.test(String(request.source || "")) && <small>HOD: {request.hodName || "Not configured"} · {request.hodStatus || "Pending"} · HR/Admin: {request.hrAdminStatus || "CC"}</small>}</div><div className="leave-request-actions"><span className={`leave-status ${request.status === "Approved" ? "leave-status-active" : request.status === "Rejected" ? "leave-status-danger" : "leave-status-warning"}`}>{request.status}</span>{canAct && <><button className="leave-table-action" disabled={saving} onClick={() => updateRequestStatus(request.id, "approve")}>Approve</button><button className="leave-table-action danger" disabled={saving} onClick={() => updateRequestStatus(request.id, "reject")}>Reject</button></>}</div></div>; })}</div></article></div>}
+      {activeTab === "requests" && <div className="leave-content-grid leave-request-layout"><article className="leave-card"><div className="leave-card-header"><div><span className="leave-eyebrow">LEAVE REQUESTS</span><h2>Create request</h2><p>Requests are validated against the employee’s active applicable policy and available balance.</p></div></div><form className="leave-request-form" onSubmit={submitRequest}><label>Employee<select value={requestDraft.employeeId} onChange={(e) => setRequestDraft((previous) => ({ ...previous, employeeId: e.target.value }))} required><option value="">Select employee</option>{employees.map((employee) => <option key={getEmployeeKey(employee)} value={getEmployeeKey(employee)}>{employee.name} · {employee.employeeId || employee.id}</option>)}</select></label><label>Leave type<select value={requestDraft.type} onChange={(e) => setRequestDraft((previous) => ({ ...previous, type: e.target.value }))}>{["EL", "PL", "CL", "SL", "CO"].map((type) => <option key={type} value={type}>{LEAVE_TYPES.find((item) => item.code === type)?.name}</option>)}</select></label><label>From<input type="date" value={requestDraft.from} onChange={(e) => setRequestDraft((previous) => ({ ...previous, from: e.target.value }))} required /></label><label>To<input type="date" min={requestDraft.from || undefined} value={requestDraft.to} onChange={(e) => setRequestDraft((previous) => ({ ...previous, to: e.target.value }))} required /></label><label className="leave-field-full">Reason<textarea rows="3" value={requestDraft.reason} onChange={(e) => setRequestDraft((previous) => ({ ...previous, reason: e.target.value }))} placeholder="Enter reason" /></label><button className="leave-btn leave-btn-primary leave-field-full" disabled={saving}>{saving ? "Submitting…" : "Submit leave request"}</button><small className="leave-help-text leave-field-full">Force Leave is company-marked in Attendance and cannot be requested by an employee.</small></form></article><article className="leave-card"><div className="leave-card-header"><div><span className="leave-eyebrow">WORKFLOW</span><h2>Request register</h2><p>Approve or reject requests and retain decision history.</p></div><span className="leave-status-count">{stats.pendingRequests} pending</span></div><div className="leave-request-list">{store.requests.length === 0 ? <div className="leave-empty-state"><strong>No leave requests yet</strong><p>Submitted requests will appear here.</p></div> : store.requests.map((request) => { const employee = employees.find((item) => getEmployeeKey(item) === String(request.employeeId)); const canAct = ["Pending", "Pending HR/Admin"].includes(request.status) && !(/employee self service/i.test(String(request.source || "")) && String(request.approvalStage || "").toUpperCase() === "HOD"); return <div className="leave-request-row" key={request.id}><div className="leave-request-main"><strong>{employee?.name || request.employeeName || request.employeeId}</strong><span>{LEAVE_TYPES.find((item) => item.code === request.type)?.name || request.type} · {request.from} → {request.to} · {request.days} day(s)</span><small>{request.reason || "No reason provided"}</small>{/employee self service/i.test(String(request.source || "")) && <small>HOD: {request.hodName || "Not configured"} · {request.hodStatus || "Pending"} · HR/Admin: {request.hrAdminStatus || "CC"}</small>}</div><div className="leave-request-actions"><span className={`leave-status ${request.status === "Approved" ? "leave-status-active" : request.status === "Rejected" ? "leave-status-danger" : "leave-status-warning"}`}>{request.status}</span>{canAct && <><button className="leave-table-action" disabled={saving} onClick={() => updateRequestStatus(request.id, "approve")}>Approve</button><button className="leave-table-action danger" disabled={saving} onClick={() => updateRequestStatus(request.id, "reject")}>Reject</button></>}</div></div>; })}</div></article></div>}
 
 
 
@@ -1984,7 +2169,7 @@ export default function Leave({ employees = [] }) {
 
 
 
-      {activeTab === "calendar" && <article className="leave-card"><div className="leave-card-header"><div><span className="leave-eyebrow">LEAVE CALENDAR</span><h2>Attendance-linked leave calendar</h2><p>Calendar entries are read from the current Attendance snapshot. Approved requests are shown separately.</p></div><select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>{[selectedYear - 1, selectedYear, selectedYear + 1].map((year) => <option key={year}>{year}</option>)}</select></div><div className="leave-calendar-list">{Object.entries(attendance).filter(([dateKey]) => dateKey.startsWith(`${selectedYear}-`)).sort(([a], [b]) => b.localeCompare(a)).flatMap(([dateKey, day]) => employees.map((employee) => { const row = findAttendanceRow(day, employee); if (!row || !["EL", "CL", "SL", "FL", "CO-E", "CO-U", "CO"].includes(normalizeStatus(row.status))) return null; const status = normalizeStatus(row.status); return <div className="leave-calendar-row" key={`${dateKey}-${getEmployeeKey(employee)}`}><span className="leave-calendar-date">{dateKey}</span><span className={`leave-calendar-code code-${status.toLowerCase().replace(/[^a-z]/g, "")}`}>{status}</span><div><strong>{employee.name}</strong><small>{status === "FL" ? `Force Leave · ${getForceLeaveTreatment(resolvePolicy(store.policies, employee, dateKey), employee)}` : (LEAVE_TYPES.find((item) => item.code === status)?.name || (status === "CO-E" ? "Comp-Off Earned" : status === "CO-U" ? "Comp-Off Utilisation" : "Comp-Off (Legacy)"))}</small></div></div>; }).filter(Boolean))}{!Object.keys(attendance).some((dateKey) => dateKey.startsWith(`${selectedYear}-`)) && <div className="leave-empty-state"><strong>No attendance leave entries for {selectedYear}</strong><p>Once Attendance has EL, CL, SL, FL or Comp-Off entries, they will appear here.</p></div>}</div></article>}
+      {activeTab === "calendar" && <article className="leave-card"><div className="leave-card-header"><div><span className="leave-eyebrow">LEAVE CALENDAR</span><h2>Attendance-linked leave calendar</h2><p>Calendar entries are read from the current Attendance snapshot. Approved requests are shown separately.</p></div><select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>{[selectedYear - 1, selectedYear, selectedYear + 1].map((year) => <option key={year}>{year}</option>)}</select></div><div className="leave-calendar-list">{Object.entries(attendance).filter(([dateKey]) => dateKey.startsWith(`${selectedYear}-`)).sort(([a], [b]) => b.localeCompare(a)).flatMap(([dateKey, day]) => employees.map((employee) => { const row = findAttendanceRow(day, employee); if (!row || !["EL", "PL", "CL", "SL", "FL", "CO-E", "CO-U", "CO"].includes(normalizeStatus(row.status))) return null; const status = normalizeStatus(row.status); return <div className="leave-calendar-row" key={`${dateKey}-${getEmployeeKey(employee)}`}><span className="leave-calendar-date">{dateKey}</span><span className={`leave-calendar-code code-${status.toLowerCase().replace(/[^a-z]/g, "")}`}>{status}</span><div><strong>{employee.name}</strong><small>{status === "FL" ? `Force Leave · ${getForceLeaveTreatment(resolvePolicy(store.policies, employee, dateKey), employee)}` : (LEAVE_TYPES.find((item) => item.code === status)?.name || (status === "CO-E" ? "Comp-Off Earned" : status === "CO-U" ? "Comp-Off Utilisation" : "Comp-Off (Legacy)"))}</small></div></div>; }).filter(Boolean))}{!Object.keys(attendance).some((dateKey) => dateKey.startsWith(`${selectedYear}-`)) && <div className="leave-empty-state"><strong>No attendance leave entries for {selectedYear}</strong><p>Once Attendance has EL, PL, CL, SL, FL or Comp-Off entries, they will appear here.</p></div>}</div></article>}
 
 
 
@@ -1992,9 +2177,31 @@ export default function Leave({ employees = [] }) {
 
 
 
-      {activeTab === "reports" && <div className="leave-content-grid"><article className="leave-card"><div className="leave-card-header"><div><span className="leave-eyebrow">BALANCE ADJUSTMENT</span><h2>Adjustment ledger</h2><p>Positive or negative corrections require a reason and are retained in audit history.</p></div></div><form className="leave-request-form" onSubmit={saveAdjustment}><label>Employee<select value={adjustmentDraft.employeeId} onChange={(e) => setAdjustmentDraft((previous) => ({ ...previous, employeeId: e.target.value }))} required><option value="">Select employee</option>{employees.map((employee) => <option key={getEmployeeKey(employee)} value={getEmployeeKey(employee)}>{employee.name} · {employee.employeeId || employee.id}</option>)}</select></label><label>Leave type<select value={adjustmentDraft.type} onChange={(e) => setAdjustmentDraft((previous) => ({ ...previous, type: e.target.value }))}>{BALANCE_TYPES.map((type) => <option key={type} value={type}>{LEAVE_TYPES.find((item) => item.code === type)?.name}</option>)}</select></label><label>Adjustment (+/-)<input type="number" step="0.5" value={adjustmentDraft.amount} onChange={(e) => setAdjustmentDraft((previous) => ({ ...previous, amount: e.target.value }))} required /></label><label className="leave-field-full">Reason<input value={adjustmentDraft.reason} onChange={(e) => setAdjustmentDraft((previous) => ({ ...previous, reason: e.target.value }))} required placeholder="Required for audit trail" /></label><button className="leave-btn leave-btn-primary leave-field-full" disabled={saving}>{saving ? "Saving…" : "Record adjustment"}</button></form></article><article className="leave-card"><div className="leave-card-header"><div><span className="leave-eyebrow">AUDIT TRAIL</span><h2>Recent changes</h2></div></div><div className="leave-audit-list">{store.audit.slice(0, 30).map((item) => <div className="leave-audit-row" key={item.id}><span className="leave-audit-dot" /><div><strong>{String(item.action || "CHANGE").replace(/**\\\_**/g, " ")}</strong><small>{item.policyName || item.employeeId || item.requestId || "Leave Management"}</small><time>{item.timestamp ? new Date(item.timestamp).toLocaleString("en-IN") : "—"}</time></div></div>)}{store.audit.length === 0 && <div className="leave-empty-state">No audit entries yet.</div>}</div></article></div>}
+      {activeTab === "reports" && <div className="leave-reports-page">
+        <div className="leave-report-hero">
+          <div><span className="leave-eyebrow">REPORTS & AUDIT</span><h2>Leave report center</h2><p>Filter attendance-linked leave marks by employee, leave type, month and year, then export the selected data.</p></div>
+          <div className="leave-report-actions"><button className="leave-btn leave-btn-secondary" onClick={exportLeaveReportExcel}>↓ Export Excel</button><button className="leave-btn leave-btn-primary" onClick={exportLeaveReportPdf}>▣ Export PDF</button></div>
+        </div>
 
+        <div className="leave-report-layout">
+          <article className="leave-card leave-report-data-card">
+            <div className="leave-card-header"><div><span className="leave-eyebrow">LEAVE DATA</span><h2>Filtered leave register</h2><p>Showing {leaveReportRows.length} attendance leave row(s) for the selected filters.</p></div><span className="leave-status-count">{selectedYear}</span></div>
+            <div className="leave-report-filter-grid">
+              <label>Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))}>{[selectedYear - 1, selectedYear, selectedYear + 1].map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
+              <label>Employee<select value={reportEmployeeId} onChange={(event) => setReportEmployeeId(event.target.value)}><option value="">All employees</option>{employees.map((employee) => <option key={getEmployeeKey(employee)} value={getEmployeeKey(employee)}>{employee.name || "Unnamed"} · {employee.employeeId || employee.id}</option>)}</select></label>
+              <label>Leave type<select value={reportLeaveType} onChange={(event) => setReportLeaveType(event.target.value)}><option value="ALL">All leave types</option><option value="EL">EL — Earned Leave</option><option value="PL">PL — Privilege Leave</option><option value="CL">CL — Casual Leave</option><option value="SL">SL — Sick Leave</option><option value="FL">FL — Force Leave</option><option value="CO-E">CO-E — Comp-Off Earned</option><option value="CO-U">CO-U — Comp-Off Utilised</option><option value="CO">CO — Legacy Comp-Off</option></select></label>
+              <label>Month<select value={reportMonth} onChange={(event) => setReportMonth(event.target.value)}><option value="ALL">All months</option>{reportMonthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
+              <button className="leave-btn leave-btn-secondary leave-report-reset" onClick={() => { setReportEmployeeId(""); setReportLeaveType("ALL"); setReportMonth("ALL"); }}>Reset filters</button>
+            </div>
 
+            <div className="leave-report-stat-grid"><div className="blue"><span>Total marks</span><strong>{formatDays(leaveReportSummary.total)}</strong></div><div className="green"><span>EL / PL</span><strong>{formatDays(leaveReportSummary.EL + leaveReportSummary.PL)}</strong></div><div className="amber"><span>CL / SL</span><strong>{formatDays(leaveReportSummary.CL + leaveReportSummary.SL)}</strong></div><div className="orange"><span>FL</span><strong>{formatDays(leaveReportSummary.FL)}</strong></div><div className="purple"><span>Comp-Off</span><strong>{formatDays(leaveReportSummary["CO-E"] + leaveReportSummary["CO-U"])}</strong></div></div>
+
+            <div className="leave-table-wrap"><table className="leave-table leave-report-table"><thead><tr><th>Date</th><th>Employee</th><th>Employee ID</th><th>Department</th><th>Site</th><th>Code</th><th>Leave Type</th><th>Days</th><th>Source</th><th>Remarks</th></tr></thead><tbody>{leaveReportRows.map((row) => <tr key={row.id}><td>{row.date}</td><td><strong>{row.employee}</strong></td><td>{row.employeeId}</td><td>{row.department}</td><td>{row.site}</td><td><span className="leave-report-code">{row.code}</span></td><td>{row.leaveName}</td><td><strong>{formatDays(row.days)}</strong></td><td>{row.source}</td><td>{row.remarks || "—"}</td></tr>)}</tbody></table>{leaveReportRows.length === 0 && <div className="leave-empty-state"><strong>No leave data found</strong><p>Try changing the employee, leave type, month or year filters.</p></div>}</div>
+          </article>
+
+          <article className="leave-card leave-audit-card"><div className="leave-card-header"><div><span className="leave-eyebrow">AUDIT TRAIL</span><h2>Recent changes</h2><p>Policy, balance and request actions.</p></div></div><div className="leave-audit-list">{store.audit.slice(0, 30).map((item) => <div className="leave-audit-row" key={item.id}><span className="leave-audit-dot" /><div><strong>{String(item.action || "CHANGE").replace(/[_-]/g, " ")}</strong><small>{item.policyName || item.employeeId || item.requestId || "Leave Management"}</small><time>{item.timestamp ? new Date(item.timestamp).toLocaleString("en-IN") : "—"}</time></div></div>)}{store.audit.length === 0 && <div className="leave-empty-state">No audit entries yet.</div>}</div></article>
+        </div>
+      </div>}
 
     </section>
 

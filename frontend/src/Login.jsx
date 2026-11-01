@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import "./Login.css";
 import {
   activateEmployeeAccount,
-  authenticateEmployee,
   verifyAdminPasswordResetOtp,
 } from "./auth";
 import { supabase } from "./supabaseClient";
@@ -667,30 +666,14 @@ export default function Login({ onLogin }) {
       }
 
       /*
-       * Supabase Auth did not authenticate the email/password.
-       *
-       * Keep the existing employee authentication flow for legacy/activation
-       * accounts that have not yet been migrated to Supabase Auth.
+       * Do not fall back to the legacy local login here.
+       * The rest of HRMS reads data through Supabase RLS policies, so a
+       * local-only login would open the UI without an authenticated JWT and
+       * every module request would return 401 Unauthorized.
        */
-      const result = await authenticateEmployee(username, password);
-
-      if (!result) {
-        setError(
-          authError?.message
-            ? "Invalid email or password."
-            : "Invalid email or password."
-        );
-        return;
-      }
-
-      if (result.inactive) {
-        setError(
-          "Your account is not activated yet. Please use the activation email sent by HR."
-        );
-        return;
-      }
-
-      onLogin(rememberMe, result.employee);
+      setError(
+        "Unable to sign in with Supabase Auth. Please use your official HRMS email/password or complete account activation."
+      );
       return;
     } catch (err) {
       setError(err?.message || "Unable to login.");

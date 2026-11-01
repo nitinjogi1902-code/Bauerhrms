@@ -247,6 +247,7 @@ const ATTENDANCE_STATUS_OPTIONS = [
   { value: "P", label: "Present" },
   { value: "A", label: "Absent" },
   { value: "EL", label: "Earned Leave" },
+  { value: "PL", label: "Privilege Leave" },
   { value: "CL", label: "Casual Leave" },
   { value: "SL", label: "Sick Leave" },
   { value: "FL", label: "Floating Leave" },
@@ -265,7 +266,7 @@ const getStatusLabel = (value) => {
 };
 
 const isWorkingStatus = (value) => ["P", "HD", "OD", "WFH", "CO"].includes(value);
-const isLeaveStatus = (value) => ["EL", "CL", "SL", "FL", "CO"].includes(value);
+const isLeaveStatus = (value) => ["EL", "PL", "CL", "SL", "FL", "CO"].includes(value);
 
 const calculateHoursFromPunches = (inTime, outTime) => {
   if (!inTime || !outTime) return "";
@@ -873,7 +874,7 @@ const [newEmployee, setNewEmployee] = useState({
     if (!attendanceEditDialog) return;
     const { employeeId, dateKey } = attendanceEditDialog;
     const nextStatus = String(attendanceEditDialog.nextStatus || "").trim().toUpperCase();
-    const allowedStatuses = ["P", "A", "EL", "CL", "SL", "FL", "CO-E", "CO-U", "OD", "WFH", "WO", "HO", "HD", "LOP"];
+    const allowedStatuses = ["P", "A", "EL", "PL", "CL", "SL", "FL", "CO-E", "CO-U", "OD", "WFH", "WO", "HO", "HD", "LOP"];
     if (nextStatus && !allowedStatuses.includes(nextStatus)) {
       window.alert(`Invalid attendance status: ${nextStatus}`);
       return;
@@ -1072,7 +1073,7 @@ const [newEmployee, setNewEmployee] = useState({
 
   const attendanceSummary = useMemo(() => {
     const counts = {
-      P: 0, A: 0, EL: 0, CL: 0, SL: 0, FL: 0, CO: 0, "CO-E": 0, "CO-U": 0,
+      P: 0, A: 0, EL: 0, PL: 0, CL: 0, SL: 0, FL: 0, CO: 0, "CO-E": 0, "CO-U": 0,
       OD: 0, WFH: 0, WO: 0, HO: 0, HD: 0, Unmarked: 0,
     };
 
@@ -1336,7 +1337,7 @@ const [newEmployee, setNewEmployee] = useState({
 
       if (statusValue === "P") summary.P += 1;
       else if (statusValue === "A") summary.A += 1;
-      else if (["EL", "CL", "SL", "FL"].includes(statusValue)) summary.leave += 1;
+      else if (["EL", "PL", "CL", "SL", "FL"].includes(statusValue)) summary.leave += 1;
       else if (statusValue === "WFH") summary.WFH += 1;
       else if (["CO", "CO-E", "CO-U"].includes(statusValue)) {
         summary.CO += 1;
@@ -1511,6 +1512,7 @@ const [newEmployee, setNewEmployee] = useState({
       P: { fill: "DCFCE7", font: "166534", border: "86EFAC" },
       A: { fill: "FEE2E2", font: "B91C1C", border: "FCA5A5" },
       EL: { fill: "DBEAFE", font: "1D4ED8", border: "93C5FD" },
+      PL: { fill: "E0F2FE", font: "0369A1", border: "7DD3FC" },
       CL: { fill: "EDE9FE", font: "6D28D9", border: "C4B5FD" },
       SL: { fill: "FFEDD5", font: "C2410C", border: "FDBA74" },
       FL: { fill: "FCE7F3", font: "BE185D", border: "F9A8D4" },
@@ -1596,7 +1598,7 @@ const [newEmployee, setNewEmployee] = useState({
       ["HRMS – MONTHLY ATTENDANCE IMPORT TEMPLATE"],
       ["Attendance Month", monthLabel],
       ["Purpose", "Monthly site attendance upload into HRMS"],
-      ["Status Codes", "P = Present | A = Absent | EL = Earned Leave | CL = Casual Leave | SL = Sick Leave | FL = Force Leave | CO-E = Comp Off Earned (Sunday Working) | CO-U = Comp Off Utilisation (Weekday Adjustment) | CO = Comp Off (Legacy) | OD = On Duty | WFH = Work From Home | WO = Weekly Off | HO = Holiday"],
+      ["Status Codes", "P = Present | A = Absent | EL = Earned Leave | PL = Privilege Leave | CL = Casual Leave | SL = Sick Leave | FL = Force Leave | CO-E = Comp Off Earned | CO-U = Comp Off Utilisation | CO = Comp Off (Legacy) | OD = On Duty | WFH = Work From Home | WO = Weekly Off | HO = Holiday"],
       ["Instructions", "Do not modify employee master fields. Enter attendance only in date columns. Use approved status codes only. Keep blank where no attendance update is required. Weekend columns are highlighted for reference; actual WO is controlled by employee Week-Off Policy."],
       headers,
       dayReferenceRow,
@@ -1676,7 +1678,7 @@ const [newEmployee, setNewEmployee] = useState({
       ["Purpose", "Use this workbook to upload monthly site attendance into HRMS."],
       ["Step 1", "Do not change Employee ID, Employee Name, Designation, Department, Site, Vendor Name or DOJ."],
       ["Step 2", "Enter attendance only under the applicable date columns."],
-      ["Step 3", "Use only: P, A, EL, CL, SL, FL, CO-E, CO-U, CO, OD, WFH, WO, HO. CO-E = Comp Off Earned; CO-U = Comp Off Utilisation."],
+      ["Step 3", "Use only: P, A, EL, PL, CL, SL, FL, CO-E, CO-U, CO, OD, WFH, WO, HO. CO-E = Comp Off Earned; CO-U = Comp Off Utilisation."],
       ["Aliases", "W/O is accepted as WO. HLD or HOLIDAY is accepted as HO."],
       ["Not supported", "HD / Half Day and split values such as P/EL, P/2, EL/P and EL/CL are currently not supported."],
       ["Step 4", "Save the completed workbook and upload it through HRMS → Daily Attendance → Import Attendance."],
@@ -1695,9 +1697,27 @@ const [newEmployee, setNewEmployee] = useState({
   };
 
   const normalizeImportedAttendanceStatus = (value) => {
-    const raw = String(value ?? "").trim().toUpperCase();
+    const raw = String(value ?? "")
+      .trim()
+      .toUpperCase()
+      // Excel files sometimes contain a non-breaking/dash variant or a
+      // space around the code. Treat all of them as the same attendance code.
+      .replace(/[‐‑‒–—−]/g, "-")
+      .replace(/\s*-\s*/g, "-")
+      .replace(/\s+/g, " ");
     if (!raw) return "";
-    const aliases = { "W/O": "WO", "W.O": "WO", HLD: "HO", HOLIDAY: "HO" };
+    const aliases = {
+      "W/O": "WO",
+      "W.O": "WO",
+      HLD: "HO",
+      HOLIDAY: "HO",
+      "CO E": "CO-E",
+      COE: "CO-E",
+      "CO_E": "CO-E",
+      "CO U": "CO-U",
+      COU: "CO-U",
+      "CO_U": "CO-U",
+    };
     const normalized = aliases[raw] || raw;
     return ATTENDANCE_STATUS_OPTIONS.some((item) => item.value === normalized && normalized !== "HD") ? normalized : null;
   };
@@ -1778,7 +1798,7 @@ const [newEmployee, setNewEmployee] = useState({
       ["Attendance Date", dateLabel],
       ["Purpose", "Daily site attendance upload — one Excel file for all employees for one attendance date."],
       ["Instructions", "Do not modify employee master fields. Enter Status / punch / hours data only. Employee ID and Date are validated before import."],
-      ["Status Codes", "P = Present | A = Absent | EL = Earned Leave | CL = Casual Leave | SL = Sick Leave | FL = Force Leave | CO-E = Comp Off Earned (Sunday Working) | CO-U = Comp Off Utilisation (Weekday Adjustment) | CO = Comp Off (Legacy) | OD = On Duty | WFH = Work From Home | WO = Weekly Off | HO = Holiday"],
+      ["Status Codes", "P = Present | A = Absent | EL = Earned Leave | PL = Privilege Leave | CL = Casual Leave | SL = Sick Leave | FL = Force Leave | CO-E = Comp Off Earned | CO-U = Comp Off Utilisation | CO = Comp Off (Legacy) | OD = On Duty | WFH = Work From Home | WO = Weekly Off | HO = Holiday"],
       headers,
       ...rows,
     ];
@@ -1820,7 +1840,7 @@ const [newEmployee, setNewEmployee] = useState({
       ["Step 2", "One Excel file represents one attendance date. The Date column must match the selected attendance date."],
       ["Step 3", "Do not change Employee ID / Employee Name / Designation / Department / Site / Vendor Name / DOJ."],
       ["Step 4", "Enter Status and, where available, In Time, Out Time, Working Hours, OT Hours and Remarks."],
-      ["Step 5", "Status may be P, A, EL, CL, SL, FL, CO, OD, WFH, WO or HO. If Status is blank but In Time and Out Time are present, HRMS will treat the row as Present."],
+      ["Step 5", "Status may be P, A, EL, PL, CL, SL, FL, CO-E, CO-U, CO, OD, WFH, WO or HO. CO-E and CO-U are accepted during Excel import as supplied by HR/Admin. If Status is blank but In Time and Out Time are present, HRMS will treat the row as Present."],
       ["Important", "Only the selected date is updated. Existing attendance for other dates is never changed."],
     ]);
     instructions["!merges"] = [
@@ -2126,7 +2146,13 @@ const [newEmployee, setNewEmployee] = useState({
     const pending = [];
 
     orderedUpdates.forEach((update) => {
-      const validation = validateCompOffUpdate(update, attendanceRecords, pending);
+      const importedStatus = String(update?.status || "").trim().toUpperCase();
+      // Excel is the HR/admin bulk-entry source of truth. Do not block a
+      // valid CO-E / CO-U row because of the interactive Sunday/ledger rules;
+      // those rules remain active for manual attendance edits on screen.
+      const validation = ["CO-E", "CO-U"].includes(importedStatus)
+        ? null
+        : validateCompOffUpdate(update, attendanceRecords, pending);
       if (validation) {
         compOffErrors.push({ ...update, message: validation });
         return;
@@ -2161,7 +2187,7 @@ const [newEmployee, setNewEmployee] = useState({
           [employeeId]: {
             ...previousRecord,
             status,
-            ...(String(status).toUpperCase() === "CO-E" ? { compOffTransaction: "CO-E", auditReason: "Comp Off Earned — Sunday working" } : {}),
+            ...(String(status).toUpperCase() === "CO-E" ? { compOffTransaction: "CO-E", auditReason: "Comp Off Earned — Excel import" } : {}),
             ...(String(status).toUpperCase() === "CO-U" ? { compOffTransaction: "CO-U", auditReason: "Comp Off Utilisation" } : {}),
             ...(String(status).toUpperCase() === "P" && isSundayDate(dateKey) ? { compOffTransaction: "CO-E", auditReason: "Sunday working — Comp Off Earned" } : {}),
             ...(attendanceImportPreview.importMode === "daily" ? {
@@ -2175,7 +2201,7 @@ const [newEmployee, setNewEmployee] = useState({
             lastUpdatedBy: "HR/Admin",
             lastUpdatedAt: new Date().toISOString(),
             auditReason: (String(status).toUpperCase() === "CO-E")
-              ? "Comp Off Earned — Sunday working"
+              ? "Comp Off Earned — Excel import"
               : (String(status).toUpperCase() === "CO-U")
                 ? "Comp Off Utilisation"
                 : (String(status).toUpperCase() === "P" && isSundayDate(dateKey))
@@ -2219,7 +2245,7 @@ const [newEmployee, setNewEmployee] = useState({
   };
 
   const attendanceReportData = useMemo(() => attendanceReportEmployees.map((employee) => {
-    const counts = { P: 0, A: 0, EL: 0, CL: 0, SL: 0, FL: 0, CO: 0, "CO-E": 0, "CO-U": 0, OD: 0, WFH: 0, WO: 0, HO: 0, HD: 0, LOP: 0, unmarked: 0 };
+    const counts = { P: 0, A: 0, EL: 0, PL: 0, CL: 0, SL: 0, FL: 0, CO: 0, "CO-E": 0, "CO-U": 0, OD: 0, WFH: 0, WO: 0, HO: 0, HD: 0, LOP: 0, unmarked: 0 };
     let workHours = 0;
     let otHours = 0;
     let paidDays = 0;
@@ -2245,7 +2271,7 @@ const [newEmployee, setNewEmployee] = useState({
       // Paid Days:
       // P, paid leaves, CO, OD, WFH, WO and HO are paid.
       // HD contributes 0.5 day. A/LOP/unmarked do not contribute.
-      const paidStatusDays = ["P", "EL", "CL", "SL", "FL", "CO", "CO-E", "CO-U", "OD", "WFH", "WO", "HO"];
+      const paidStatusDays = ["P", "EL", "PL", "CL", "SL", "FL", "CO", "CO-E", "CO-U", "OD", "WFH", "WO", "HO"];
       if (paidStatusDays.includes(statusValue)) paidDays += 1;
       else if (statusValue === "HD") paidDays += 0.5;
 
@@ -2280,7 +2306,7 @@ const [newEmployee, setNewEmployee] = useState({
     const summary = { employees: attendanceReportData.length, P: 0, A: 0, leave: 0, WFH: 0, CO: 0, OD: 0, WO: 0, HO: 0, HD: 0, LOP: 0, paidDays: 0, workHours: 0, otHours: 0 };
     attendanceReportData.forEach((row) => {
       summary.P += row.counts.P; summary.A += row.counts.A;
-      summary.leave += row.counts.EL + row.counts.CL + row.counts.SL + row.counts.FL;
+      summary.leave += row.counts.EL + row.counts.PL + row.counts.CL + row.counts.SL + row.counts.FL;
       summary.WFH += row.counts.WFH; summary.CO += row.counts.CO; summary.OD += row.counts.OD;
       summary.WO += row.counts.WO; summary.HO += row.counts.HO; summary.HD += row.counts.HD; summary.LOP += row.counts.LOP;
       summary.paidDays += row.paidDays;
@@ -2333,6 +2359,7 @@ const [newEmployee, setNewEmployee] = useState({
       "Present",
       "Absent",
       "EL",
+      "PL",
       "CL",
       "SL",
       "FL",
@@ -2396,6 +2423,7 @@ const [newEmployee, setNewEmployee] = useState({
         row.counts.P,
         row.counts.A,
         row.counts.EL,
+        row.counts.PL,
         row.counts.CL,
         row.counts.SL,
         row.counts.FL,
@@ -2421,7 +2449,7 @@ const [newEmployee, setNewEmployee] = useState({
     // Apply the same attendance status palette to date cells in the exported report.
     const reportExcelStatusStyles = {
       P: ["DCFCE7", "166534", "86EFAC"], A: ["FEE2E2", "B91C1C", "FCA5A5"],
-      EL: ["DBEAFE", "1D4ED8", "93C5FD"], CL: ["EDE9FE", "6D28D9", "C4B5FD"],
+      EL: ["DBEAFE", "1D4ED8", "93C5FD"], PL: ["E0F2FE", "0369A1", "7DD3FC"], CL: ["EDE9FE", "6D28D9", "C4B5FD"],
       SL: ["FFEDD5", "C2410C", "FDBA74"], FL: ["FCE7F3", "BE185D", "F9A8D4"],
       "CO-E": ["D1FAE5", "047857", "6EE7B7"], "CO-U": ["CFFAFE", "0E7490", "67E8F9"],
       CO: ["F1F5F9", "475569", "CBD5E1"], OD: ["DBEAFE", "1E40AF", "93C5FD"],
@@ -2718,7 +2746,7 @@ const [newEmployee, setNewEmployee] = useState({
         row.employee.vendor || "-",
         row.counts.P,
         row.counts.A,
-        row.counts.EL + row.counts.CL + row.counts.SL + row.counts.FL,
+        row.counts.EL + row.counts.PL + row.counts.CL + row.counts.SL + row.counts.FL,
         row.counts.WO,
         row.counts.HO,
         row.counts.LOP,
@@ -2880,7 +2908,7 @@ const [newEmployee, setNewEmployee] = useState({
       const statusValue = record.status || "Unmarked";
       if (statusValue === "P") summary.present += 1;
       else if (statusValue === "A") summary.absent += 1;
-      else if (["CL", "SL", "EL", "FL"].includes(statusValue)) summary.leave += 1;
+      else if (["CL", "SL", "EL", "PL", "FL"].includes(statusValue)) summary.leave += 1;
       else if (statusValue === "WFH") summary.wfh += 1;
       else if (["CO", "CO-E", "CO-U"].includes(statusValue)) {
         summary.compOff += 1;
@@ -3523,7 +3551,7 @@ const handleImportExcel = (event) => {
           {attendanceView === "daily" && (
             <>
               <div className="attendance-toolbar"><div><strong>{new Date(`${attendanceDate}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</strong><span>{filteredAttendanceEmployees.length} employees shown</span></div><div className="attendance-toolbar-actions"><button className="secondary-btn" onClick={downloadAttendanceTemplate}>⬇ Monthly Template</button><button className="secondary-btn" onClick={downloadDailyAttendanceTemplate}>⬇ Daily Template</button><button className="primary-button bulk-import-btn" onClick={() => openAttendanceImport("monthly")}>📥 Monthly Import</button><button className="primary-button bulk-import-btn" onClick={() => openAttendanceImport("daily")}>📅 Daily Import</button><button className="secondary-btn" onClick={() => markAllAttendance("WO")}>Mark Weekly Off</button><button className="danger-light-btn" onClick={clearAttendanceDay}>Clear Day</button></div></div>
-              <div className="attendance-summary-grid">{[["Total Employees",attendanceSummary.P+attendanceSummary.A+attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.FL+attendanceSummary.CO+attendanceSummary["CO-E"]+attendanceSummary["CO-U"]+attendanceSummary.OD+attendanceSummary.WFH+attendanceSummary.WO+attendanceSummary.HO+attendanceSummary.HD+attendanceSummary.Unmarked,"total"],["Present",attendanceSummary.P,"present"],["Absent",attendanceSummary.A,"absent"],["Leave",attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.FL,"leave"],["WFH",attendanceSummary.WFH,"wfh"],["Comp Off",attendanceSummary.CO,"co"],["CO-E — Earned",attendanceSummary["CO-E"],"co"],["CO-U — Utilised",attendanceSummary["CO-U"],"co"],["Unmarked",attendanceSummary.Unmarked,"unmarked"]].map(([label,value,type])=><div className={`attendance-summary-card ${type}`} key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+              <div className="attendance-summary-grid">{[["Total Employees",attendanceSummary.P+attendanceSummary.A+attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.PL+attendanceSummary.FL+attendanceSummary.CO+attendanceSummary["CO-E"]+attendanceSummary["CO-U"]+attendanceSummary.OD+attendanceSummary.WFH+attendanceSummary.WO+attendanceSummary.HO+attendanceSummary.HD+attendanceSummary.Unmarked,"total"],["Present",attendanceSummary.P,"present"],["Absent",attendanceSummary.A,"absent"],["Leave",attendanceSummary.CL+attendanceSummary.SL+attendanceSummary.EL+attendanceSummary.PL+attendanceSummary.FL,"leave"],["WFH",attendanceSummary.WFH,"wfh"],["Comp Off",attendanceSummary.CO,"co"],["CO-E — Earned",attendanceSummary["CO-E"],"co"],["CO-U — Utilised",attendanceSummary["CO-U"],"co"],["Unmarked",attendanceSummary.Unmarked,"unmarked"]].map(([label,value,type])=><div className={`attendance-summary-card ${type}`} key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
               <div className="attendance-table-card"><div className="table-wrapper"><table><thead><tr><th>Employee</th><th>Site</th><th>Type</th><th>Attendance</th><th>In Time</th><th>Out Time</th><th>Working Hrs.</th><th>OT Hrs.</th><th>Source</th><th>Remarks</th><th className="attendance-action-header">Action</th></tr></thead><tbody>{filteredAttendanceEmployees.map(employee=>{
                 const record = getDisplayedAttendanceRecord(employee, attendanceDate);
                 const rawRecord = todayAttendance[employee.id] || {};
@@ -3599,7 +3627,7 @@ const handleImportExcel = (event) => {
                   </div>
                   <div className="attendance-report-table-wrap">
                     <table className="attendance-report-table">
-                      <thead><tr><th className="report-sticky">Employee</th><th>Designation</th><th>Site</th>{reportMonthDays.map((dateKey) => <th key={dateKey}>{dateKey.slice(8,10)}</th>)}<th>P</th><th>A</th><th>EL</th><th>CL</th><th>SL</th><th>FL</th><th>CO-E</th><th>CO-U</th><th>OD</th><th>WFH</th><th>WO</th><th>HO</th><th>HD</th><th className="lop-head">LOP</th><th className="paid-head">Paid Days</th></tr></thead>
+                      <thead><tr><th className="report-sticky">Employee</th><th>Designation</th><th>Site</th>{reportMonthDays.map((dateKey) => <th key={dateKey}>{dateKey.slice(8,10)}</th>)}<th>P</th><th>A</th><th>EL</th><th>PL</th><th>CL</th><th>SL</th><th>FL</th><th>CO-E</th><th>CO-U</th><th>OD</th><th>WFH</th><th>WO</th><th>HO</th><th>HD</th><th className="lop-head">LOP</th><th className="paid-head">Paid Days</th></tr></thead>
                       <tbody>
                         {attendanceReportData.map((row) => (
                           <tr key={row.employee.id}>
@@ -3636,7 +3664,7 @@ const handleImportExcel = (event) => {
                                 </button>
                               </td>
                             ))}
-                            <td className="count-p">{row.counts.P}</td><td className="count-a">{row.counts.A}</td><td>{row.counts.EL}</td><td>{row.counts.CL}</td><td>{row.counts.SL}</td><td>{row.counts.FL}</td><td>{row.counts["CO-E"]}</td><td>{row.counts["CO-U"]}</td><td>{row.counts.OD}</td><td>{row.counts.WFH}</td><td>{row.counts.WO}</td><td>{row.counts.HO}</td><td>{row.counts.HD}</td><td className="count-lop">{row.counts.LOP}</td><td className={`count-paid${row.paidDaysNeedsReview ? " paid-days-warning" : ""}`} title={row.paidDaysNeedsReview ? `Paid Days ${row.paidDays.toFixed(1)} is below ${row.totalCalendarDays} calendar days — please review attendance.` : `Paid Days ${row.paidDays.toFixed(1)} of ${row.totalCalendarDays} — OK.`}>{row.paidDays.toFixed(1)}{row.paidDaysNeedsReview && <span className="paid-days-alert" aria-label="Review required">!</span>}</td>
+                            <td className="count-p">{row.counts.P}</td><td className="count-a">{row.counts.A}</td><td>{row.counts.EL}</td><td>{row.counts.PL}</td><td>{row.counts.CL}</td><td>{row.counts.SL}</td><td>{row.counts.FL}</td><td>{row.counts["CO-E"]}</td><td>{row.counts["CO-U"]}</td><td>{row.counts.OD}</td><td>{row.counts.WFH}</td><td>{row.counts.WO}</td><td>{row.counts.HO}</td><td>{row.counts.HD}</td><td className="count-lop">{row.counts.LOP}</td><td className={`count-paid${row.paidDaysNeedsReview ? " paid-days-warning" : ""}`} title={row.paidDaysNeedsReview ? `Paid Days ${row.paidDays.toFixed(1)} is below ${row.totalCalendarDays} calendar days — please review attendance.` : `Paid Days ${row.paidDays.toFixed(1)} of ${row.totalCalendarDays} — OK.`}>{row.paidDays.toFixed(1)}{row.paidDaysNeedsReview && <span className="paid-days-alert" aria-label="Review required">!</span>}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -4224,6 +4252,7 @@ const handleImportExcel = (event) => {
                     { value: "P", label: "Present", color: "#047857", bg: "#ecfdf5", border: "#a7f3d0" },
                     { value: "A", label: "Absent", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
                     { value: "EL", label: "Earned Leave", color: "#92400e", bg: "#fffbeb", border: "#fde68a" },
+                    { value: "PL", label: "Privilege Leave", color: "#0369a1", bg: "#f0f9ff", border: "#bae6fd" },
                     { value: "CL", label: "Casual Leave", color: "#6d28d9", bg: "#f5f3ff", border: "#ddd6fe" },
                     { value: "SL", label: "Sick Leave", color: "#7e22ce", bg: "#faf5ff", border: "#e9d5ff" },
                     { value: "FL", label: "Floating Leave", color: "#be185d", bg: "#fdf2f8", border: "#fbcfe8" },
