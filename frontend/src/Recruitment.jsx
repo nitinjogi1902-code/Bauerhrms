@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
+import JSZip from "jszip";
 import { loadOrganizationModuleData, saveOrganizationModuleData } from "./organizationModuleStorage";
 import "./Recruitment.css";
 
@@ -233,6 +234,27 @@ export default function Recruitment({ employees = [], masters = {} }) {
     })();
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const refreshOrganizationMasters = async () => {
+      try {
+        const latest = await loadOrganizationModuleData(MASTERS_KEY, {});
+        if (mounted) setMasterData((current) => ({ ...current, ...(latest || {}) }));
+      } catch (error) {
+        // The last loaded masters remain usable if the refresh is unavailable.
+      }
+    };
+    const syncProps = () => setMasterData((current) => ({ ...current, ...(masters || {}) }));
+    window.addEventListener("bauerHrmsOrganizationMastersUpdated", refreshOrganizationMasters);
+    window.addEventListener("focus", refreshOrganizationMasters);
+    syncProps();
+    return () => {
+      mounted = false;
+      window.removeEventListener("bauerHrmsOrganizationMastersUpdated", refreshOrganizationMasters);
+      window.removeEventListener("focus", refreshOrganizationMasters);
+    };
+  }, [masters]);
 
   const departments = useMemo(() => normalizeOptions(masterData.departments), [masterData.departments]);
   const locations = useMemo(() => normalizeOptions(masterData.locations), [masterData.locations]);
@@ -551,24 +573,88 @@ export default function Recruitment({ employees = [], masters = {} }) {
     return idMatch || store.requirements.find((item) => title && String(item.title || "").toLowerCase() === title.toLowerCase()) || null;
   };
 
-  const downloadTemplate = (type) => {
+  const downloadTemplate = async (type) => {
     const isCandidate = type === "candidates";
     const headers = isCandidate
       ? ["Candidate ID", "Candidate Name", "Mobile", "Email", "Current Company", "Current Designation", "Current Department", "Total Experience", "Relevant Experience", "Highest Qualification", "Passing Year", "Current CTC", "Expected CTC", "Notice Period", "Last Working Date", "Current Location", "Preferred Location", "Willing to Relocate", "Category", "Source", "Consultant", "Recruiter", "Requirement", "Requirement ID", "Stage", "Next Action", "Next Action Date", "Owner", "Key Skills", "Notes"]
-      : ["Req ID", "Designation", "Department", "Site / Location", "Category", "Positions Required", "Employment Type", "Employee Group", "Qualification", "Experience", "Required Skills", "Min CTC (LPA)", "Max CTC (LPA)", "Priority", "Target Joining Date", "Hiring Manager", "Recruiter", "Reason", "Remarks"];
+      : ["Req ID", "Designation", "Department", "Site / Location", "Category", "Positions Required", "Employment Type", "Employee Group", "Qualification", "Experience", "Required Skills", "Min CTC (LPA)", "Max CTC (LPA)", "Priority", "Target Joining Date", "Hiring Manager", "Recruiter", "Status", "Reason", "Remarks"];
+    const names = (items) => [...new Set((Array.isArray(items) ? items : []).map((item) => typeof item === "string" ? item : item?.name).map((value) => String(value || "").trim()).filter(Boolean))];
+    const hrmsLists = [
+      { name: "Departments", values: names(departments) },
+      { name: "Designations", values: names(designations) },
+      { name: "Locations", values: names(locations) },
+      { name: "EmployeeGroups", values: names(employeeGroups) },
+      { name: "Employees", values: names(employeeOptions) },
+      { name: "Recruiters", values: names(recruiterOptions) },
+      { name: "RequirementIds", values: names(store.requirements.map((item) => item.requirementNo || item.id)) },
+      { name: "RequirementTitles", values: names(store.requirements.map((item) => item.title)) },
+      { name: "Categories", values: names(CATEGORIES) },
+      { name: "CandidateSources", values: names(SOURCES) },
+      { name: "CandidateStages", values: names(CANDIDATE_STAGES) },
+      { name: "RequirementStatuses", values: names(REQ_STATUSES) },
+      { name: "EmploymentTypes", values: names(["Full Time", "Part Time", "Contract"]) },
+      { name: "ExperienceRanges", values: names(EXPERIENCE_OPTIONS.map((value) => `${value} Years`)) },
+      { name: "CtcRanges", values: names(CTC_LPA_OPTIONS.map((value) => `${value} LPA`)) },
+      { name: "Priorities", values: names(["High", "Medium", "Low"]) },
+      { name: "RequirementReasons", values: names(["New Position", "Replacement", "Expansion", "Attrition"]) },
+      { name: "YesNo", values: ["Yes", "No"] },
+    ].map((list) => ({ ...list, values: list.values.length ? list.values : ["(none configured)"] }));
     const instructions = isCandidate
-      ? [["BAUER HRMS — Candidate Bulk Import"], ["Candidate Name is required. Updated CV is optional in this import and can be uploaded later from the candidate profile."], ["Requirement can be matched using the exact Requirement ID or Position/Designation title."], ["Stage examples: New, Screening, Shortlisted, Interview Scheduled, Selected, Offer Released, Joined."], ["Keep one candidate per row. Do not change the header names."]]
-      : [["BAUER HRMS — Requirement Bulk Import"], ["Designation and Department are required. Positions Required defaults to 1 when blank."], ["Imported requirements start as Draft so the normal Submit/Approve workflow remains available."], ["Keep one requirement per row. Do not change the header names."]];
+      ? [["BAUER HRMS — Candidate Bulk Import"], ["Candidate Name is required. Updated CV is optional in this import and can be uploaded later from the candidate profile."], ["Requirement ID must be copied exactly from the Reference Lists sheet. Requirement ID is optional; Requirement title can also be used."], ["Do not type a new Requirement ID for an existing position. Leave it blank for an unlinked candidate."], ["Dates must be entered as YYYY-MM-DD (example: 2026-11-01). Dropdown fields are validated against the current HRMS masters."], ["Keep one candidate per row and do not change the header names. The template is generated with the current HRMS data each time you download it."]]
+      : [["BAUER HRMS — Requirement Bulk Import"], ["Designation and Department are required. Positions Required defaults to 1 when blank."], ["Req ID is optional for a new requirement. Leave it blank and HRMS will generate the next REQ-0001 style ID."], ["For an existing requirement, copy its exact Req ID from the Reference Lists sheet to update that record instead of creating a duplicate."], ["Imported requirements start as Draft so the normal Submit/Approve workflow remains available."], ["Dates must be entered as YYYY-MM-DD (example: 2026-11-01). Dropdown fields are validated against the current HRMS masters."], ["Keep one requirement per row and do not change the header names. The template is generated with the current HRMS data each time you download it."]];
     const workbook = XLSX.utils.book_new();
     const dataSheet = XLSX.utils.aoa_to_sheet([headers]);
     dataSheet["!cols"] = headers.map((header) => ({ wch: Math.min(28, Math.max(14, header.length + 2)) }));
     dataSheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }) };
     dataSheet["!freeze"] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" };
-    XLSX.utils.book_append_sheet(workbook, dataSheet, isCandidate ? "Candidates Import" : "Requirements Import");
+    const referenceRows = [hrmsLists.map((list) => list.name)];
+    const maxListLength = Math.max(...hrmsLists.map((list) => list.values.length));
+    for (let index = 0; index < maxListLength; index += 1) referenceRows.push(hrmsLists.map((list) => list.values[index] || ""));
+    const referenceSheet = XLSX.utils.aoa_to_sheet(referenceRows);
+    referenceSheet["!cols"] = hrmsLists.map((list) => ({ wch: Math.min(32, Math.max(16, list.name.length + 2)) }));
+    referenceSheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxListLength, c: hrmsLists.length - 1 } }) };
+    referenceSheet["!freeze"] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" };
     const infoSheet = XLSX.utils.aoa_to_sheet(instructions);
-    infoSheet["!cols"] = [{ wch: 105 }];
+    infoSheet["!cols"] = [{ wch: 115 }];
+    XLSX.utils.book_append_sheet(workbook, dataSheet, isCandidate ? "Candidates Import" : "Requirements Import");
+    XLSX.utils.book_append_sheet(workbook, referenceSheet, "Reference Lists");
     XLSX.utils.book_append_sheet(workbook, infoSheet, "Instructions");
-    XLSX.writeFile(workbook, isCandidate ? "BAUER_Candidate_Import_Template.xlsx" : "BAUER_Requirement_Import_Template.xlsx");
+
+    // SheetJS Community Edition does not expose data-validation writing, so add
+    // native Excel list/date/number validation to the generated workbook XML.
+    const columnLetter = (index) => { let value = ""; let current = index + 1; while (current > 0) { const remainder = (current - 1) % 26; value = String.fromCharCode(65 + remainder) + value; current = Math.floor((current - 1) / 26); } return value; };
+    const validationMap = isCandidate
+      ? { "Current Designation": "Designations", "Current Department": "Departments", "Current Location": "Locations", "Preferred Location": "Locations", "Willing to Relocate": "YesNo", Category: "Categories", Source: "CandidateSources", Recruiter: "Recruiters", Requirement: "RequirementTitles", "Requirement ID": "RequirementIds", Stage: "CandidateStages", Owner: "Employees" }
+      : { "Req ID": "RequirementIds", Designation: "Designations", Department: "Departments", "Site / Location": "Locations", Category: "Categories", "Employment Type": "EmploymentTypes", "Employee Group": "EmployeeGroups", Experience: "ExperienceRanges", "Min CTC (LPA)": "CtcRanges", "Max CTC (LPA)": "CtcRanges", Priority: "Priorities", "Hiring Manager": "Employees", Recruiter: "Recruiters", Status: "RequirementStatuses", Reason: "RequirementReasons" };
+    const dateHeaders = isCandidate ? ["Last Working Date", "Next Action Date"] : ["Target Joining Date"];
+    const validations = [];
+    Object.entries(validationMap).forEach(([header, listName]) => { const column = headers.indexOf(header); if (column >= 0) validations.push(`<dataValidation type="list" allowBlank="1" showErrorMessage="1" showInputMessage="1" sqref="${columnLetter(column)}2:${columnLetter(column)}1000"><formula1>=${listName}</formula1></dataValidation>`); });
+    dateHeaders.forEach((header) => { const column = headers.indexOf(header); if (column >= 0) validations.push(`<dataValidation type="date" operator="between" allowBlank="1" showErrorMessage="1" sqref="${columnLetter(column)}2:${columnLetter(column)}1000"><formula1>DATE(2000,1,1)</formula1><formula2>DATE(2100,12,31)</formula2></dataValidation>`); });
+    if (!isCandidate) { const column = headers.indexOf("Positions Required"); if (column >= 0) validations.push(`<dataValidation type="whole" operator="between" allowBlank="1" showErrorMessage="1" sqref="${columnLetter(column)}2:${columnLetter(column)}1000"><formula1>1</formula1><formula2>100000</formula2></dataValidation>`); }
+    try {
+      const workbookArray = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+      const zip = await JSZip.loadAsync(workbookArray);
+      const dataEntry = zip.file("xl/worksheets/sheet1.xml");
+      if (dataEntry && validations.length) {
+        let sheetXml = await dataEntry.async("string");
+        const validationXml = `<dataValidations count="${validations.length}">${validations.join("")}</dataValidations>`;
+        const marker = ["<pageMargins", "<pageSetup", "<headerFooter", "<drawing", "<legacyDrawing", "<tableParts", "</worksheet>"].find((value) => sheetXml.includes(value));
+        sheetXml = marker ? sheetXml.replace(marker, `${validationXml}${marker}`) : sheetXml;
+        zip.file("xl/worksheets/sheet1.xml", sheetXml);
+      }
+      const workbookEntry = zip.file("xl/workbook.xml");
+      if (workbookEntry) {
+        let workbookXml = await workbookEntry.async("string");
+        const definedNames = `<definedNames>${hrmsLists.map((list, index) => `<definedName name="${list.name}">'Reference Lists'!$${columnLetter(index)}$2:$${columnLetter(index)}$${list.values.length + 1}</definedName>`).join("")}</definedNames>`;
+        workbookXml = workbookXml.includes("<definedNames") ? workbookXml.replace("</definedNames>", `${definedNames.replace("<definedNames>", "").replace("</definedNames>", "")}</definedNames>`) : workbookXml.replace("</workbook>", `${definedNames}</workbook>`);
+        zip.file("xl/workbook.xml", workbookXml);
+      }
+      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+      const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = isCandidate ? "BAUER_Candidate_Import_Template.xlsx" : "BAUER_Requirement_Import_Template.xlsx"; link.click(); URL.revokeObjectURL(url);
+    } catch (error) {
+      // Keep downloads usable even if a browser blocks ZIP post-processing.
+      XLSX.writeFile(workbook, isCandidate ? "BAUER_Candidate_Import_Template.xlsx" : "BAUER_Requirement_Import_Template.xlsx");
+    }
   };
 
   const importCandidatesExcel = async (file) => {
@@ -644,14 +730,22 @@ export default function Recruitment({ employees = [], masters = {} }) {
       const rows = await readImportRows(file, ["requirements import", "requirements", "open positions", "open position"]);
       const now = new Date().toISOString();
       const imported = [];
+      const usedRequirementNumbers = new Set(store.requirements.map((item) => String(item.requirementNo || "").trim().toLowerCase()).filter(Boolean));
+      let nextRequirementSequence = 1;
+      const nextRequirementNumber = () => {
+        let value = `REQ-${String(nextRequirementSequence).padStart(4, "0")}`;
+        while (usedRequirementNumbers.has(value.toLowerCase())) { nextRequirementSequence += 1; value = `REQ-${String(nextRequirementSequence).padStart(4, "0")}`; }
+        usedRequirementNumbers.add(value.toLowerCase()); nextRequirementSequence += 1; return value;
+      };
       let skipped = 0;
-      rows.forEach((row, index) => {
+      rows.forEach((row) => {
         const title = importText(row, ["Designation", "Position", "Requirement"]);
         const department = importText(row, ["Department"]);
         if (!title || !department) { skipped += 1; return; }
         const suppliedNo = importText(row, ["Req ID", "Requirement ID", "Requirement No", "Position ID"]);
-        const requirementNo = suppliedNo || `REQ-${String(store.requirements.length + index + 1).padStart(4, "0")}`;
-        const existing = store.requirements.find((item) => String(item.requirementNo || "").toLowerCase() === requirementNo.toLowerCase() || (String(item.title || "").toLowerCase() === title.toLowerCase() && String(item.department || "").toLowerCase() === department.toLowerCase()));
+        const existing = [...store.requirements, ...imported].find((item) => (suppliedNo && String(item.requirementNo || "").toLowerCase() === suppliedNo.toLowerCase()) || (!suppliedNo && String(item.title || "").toLowerCase() === title.toLowerCase() && String(item.department || "").toLowerCase() === department.toLowerCase()));
+        const requirementNo = existing?.requirementNo || suppliedNo || nextRequirementNumber();
+        usedRequirementNumbers.add(requirementNo.toLowerCase());
         const statusRaw = importText(row, ["Status"], existing?.status || "Draft");
         const status = REQ_STATUSES.includes(statusRaw) ? statusRaw : "Draft";
         const mapped = {
