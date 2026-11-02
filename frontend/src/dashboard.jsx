@@ -822,6 +822,17 @@ function Dashboard({ onLogout, currentUser = null }) {
     if (window.innerWidth < 900) setSidebarOpen(false);
   };
 
+  const openSettingsSection = (selector) => {
+    setProfileOpen(false);
+    handleMenu("Settings");
+    window.setTimeout(() => {
+      document.querySelector(selector)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 80);
+  };
+
   const exitDateValue = (employee) =>
     employee.exitDate ||
     employee.dateOfExit ||
@@ -1391,8 +1402,12 @@ function Dashboard({ onLogout, currentUser = null }) {
 
               {profileOpen && (
                 <div className="profile-dropdown">
-                  <button type="button">My Profile</button>
-                  <button type="button">Change Password</button>
+                  <button
+                    type="button"
+                    onClick={() => openSettingsSection(".security-card")}
+                  >
+                    Change Password
+                  </button>
                   <div />
                   <button
                     type="button"

@@ -505,6 +505,191 @@ export default function Recruitment({ employees = [], masters = {} }) {
   const filteredCandidates = useMemo(() => { const q = search.trim().toLowerCase(); return store.candidates.filter((c) => { const text = [c.id,c.candidateNo,c.name,c.mobile,c.email,c.currentCompany,c.currentDesignation,c.department,c.skills,c.source,c.recruiter,c.owner,c.location,c.preferredLocation,c.category].join(" ").toLowerCase(); return (!q || text.includes(q)) && (stageFilter === "All" || c.stage === stageFilter) && (categoryFilter === "All" || c.category === categoryFilter); }); }, [store.candidates, search, stageFilter, categoryFilter]);
   const filteredRequirements = store.requirements.filter((r) => reqFilter === "All" || r.status === reqFilter);
 
+  // Bulk imports intentionally do not use saveCandidate(): individual candidate
+  // entry keeps the Updated CV validation, while Excel onboarding lets HR add
+  // the pipeline first and attach each CV later from the candidate profile.
+  const readImportRows = (file, preferredNames) => new Promise((resolve, reject) => {
+    if (!file) { resolve([]); return; }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const workbook = XLSX.read(event.target.result, { type: "array", cellDates: true });
+        const sheetName = workbook.SheetNames.find((name) => preferredNames.some((needle) => name.toLowerCase().includes(needle))) || workbook.SheetNames[0];
+        resolve(sheetName ? XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" }) : []);
+      } catch (error) { reject(error); }
+    };
+    reader.onerror = () => reject(new Error("Unable to read the Excel file."));
+    reader.readAsArrayBuffer(file);
+  });
+
+  const importValue = (row, keys) => {
+    const found = Object.keys(row).find((key) => keys.some((candidate) => key.toLowerCase().trim() === candidate.toLowerCase().trim()));
+    return found ? row[found] : "";
+  };
+
+  const importText = (row, keys, fallback = "") => {
+    const value = importValue(row, keys);
+    return value === null || value === undefined ? fallback : String(value).trim() || fallback;
+  };
+
+  const importNumber = (row, keys, fallback = 0) => {
+    const value = Number(importValue(row, keys));
+    return Number.isFinite(value) ? value : fallback;
+  };
+
+  const importDate = (row, keys) => {
+    const value = importValue(row, keys);
+    if (!value) return "";
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+    return String(value).trim();
+  };
+
+  const requirementForImport = (row) => {
+    const id = importText(row, ["Requirement ID", "Req ID", "Requirement No", "Position ID"]);
+    const title = importText(row, ["Requirement", "Position", "Designation"]);
+    const idMatch = id && store.requirements.find((item) => [item.id, item.requirementNo].some((value) => String(value || "").toLowerCase() === id.toLowerCase()));
+    return idMatch || store.requirements.find((item) => title && String(item.title || "").toLowerCase() === title.toLowerCase()) || null;
+  };
+
+  const downloadTemplate = (type) => {
+    const isCandidate = type === "candidates";
+    const headers = isCandidate
+      ? ["Candidate ID", "Candidate Name", "Mobile", "Email", "Current Company", "Current Designation", "Current Department", "Total Experience", "Relevant Experience", "Highest Qualification", "Passing Year", "Current CTC", "Expected CTC", "Notice Period", "Last Working Date", "Current Location", "Preferred Location", "Willing to Relocate", "Category", "Source", "Consultant", "Recruiter", "Requirement", "Requirement ID", "Stage", "Next Action", "Next Action Date", "Owner", "Key Skills", "Notes"]
+      : ["Req ID", "Designation", "Department", "Site / Location", "Category", "Positions Required", "Employment Type", "Employee Group", "Qualification", "Experience", "Required Skills", "Min CTC (LPA)", "Max CTC (LPA)", "Priority", "Target Joining Date", "Hiring Manager", "Recruiter", "Reason", "Remarks"];
+    const instructions = isCandidate
+      ? [["BAUER HRMS — Candidate Bulk Import"], ["Candidate Name is required. Updated CV is optional in this import and can be uploaded later from the candidate profile."], ["Requirement can be matched using the exact Requirement ID or Position/Designation title."], ["Stage examples: New, Screening, Shortlisted, Interview Scheduled, Selected, Offer Released, Joined."], ["Keep one candidate per row. Do not change the header names."]]
+      : [["BAUER HRMS — Requirement Bulk Import"], ["Designation and Department are required. Positions Required defaults to 1 when blank."], ["Imported requirements start as Draft so the normal Submit/Approve workflow remains available."], ["Keep one requirement per row. Do not change the header names."]];
+    const workbook = XLSX.utils.book_new();
+    const dataSheet = XLSX.utils.aoa_to_sheet([headers]);
+    dataSheet["!cols"] = headers.map((header) => ({ wch: Math.min(28, Math.max(14, header.length + 2)) }));
+    dataSheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }) };
+    dataSheet["!freeze"] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" };
+    XLSX.utils.book_append_sheet(workbook, dataSheet, isCandidate ? "Candidates Import" : "Requirements Import");
+    const infoSheet = XLSX.utils.aoa_to_sheet(instructions);
+    infoSheet["!cols"] = [{ wch: 105 }];
+    XLSX.utils.book_append_sheet(workbook, infoSheet, "Instructions");
+    XLSX.writeFile(workbook, isCandidate ? "BAUER_Candidate_Import_Template.xlsx" : "BAUER_Requirement_Import_Template.xlsx");
+  };
+
+  const importCandidatesExcel = async (file) => {
+    if (!file) return;
+    try {
+      const rows = await readImportRows(file, ["candidates import", "candidate tracker", "candidates", "candidate"]);
+      const now = new Date().toISOString();
+      const stageMap = { "CV Received": "New", "Interview Pending": "Interview Scheduled", "Interview Done": "Interviewed", "Mapping Pending": "Selected", "Documents Pending": "Selected", "Approval Pending": "Selected", "Offer Sent": "Offer Released", "Offer Accepted": "Offer Accepted", "Joining Pending": "Joining Scheduled", "Joined": "Joined", "Hold": "Hold", "Rejected": "Rejected", "No Show": "No Show", "Screening": "Screening", "Shortlisted": "Shortlisted" };
+      const imported = [];
+      let skipped = 0;
+      rows.forEach((row, index) => {
+        const name = importText(row, ["Candidate Name", "Name"]);
+        if (!name) { skipped += 1; return; }
+        const suppliedNo = importText(row, ["Candidate ID", "Candidate No", "Employee Code"]);
+        const candidateNo = suppliedNo || `CAND-${String(store.candidates.length + index + 1).padStart(4, "0")}`;
+        const existing = store.candidates.find((candidate) => String(candidate.candidateNo || "").toLowerCase() === candidateNo.toLowerCase() || (importText(row, ["Email", "Email ID", "Email Id"]) && String(candidate.email || "").toLowerCase() === importText(row, ["Email", "Email ID", "Email Id"]).toLowerCase()));
+        const requirement = requirementForImport(row);
+        const stageRaw = importText(row, ["Stage", "Current Stage"], "New");
+        const stage = stageMap[stageRaw] || (CANDIDATE_STAGES.includes(stageRaw) ? stageRaw : "New");
+        const category = importText(row, ["Category", "Workforce Category"], "On Roll");
+        const mapped = {
+          ...EMPTY_CANDIDATE,
+          id: existing?.id || makeId("CAN"),
+          candidateNo: existing?.candidateNo || candidateNo,
+          name,
+          mobile: importText(row, ["Mobile", "Contact No.", "Contact"]),
+          email: importText(row, ["Email", "Email ID", "Email Id"]),
+          currentCompany: importText(row, ["Current Company", "Company"]),
+          currentDesignation: importText(row, ["Current Designation", "Current Role", "Designation"]),
+          department: importText(row, ["Current Department", "Candidate Department", "Department"]),
+          totalExperience: importText(row, ["Total Experience", "Total Exp.", "Experience"]),
+          relevantExperience: importText(row, ["Relevant Experience", "Relevant Exp."]),
+          qualification: importText(row, ["Highest Qualification", "Qualification"]),
+          qualificationYear: importText(row, ["Passing Year", "Qualification Year"]),
+          currentCtc: importText(row, ["Current CTC", "Current CTC (LPA)"]),
+          expectedCtc: importText(row, ["Expected CTC", "Expected CTC (LPA)"]),
+          noticePeriod: importText(row, ["Notice Period"]),
+          lastWorkingDate: importDate(row, ["Last Working Date", "LWD"]),
+          location: importText(row, ["Current Location", "Location", "Site / Location", "Site"]),
+          preferredLocation: importText(row, ["Preferred Location"]),
+          willingToRelocate: importText(row, ["Willing to Relocate"], "Yes"),
+          category: CATEGORIES.includes(category) ? category : "On Roll",
+          source: importText(row, ["Source", "Source / Remarks"], "Other").split("/")[0].trim() || "Other",
+          consultant: importText(row, ["Consultant"]),
+          recruiter: importText(row, ["Recruiter", "Owner"]),
+          owner: importText(row, ["Owner", "Recruiter"]),
+          requirementId: requirement?.id || "",
+          stage,
+          nextAction: importText(row, ["Next Action"]),
+          nextActionDate: importDate(row, ["Next Action Date"]),
+          skills: importText(row, ["Key Skills", "Skills", "Required Skills"]),
+          notes: importText(row, ["Notes", "Remarks", "Source / Remarks"]),
+          // CV is deliberately not fabricated from an Excel filename.
+          updatedCvName: existing?.updatedCvName || "",
+          updatedCvData: existing?.updatedCvData || "",
+          cvStatus: existing?.cvStatus || "Missing",
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+        };
+        imported.push(existing ? { ...existing, ...mapped, id: existing.id, candidateNo: existing.candidateNo || candidateNo, updatedCvName: existing.updatedCvName || "", updatedCvData: existing.updatedCvData || "", cvStatus: existing.cvStatus || "Missing" } : mapped);
+      });
+      const importedIds = new Set(imported.map((candidate) => candidate.id));
+      const mergedCandidates = [...imported, ...store.candidates.filter((candidate) => !importedIds.has(candidate.id))];
+      const activities = [...imported.map((candidate) => addActivity(candidate.id, "Candidate imported from Excel", `${file.name} · CV can be uploaded later`)), ...store.activities];
+      await replaceAndSave({ candidates: mergedCandidates, activities }, true);
+      alert(`Candidate import completed. ${imported.length} row(s) added/updated${skipped ? `, ${skipped} skipped` : ""}. Updated CV upload remains available from each candidate profile.`);
+    } catch (error) { alert(`Candidate import failed: ${error?.message || "Invalid workbook"}`); }
+  };
+
+  const importRequirementsExcel = async (file) => {
+    if (!file) return;
+    try {
+      const rows = await readImportRows(file, ["requirements import", "requirements", "open positions", "open position"]);
+      const now = new Date().toISOString();
+      const imported = [];
+      let skipped = 0;
+      rows.forEach((row, index) => {
+        const title = importText(row, ["Designation", "Position", "Requirement"]);
+        const department = importText(row, ["Department"]);
+        if (!title || !department) { skipped += 1; return; }
+        const suppliedNo = importText(row, ["Req ID", "Requirement ID", "Requirement No", "Position ID"]);
+        const requirementNo = suppliedNo || `REQ-${String(store.requirements.length + index + 1).padStart(4, "0")}`;
+        const existing = store.requirements.find((item) => String(item.requirementNo || "").toLowerCase() === requirementNo.toLowerCase() || (String(item.title || "").toLowerCase() === title.toLowerCase() && String(item.department || "").toLowerCase() === department.toLowerCase()));
+        const statusRaw = importText(row, ["Status"], existing?.status || "Draft");
+        const status = REQ_STATUSES.includes(statusRaw) ? statusRaw : "Draft";
+        const mapped = {
+          ...EMPTY_REQ,
+          id: existing?.id || makeId("REQ"),
+          requirementNo: existing?.requirementNo || requirementNo,
+          title,
+          department,
+          location: importText(row, ["Site / Location", "Location", "Site"]),
+          category: CATEGORIES.includes(importText(row, ["Category", "Workforce Category"], "On Roll")) ? importText(row, ["Category", "Workforce Category"], "On Roll") : "On Roll",
+          vacancies: Math.max(1, importNumber(row, ["Positions Required", "Vacancies", "Required"], 1)),
+          employmentType: importText(row, ["Employment Type"], "Full Time"),
+          employeeGroup: importText(row, ["Employee Group", "Workforce Category"]),
+          qualification: importText(row, ["Qualification"]),
+          experience: importText(row, ["Experience"]),
+          skills: importText(row, ["Required Skills", "Skills"]),
+          minCtc: importText(row, ["Min CTC (LPA)", "Minimum CTC"]),
+          maxCtc: importText(row, ["Max CTC (LPA)", "Maximum CTC"]),
+          priority: importText(row, ["Priority"], "Medium"),
+          targetDate: importDate(row, ["Target Joining Date", "Target Date"]),
+          hiringManager: importText(row, ["Hiring Manager"]),
+          recruiter: importText(row, ["Recruiter", "Owner"]),
+          reason: importText(row, ["Reason"], "New Position"),
+          remarks: importText(row, ["Remarks", "Notes"]),
+          status,
+          approvalStatus: status === "Approved" ? "Approved" : (existing?.approvalStatus || "Pending"),
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+        };
+        imported.push(existing ? { ...existing, ...mapped, id: existing.id, requirementNo: existing.requirementNo || requirementNo } : mapped);
+      });
+      const importedIds = new Set(imported.map((item) => item.id));
+      const mergedRequirements = [...imported, ...store.requirements.filter((item) => !importedIds.has(item.id))];
+      await replaceAndSave({ requirements: mergedRequirements }, true);
+      alert(`Requirement import completed. ${imported.length} row(s) added/updated${skipped ? `, ${skipped} skipped (Designation and Department are required)` : ""}.`);
+    } catch (error) { alert(`Requirement import failed: ${error?.message || "Invalid workbook"}`); }
+  };
+
   const importRecruitmentExcel = (file) => {
     if (!file) return;
     const reader = new FileReader();
@@ -516,8 +701,8 @@ export default function Recruitment({ employees = [], masters = {} }) {
           if (!sheetName) return [];
           return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
         };
-        const candidateRows = rowsFromSheet(["candidate tracker", "candidate", "current candidate"]);
-        const requirementRows = rowsFromSheet(["requirements", "open position", "open positions"]);
+        const candidateRows = rowsFromSheet(["candidates import", "candidate tracker", "candidate", "current candidate"]);
+        const requirementRows = rowsFromSheet(["requirements import", "requirements", "open position", "open positions"]);
         const norm = (row, keys) => { const found = Object.keys(row).find((k) => keys.some((key) => k.toLowerCase().trim() === key.toLowerCase().trim())); return found ? row[found] : ""; };
         const importedCandidates = candidateRows.map((r, index) => {
           const stageRaw = String(norm(r,["Current Stage","Stage"]) || "New").trim();
@@ -562,6 +747,7 @@ export default function Recruitment({ employees = [], masters = {} }) {
     const wb = XLSX.utils.book_new();
     const addSheet = (name, rows) => { const data = rows.length ? rows : [{ "No records": "" }]; const ws = XLSX.utils.json_to_sheet(data); const headers = Object.keys(data[0] || { "No records": "" }); ws["!cols"] = headers.map((key) => ({ wch: Math.min(32, Math.max(14, key.length + 2)) })); ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, data.length), c: Math.max(0, headers.length - 1) } }) }; ws["!freeze"] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" }; XLSX.utils.book_append_sheet(wb, ws, name); };
     if (mode === "candidate") addSheet("Candidate Tracker", candidateRows);
+    else if (mode === "requirements") addSheet("Requirements", reqRows);
     else {
       addSheet("Candidate Tracker", candidateRows);
       addSheet("Open Positions", reqRows.filter((r) => ["Draft", "Pending Approval", "Approved", "On Hold", "Partially Filled"].includes(r["Requirement Status"]) && r["Balance Vacancies"] > 0));
@@ -569,7 +755,7 @@ export default function Recruitment({ employees = [], masters = {} }) {
       addSheet("Interview Offer Joining", interviewRows);
       addSheet("All Requirements", reqRows);
     }
-    XLSX.writeFile(wb, `BAUER_Recruitment_${mode === "candidate" ? "Candidate_Tracker" : "MIS"}_${today}.xlsx`);
+    XLSX.writeFile(wb, `BAUER_Recruitment_${mode === "candidate" ? "Candidate_Tracker" : mode === "requirements" ? "Requirements" : "MIS"}_${today}.xlsx`);
   };
 
   const openMappingForCandidate = (candidate) => {
@@ -796,7 +982,7 @@ const renderDashboard = () => {
       <section className="rec-list-hero requirements"><div><span className="rec-eyebrow">MANPOWER PLANNING</span><h2>Open Positions</h2><p>Create, monitor and close requirements while keeping the vacancy pipeline visible.</p></div><button className="rec-primary rec-hero-add" onClick={() => setReqModal(true)}>＋ New Requirement</button></section>
       <div className="rec-list-metrics">{requirementMetrics.map(([label, value, note, icon, tone]) => <div className={`rec-list-metric ${tone}`} key={label}><span>{icon}</span><div><small>{label}</small><strong>{value || 0}</strong><em>{note}</em></div></div>)}</div>
       <section className="rec-card rec-list-card">
-        <div className="rec-card-head"><div><h3>Requirements &amp; Candidate Pipeline</h3><p>Live requirement status, vacant positions and recruitment progress.</p></div><div className="rec-list-head-actions"><button className="rec-secondary" onClick={() => exportRecruitmentMIS("all")}>↓ Export MIS</button><button className="rec-primary" onClick={() => setReqModal(true)}>＋ Add Position</button></div></div>
+        <div className="rec-card-head"><div><h3>Requirements &amp; Candidate Pipeline</h3><p>Live requirement status, vacant positions and recruitment progress.</p></div><div className="rec-list-head-actions"><button className="rec-secondary" onClick={() => exportRecruitmentMIS("requirements")}>↓ Export Requirements</button><button className="rec-secondary" onClick={() => downloadTemplate("requirements")}>↓ Template</button><label className="rec-secondary rec-upload-button">↑ Import Requirements<input type="file" accept=".xlsx,.xls,.csv" onChange={(event) => { importRequirementsExcel(event.target.files?.[0]); event.target.value = ""; }} /></label><button className="rec-primary" onClick={() => setReqModal(true)}>＋ Add Position</button></div></div>
         <div className="rec-list-toolbar"><label className="rec-list-search">⌕<input placeholder="Search requirement, position, department or site..." value={search} onChange={(event) => setSearch(event.target.value)} /></label><select value={reqFilter} onChange={(event) => setReqFilter(event.target.value)}><option value="All">All statuses</option>{REQ_STATUSES.map((status) => <option key={status}>{status}</option>)}</select><span className="rec-list-count">{visibleRequirements.length} requirement{visibleRequirements.length === 1 ? "" : "s"}</span></div>
         <div className="rec-table-wrap"><table className="rec-table rec-requirement-table"><thead><tr><th>#</th><th>Position</th><th>Requirement ID</th><th>Department</th><th>Project / Site</th><th>Required</th><th>Pipeline</th><th>Open</th><th>Target joining</th><th>Recruiter</th><th>Status</th><th>Actions</th></tr></thead><tbody>
           {visibleRequirements.map((requirement, index) => {
@@ -829,7 +1015,7 @@ const renderDashboard = () => {
       <section className="rec-list-hero candidates"><div><span className="rec-eyebrow">CANDIDATE TRACKER</span><h2>Candidate Control Tower</h2><p>Review every candidate from CV received to offer, joining and employee handoff.</p></div><button className="rec-primary rec-hero-add" onClick={() => setCandidateModal(true)}>＋ Add Candidate</button></section>
       <div className="rec-list-metrics">{candidateMetrics.map(([label, value, note, icon, tone]) => <div className={`rec-list-metric ${tone}`} key={label}><span>{icon}</span><div><small>{label}</small><strong>{value || 0}</strong><em>{note}</em></div></div>)}</div>
       <section className="rec-card rec-list-card">
-        <div className="rec-card-head"><div><h3>Candidates <span className="rec-heading-muted">(All Positions)</span></h3><p>Click a candidate to open their complete recruitment profile.</p></div><div className="rec-list-head-actions"><button className="rec-secondary" onClick={() => exportRecruitmentMIS("candidate")}>↓ Export Candidate Excel</button><button className="rec-secondary" onClick={exportCandidateCsv}>↓ Export CSV</button><button className="rec-primary" onClick={() => setCandidateModal(true)}>＋ Add Candidate</button></div></div>
+        <div className="rec-card-head"><div><h3>Candidates <span className="rec-heading-muted">(All Positions)</span></h3><p>Click a candidate to open their complete recruitment profile. CV can be attached after bulk import.</p></div><div className="rec-list-head-actions"><button className="rec-secondary" onClick={() => exportRecruitmentMIS("candidate")}>↓ Export Candidate Excel</button><button className="rec-secondary" onClick={exportCandidateCsv}>↓ Export CSV</button><button className="rec-secondary" onClick={() => downloadTemplate("candidates")}>↓ Template</button><label className="rec-secondary rec-upload-button">↑ Import Candidates<input type="file" accept=".xlsx,.xls,.csv" onChange={(event) => { importCandidatesExcel(event.target.files?.[0]); event.target.value = ""; }} /></label><button className="rec-primary" onClick={() => setCandidateModal(true)}>＋ Add Candidate</button></div></div>
         <div className="rec-list-toolbar candidate-filters"><label className="rec-list-search">⌕<input placeholder="Search candidate, mobile, company, designation or position..." value={search} onChange={(event) => setSearch(event.target.value)} /></label><select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="All">All stages</option>{CANDIDATE_STAGES.map((stage) => <option key={stage}>{stage}</option>)}</select><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="All">All categories</option>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select><span className="rec-list-count">{filteredCandidates.length} candidate{filteredCandidates.length === 1 ? "" : "s"}</span></div>
         <div className="rec-table-wrap"><table className="rec-table rec-candidate-table"><thead><tr><th>#</th><th>Candidate</th><th>Employee code</th><th>Position</th><th>Project / Site</th><th>Source</th><th>CV received</th><th>Current stage</th><th>Offer DOJ</th><th>Actual DOJ</th><th>Status</th><th>Actions</th></tr></thead><tbody>
           {filteredCandidates.map((candidate, index) => {
@@ -900,7 +1086,7 @@ const renderDashboard = () => {
   if (loading) return <section className="recruitment-module"><div className="rec-loading"><div className="rec-spinner"/><h3>Loading Recruitment Control Tower</h3><p>Reading recruitment data from Supabase...</p></div></section>;
 
   return <section className="recruitment-module">
-    <div className="rec-page-head"><div><div className="rec-eyebrow">TALENT ACQUISITION</div><h1>Recruitment Management</h1><p>Track open positions, manage candidates, monitor offers, joining and backouts.</p></div><div className="rec-page-actions"><span className="rec-save-indicator">{saving?"Saving…":"Synced"}</span><label className="rec-secondary rec-upload-button">↑ Import Excel<input type="file" accept=".xlsx,.xls" onChange={(e)=>importRecruitmentExcel(e.target.files?.[0])}/></label><button className="rec-secondary" onClick={()=>setReqModal(true)}>＋ Requirement</button><button className="rec-primary" onClick={()=>setCandidateModal(true)}>＋ Candidate</button></div></div>
+    <div className="rec-page-head"><div><div className="rec-eyebrow">TALENT ACQUISITION</div><h1>Recruitment Management</h1><p>Track open positions, manage candidates, monitor offers, joining and backouts.</p></div><div className="rec-page-actions"><span className="rec-save-indicator">{saving?"Saving…":"Synced"}</span><label className="rec-secondary rec-upload-button">↑ Import Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={(e)=>{importRecruitmentExcel(e.target.files?.[0]);e.target.value="";}}/></label><button className="rec-secondary" onClick={()=>setReqModal(true)}>＋ Requirement</button><button className="rec-primary" onClick={()=>setCandidateModal(true)}>＋ Candidate</button></div></div>
     {loadError&&<div className="rec-error-banner">{loadError}</div>}
     <div className="rec-nav">{navItems.map(([item,icon])=><button key={item} className={view===item?"active":""} onClick={()=>setView(item)}><span>{icon}</span>{item}</button>)}</div>
     {renderContent()}
