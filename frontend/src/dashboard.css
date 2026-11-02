@@ -2746,3 +2746,27 @@ body { background: var(--bg); color: var(--text); }
   .bottom-grid { grid-template-columns: 1fr; }
   .event-list { grid-template-columns: 1fr; }
 }
+
+/* Workforce analytics */
+.analytics-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
+.analytics-panel { min-height: 238px; }
+.department-chart { display: grid; gap: 13px; padding: 3px 0 2px; }
+.department-chart-row { display: grid; gap: 6px; }
+.department-chart-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #60788f; font-size: 10px; }
+.department-chart-label span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.department-chart-label strong { color: #1d4568; font-size: 11px; }
+.department-chart-track { height: 7px; overflow: hidden; border-radius: 999px; background: #edf2f7; }
+.department-chart-track i { display: block; height: 100%; min-width: 3px; border-radius: inherit; background: linear-gradient(90deg, #6b5ee7, #2b9ed7); }
+.movement-chart { display: flex; align-items: flex-end; justify-content: space-between; gap: 5px; height: 154px; padding: 8px 4px 0; border-bottom: 1px solid #e8eef4; }
+.movement-column { display: flex; flex: 1; min-width: 0; height: 100%; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; padding: 4px 2px 0; border-radius: 6px 6px 0 0; }
+.movement-column.selected { background: #f3f8ff; }
+.movement-column > span { color: #8092a4; font-size: 8px; }
+.movement-bars { display: flex; align-items: flex-end; justify-content: center; gap: 2px; width: 100%; height: 122px; }
+.movement-bars i { display: block; width: 8px; min-height: 2px; border-radius: 3px 3px 0 0; }
+.movement-bars i.joiners, .movement-legend i.joiners { background: #36b98a; }
+.movement-bars i.exits, .movement-legend i.exits { background: #f39a51; }
+.movement-legend { display: flex; justify-content: flex-end; gap: 14px; margin-top: 9px; color: #74889b; font-size: 9px; }
+.movement-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.movement-legend i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+@media (max-width: 1040px) { .analytics-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .movement-bars i { width: 5px; } .movement-column > span { font-size: 7px; } }

@@ -131,7 +131,12 @@ function dashboardFormatDate(value) {
 
 function parseDashboardDate(value) {
   if (!value) return null;
-  const date = new Date(`${value}T00:00:00`);
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00` : raw);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
@@ -687,6 +692,8 @@ function Dashboard({ onLogout, currentUser = null }) {
       let resolvedOrganizationId =
         currentUser?.organizationId ||
         currentUser?.organization_id ||
+        currentUser?.organization?.id ||
+        currentUser?.organization?.organization_id ||
         "";
 
       /*
@@ -847,7 +854,15 @@ function Dashboard({ onLogout, currentUser = null }) {
     const doj = parseDashboardDate(employee.dateOfJoining || employee.doj);
     const exitDate = parseDashboardDate(exitDateValue(employee));
 
-    if (!doj || doj > asOfDate) return false;
+    // Older Employee Master rows may not have a joining date. They are still
+    // valid active employees and must be included in the dashboard totals.
+    // For those rows, month selection uses the employee's current status and
+    // any available exit date instead of silently dropping the record.
+    if (!doj) {
+      if (exitDate && exitDate < asOfDate) return false;
+      return status === "active" || Boolean(exitDate && exitDate >= asOfDate);
+    }
+    if (doj > asOfDate) return false;
     if (exitDate && exitDate < asOfDate) return false;
     if (status !== "active" && !exitDate) return false;
     return true;
@@ -1048,6 +1063,46 @@ function Dashboard({ onLogout, currentUser = null }) {
   ];
 
   const dashboardEvents = dashboardUpcomingEvents(activeEmployees);
+
+  const departmentAnalytics = Array.from(
+    activeEmployees.reduce((counts, employee) => {
+      const department = String(employee.department || "Unassigned").trim() || "Unassigned";
+      counts.set(department, (counts.get(department) || 0) + 1);
+      return counts;
+    }, new Map())
+  )
+    .map(([department, count]) => ({ department, count }))
+    .sort((a, b) => b.count - a.count || a.department.localeCompare(b.department))
+    .slice(0, 7);
+
+  const monthlyMovement = useMemo(() => {
+    const match = String(financialYear || "").match(/^(\d{4})-/);
+    if (!match) return [];
+    const fyStartYear = Number(match[1]);
+    return Array.from({ length: 12 }, (_, index) => {
+      const monthStart = new Date(fyStartYear, index + 3, 1);
+      const monthEnd = new Date(fyStartYear, index + 4, 0, 23, 59, 59, 999);
+      const joiners = employees.filter((employee) => {
+        const doj = parseDashboardDate(employee.dateOfJoining || employee.doj);
+        return doj && doj >= monthStart && doj <= monthEnd;
+      }).length;
+      const exits = employees.filter((employee) => {
+        const exitDate = parseDashboardDate(exitDateValue(employee));
+        return exitDate && exitDate >= monthStart && exitDate <= monthEnd;
+      }).length;
+      return {
+        key: `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}`,
+        label: monthStart.toLocaleString("en-IN", { month: "short" }),
+        joiners,
+        exits,
+      };
+    });
+  }, [employees, financialYear]);
+
+  const monthlyMovementMax = Math.max(
+    1,
+    ...monthlyMovement.flatMap((item) => [item.joiners, item.exits])
+  );
 
   const dashboardShiftRows = Array.from(
     new Set(activeEmployees.map((employee) => employee.shift).filter(Boolean))
@@ -1742,6 +1797,49 @@ function Dashboard({ onLogout, currentUser = null }) {
                     <Icon name="help" size={14} />
                     Review the items above before closing today's HR tasks.
                   </div>
+                </article>
+              </section>
+
+              <section className="analytics-grid">
+                <article className="panel analytics-panel">
+                  <div className="panel-head">
+                    <div>
+                      <span className="panel-eyebrow">PEOPLE ANALYTICS</span>
+                      <h2>Department distribution</h2>
+                    </div>
+                    <span className="module-count">{activeEmployees.length.toLocaleString("en-IN")} active</span>
+                  </div>
+                  {departmentAnalytics.length ? (
+                    <div className="department-chart">
+                      {departmentAnalytics.map((item) => (
+                        <div className="department-chart-row" key={item.department}>
+                          <div className="department-chart-label"><span title={item.department}>{item.department}</span><strong>{item.count}</strong></div>
+                          <div className="department-chart-track"><i style={{ width: `${(item.count / Math.max(1, activeEmployees.length)) * 100}%` }} /></div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <div className="empty-state">No department data available.</div>}
+                </article>
+
+                <article className="panel analytics-panel">
+                  <div className="panel-head">
+                    <div>
+                      <span className="panel-eyebrow">MONTHLY MOVEMENT</span>
+                      <h2>Joiners vs exits</h2>
+                    </div>
+                    <span className="module-count">{financialYear}</span>
+                  </div>
+                  {monthlyMovement.length ? (
+                    <div className="movement-chart" aria-label="Monthly joiners and exits chart">
+                      {monthlyMovement.map((item) => (
+                        <div className={`movement-column ${item.key === month ? "selected" : ""}`} key={item.key} title={`${item.label}: ${item.joiners} joiners, ${item.exits} exits`}>
+                          <div className="movement-bars"><i className="joiners" style={{ height: `${Math.max(item.joiners ? 8 : 2, (item.joiners / monthlyMovementMax) * 100)}%` }} /><i className="exits" style={{ height: `${Math.max(item.exits ? 8 : 2, (item.exits / monthlyMovementMax) * 100)}%` }} /></div>
+                          <span>{item.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <div className="empty-state">No monthly movement data available.</div>}
+                  <div className="movement-legend"><span><i className="joiners" />Joiners</span><span><i className="exits" />Exits</span></div>
                 </article>
               </section>
 
