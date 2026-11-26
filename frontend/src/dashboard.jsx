@@ -1865,6 +1865,29 @@ function Dashboard({ onLogout, currentUser = null }) {
                       <Icon name="arrow" size={13} />
                     </button>
                     )}
+                    <button type="button" onClick={() => handleMenu("Employees")}>
+                      <span className="quick-action-icon purple">
+                        <Icon name="users" size={18} />
+                      </span>
+                      <span>
+                        <strong>Employee transfer</strong>
+                        <small>Open employee master</small>
+                      </span>
+                      <Icon name="arrow" size={13} />
+                    </button>
+
+                    {canAccessMenu("Force Leave") && (
+                    <button type="button" onClick={() => handleMenu("Force Leave")}>
+                      <span className="quick-action-icon orange">
+                        <Icon name="calendar" size={18} />
+                      </span>
+                      <span>
+                        <strong>Force Leave</strong>
+                        <small>Manage force leave records</small>
+                      </span>
+                      <Icon name="arrow" size={13} />
+                    </button>
+                    )}
 
                     {hasPermission("attendance.view") && (
                     <button
