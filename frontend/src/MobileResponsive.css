@@ -566,3 +566,216 @@ html.native-app #root {
     font-size: 23px;
   }
 }
+/* =====================================================
+   HRSYNC MOBILE FIX — NAVIGATION & TEXT OVERLAP
+   Desktop design remains unchanged
+   ===================================================== */
+
+@media (max-width: 768px) {
+
+  /* Prevent page-wide horizontal overflow */
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* ---------------- ATTENDANCE ---------------- */
+
+  .attendance-module {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 12px !important;
+    box-sizing: border-box;
+  }
+
+  .attendance-view-tabs {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    width: 100%;
+    max-width: 100%;
+    gap: 6px !important;
+    padding: 6px !important;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .attendance-view-tabs button {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: max-content !important;
+    max-width: none !important;
+    white-space: nowrap !important;
+    position: relative !important;
+    font-size: 12px !important;
+    padding: 10px 12px !important;
+    line-height: 1.3 !important;
+  }
+
+  .attendance-view-tabs button span {
+    display: inline-block;
+    margin-right: 5px;
+  }
+
+  /* Attendance headings */
+  .attendance-module h1 {
+    font-size: clamp(25px, 7vw, 36px) !important;
+    line-height: 1.15 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .attendance-module h2 {
+    font-size: clamp(20px, 5.5vw, 28px) !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Attendance action buttons */
+  .attendance-module button {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------------- RECRUITMENT ---------------- */
+
+  .recruitment-module {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 12px !important;
+    box-sizing: border-box;
+  }
+
+  /* Recruitment module navigation */
+  .recruitment-module .rec-nav {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    width: 100%;
+    max-width: 100%;
+    gap: 5px !important;
+    padding: 5px !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .recruitment-module .rec-nav button {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: max-content !important;
+    max-width: none !important;
+    white-space: nowrap !important;
+    position: relative !important;
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+    padding: 10px 11px !important;
+  }
+
+  /* Recruitment headings */
+  .recruitment-module h1 {
+    font-size: clamp(23px, 6.5vw, 32px) !important;
+    line-height: 1.15 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .recruitment-module h2 {
+    font-size: clamp(19px, 5.5vw, 26px) !important;
+    line-height: 1.2 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .recruitment-module h3 {
+    font-size: 16px !important;
+    line-height: 1.3 !important;
+    overflow-wrap: anywhere;
+  }
+
+  /* Recruitment buttons */
+  .recruitment-module button {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* Action rows */
+  .rec-page-actions,
+  .rec-head-actions,
+  .rec-feature-hero-actions,
+  .rec-list-head-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    width: 100%;
+    gap: 8px !important;
+  }
+
+  /* Cards and grids */
+  .rec-grid-2,
+  .rec-interview-grid,
+  .rec-joining-grid,
+  .rec-report-grid,
+  .rec-settings-grid,
+  .rec-feature-two-col {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Allow long content to shrink */
+  .rec-card,
+  .rec-feature-card,
+  .rec-page-view,
+  .rec-page-head,
+  .rec-list-card {
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+
+  /* Tables: scroll inside their own container */
+  .rec-table-wrap,
+  .rec-feature-table-wrap,
+  .table-wrapper {
+    max-width: 100%;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+}
+
+/* Smaller phones */
+@media (max-width: 480px) {
+
+  .attendance-module,
+  .recruitment-module {
+    padding: 10px !important;
+  }
+
+  .attendance-view-tabs button {
+    font-size: 11px !important;
+    padding: 9px 10px !important;
+  }
+
+  .recruitment-module .rec-nav button {
+    font-size: 10px !important;
+    padding: 9px 10px !important;
+  }
+
+  .rec-page-head {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .rec-page-head h1 {
+    font-size: 25px !important;
+    line-height: 1.15 !important;
+  }
+
+  .rec-page-head p {
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+  }
+
+}
