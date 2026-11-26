@@ -1,4 +1,4 @@
-/* BAUER HRMS — Recruitment Control Tower */
+/* HRSYNC — Recruitment Control Tower */
 
 .recruitment-module{--rec-navy:#153b5d;--rec-blue:#2169a8;--rec-text:#18324d;--rec-muted:#73879a;--rec-border:#e3eaf2;--rec-bg:#f5f8fc;--rec-card:#fff;color:var(--rec-text);padding:24px;min-height:100%;background:linear-gradient(180deg,#f8fbff 0%,#f4f7fb 100%);box-sizing:border-box}
 
@@ -89,3 +89,183 @@
 /* Requirement action modal */
 .rec-requirement-action-modal{display:grid;gap:14px;min-width:360px}.rec-requirement-action-modal .rec-modal-help{margin:0;color:#6d8297;font-size:11px}.rec-requirement-action-modal .rec-form-actions{display:flex;flex-wrap:wrap;gap:8px}.rec-danger-button{border:1px solid #f0d4d4;border-radius:8px;padding:9px 13px;background:#fff5f5;color:#b75b5b;font:inherit;font-size:12px;font-weight:700;cursor:pointer}.rec-danger-button:hover{background:#ffecec;color:#a33d3d}
 .rec-list-head-actions .rec-upload-button{white-space:nowrap}
+
+/* Restored colourful Recruitment Management dashboard */
+.rec-page-head h1{font-size:22px;letter-spacing:-.45px}.rec-page-head{margin-bottom:14px}.rec-nav{margin-bottom:12px}
+.rec-overview-stats{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}.rec-overview-stat{min-height:74px;padding:10px;grid-template-columns:35px minmax(0,1fr);gap:8px}.rec-overview-stat-icon{width:35px;height:35px;font-size:19px}.rec-overview-stat strong{font-size:22px}.rec-overview-stat em{font-size:8px;white-space:normal}
+.rec-overview-funnel{padding:13px 12px}.rec-overview-funnel .rec-card-head h3{font-size:15px}.rec-overview-funnel-steps{gap:3px}.rec-overview-funnel-step{gap:3px}.rec-overview-funnel-tile{min-width:0;padding:7px 6px;gap:5px}.rec-overview-funnel-tile>span{font-size:16px}.rec-overview-funnel-tile small{font-size:7px}.rec-overview-funnel-tile strong{font-size:16px}.rec-overview-funnel-step>b{font-size:11px}
+.rec-overview-main-grid{grid-template-columns:minmax(0,1.75fr) minmax(215px,.48fr);gap:11px}.rec-overview-tracker .rec-card-head{padding:12px 11px 10px}.rec-overview-tracker .rec-card-head h3{font-size:14px}.rec-overview-tracker .rec-card-head p{font-size:9px}.rec-overview-actions{gap:5px}.rec-overview-search{width:175px;height:30px}.rec-overview-search input{font-size:9px}.rec-overview-table{min-width:900px}.rec-overview-table th{font-size:8px;padding:8px 6px}.rec-overview-table td{font-size:9px;padding:8px 6px}.rec-overview-table td strong{font-size:9px}.rec-overview-row-actions button{width:22px;height:22px;font-size:11px}.rec-overview-attention{padding:11px}.rec-overview-attention .rec-card-head h3{font-size:14px}.rec-attention-row{min-height:38px;padding:7px;grid-template-columns:19px minmax(0,1fr) auto 8px}.rec-attention-row b{font-size:8px}.rec-attention-row strong{font-size:14px}.rec-overview-lower-grid{gap:11px}.rec-overview-position-list>button,.rec-overview-action-list>button{padding:8px 0}
+@media(max-width:1100px){.rec-overview-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.rec-overview-main-grid{grid-template-columns:1fr}.rec-overview-attention{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.rec-overview-attention .rec-card-head{grid-column:1/-1}.rec-attention-row{margin:0}}
+@media(max-width:700px){.rec-overview-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.rec-overview-funnel-steps{overflow-x:auto}.rec-overview-funnel-step{flex:0 0 auto}.rec-overview-funnel-tile{min-width:112px}.rec-overview-attention{grid-template-columns:1fr}.rec-overview-attention .rec-card-head{grid-column:auto}.rec-overview-lower-grid{grid-template-columns:1fr}.rec-overview-tracker .rec-card-head{align-items:flex-start;flex-direction:column}.rec-overview-actions{width:100%}.rec-overview-search{flex:1;min-width:0}.rec-overview-actions .rec-secondary{padding:7px 8px}}
+
+
+/* Attention panel label layout fix + unified colourful theme for every recruitment tab */
+.rec-overview-attention .rec-card-head{margin-bottom:9px;}
+.rec-overview-attention .rec-card-head>div{min-width:0;}
+.rec-overview-attention .rec-card-head h3{font-size:12px;line-height:1.35;max-width:100%;overflow-wrap:anywhere;}
+.rec-attention-row{display:grid;grid-template-columns:20px minmax(0,1fr) auto 9px;align-items:center;gap:7px;width:100%;min-height:40px;margin:0 0 7px;padding:8px 9px;border:1px solid transparent;border-radius:8px;text-align:left;line-height:1.25;}
+.rec-attention-row:last-child{margin-bottom:0;}
+.rec-attention-row>span{display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;}
+.rec-attention-row>b{display:block;min-width:0;max-width:100%;font-size:9px;line-height:1.3;font-weight:800;white-space:normal;overflow-wrap:anywhere;word-break:normal;}
+.rec-attention-row>strong{font-size:13px;line-height:1;font-weight:800;white-space:nowrap;}
+.rec-attention-row>i{font-style:normal;font-size:15px;line-height:1;text-align:center;}
+.rec-attention-row.overdue{background:#fff0f1;border-color:#ffd9dd;color:#c91e42;}
+.rec-attention-row.due{background:#fff7e4;border-color:#ffe4ad;color:#b87800;}
+.rec-attention-row.backout{background:#ffedf0;border-color:#ffd5dc;color:#d3264b;}
+.rec-attention-row.mapping{background:#eaf5ff;border-color:#d4e9ff;color:#1471bf;}
+.rec-attention-row.documents{background:#eaf9f1;border-color:#d5f0df;color:#16865a;}
+
+.rec-page-view{display:block;min-width:0;}
+.rec-page-view>.rec-card,.rec-page-view>.rec-settings-grid>.rec-card,.rec-page-view>.rec-report-grid>.rec-card{border:1px solid #dfeaf4;border-radius:13px;background:#fff;box-shadow:0 4px 14px rgba(27,65,98,.045);}
+.rec-page-view .rec-card-head{padding-bottom:10px;border-bottom:1px solid #edf3f8;margin-bottom:13px;}
+.rec-page-view .rec-card-head h3,.rec-page-view> .rec-card h3{color:#173f68;letter-spacing:-.2px;}
+.rec-page-view .rec-eyebrow{color:#3979ae;}
+.rec-page-view .rec-toolbar{padding:10px;background:linear-gradient(90deg,#f4faff,#fbfdff);border:1px solid #e1edf7;border-radius:10px;}
+.rec-page-view .rec-table th{background:#eef6ff;color:#55799a;border-bottom-color:#dceaf6;}
+.rec-page-view .rec-table tbody tr:hover{background:#f8fcff;}
+.rec-page-view .rec-mini-kpis>div:nth-child(4n+1){background:#e8f5ff;border-color:#d5eaff;}
+.rec-page-view .rec-mini-kpis>div:nth-child(4n+2){background:#eaf9f1;border-color:#d8f0e2;}
+.rec-page-view .rec-mini-kpis>div:nth-child(4n+3){background:#fff7e4;border-color:#ffedc5;}
+.rec-page-view .rec-mini-kpis>div:nth-child(4n+4){background:#f1edff;border-color:#e4dcff;}
+.rec-page-view .rec-interview-card{background:#f8fcff;border-color:#dceaf5;}
+.rec-page-view .rec-interview-card:nth-child(4n+2){background:#f9f7ff;border-color:#e6ddff;}
+.rec-page-view .rec-interview-card:nth-child(4n+3){background:#fffaf0;border-color:#ffebc8;}
+.rec-page-view .rec-interview-card:nth-child(4n+4){background:#f3fcf7;border-color:#d9f1e3;}
+.rec-page-view .rec-letter-type-card:nth-child(1){background:#eaf5ff;border-color:#d5eaff;}
+.rec-page-view .rec-letter-type-card:nth-child(2){background:#eaf9f1;border-color:#d8f0e2;}
+.rec-page-view .rec-letter-type-card:nth-child(3){background:#fff1e7;border-color:#ffe0cb;}
+.rec-page-view .rec-detail-section,.rec-page-view .rec-card.nested{background:#f9fcff;border-color:#dfeaf4;}
+.rec-page-view .rec-report-row:nth-child(even),.rec-page-view .rec-setting-row:nth-child(even){background:#f7fbff;}
+.rec-page-view .rec-report-row,.rec-page-view .rec-setting-row{padding-left:8px;padding-right:8px;border-radius:6px;}
+.rec-page-view .rec-inline-action{border-color:#d3e5f3;background:#f5fbff;color:#246b9b;}
+.rec-page-view .rec-inline-action:hover{background:#eaf5ff;}
+.rec-page-view .rec-primary{background:#17689e;}
+.rec-page-view .rec-primary:hover{background:#125783;}
+.rec-page-view .rec-secondary{border-color:#d8e7f3;background:#fff;color:#326a94;}
+.rec-page-view .rec-secondary:hover{background:#f2f9ff;}
+.rec-page-view .rec-empty{background:#fbfdff;border-color:#d9e8f3;}
+.rec-page-view .rec-status{border:1px solid rgba(0,0,0,.025);}
+.rec-page-view .rec-settings-grid{gap:13px;}
+.rec-page-view .rec-report-grid{gap:13px;}
+@media(max-width:700px){
+ .rec-overview-attention .rec-card-head h3{font-size:12px;}
+ .rec-attention-row{grid-template-columns:20px minmax(0,1fr) auto 9px;gap:6px;}
+ .rec-attention-row>b{font-size:9px;}
+ .rec-page-view .rec-card-head{padding-bottom:9px;}
+}
+
+/* Recruitment page consistency pass: pastel theme, clear page spacing and safe text wrapping */
+.rec-detail-page{display:grid;gap:12px;min-width:0}
+.rec-feature-hero-actions,.rec-list-head-actions,.rec-head-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.rec-feature-hero-actions .rec-secondary,.rec-feature-hero-actions .rec-primary,.rec-list-head-actions .rec-secondary,.rec-list-head-actions .rec-primary{white-space:nowrap}
+.rec-feature-card{overflow:hidden}
+.rec-feature-card .rec-card-head{gap:12px;flex-wrap:wrap}
+.rec-feature-card .rec-card-head>div{min-width:0}
+.rec-feature-card .rec-card-head p{line-height:1.45}
+.rec-feature-metrics,.rec-list-metrics{margin-bottom:0}
+.rec-detail-page .rec-report-grid{margin-top:0}
+.rec-detail-page .rec-settings-grid{margin-top:0}
+.rec-overview-attention{min-width:0;overflow:hidden}
+.rec-attention-row{grid-template-columns:22px minmax(0,1fr) auto 8px!important;align-items:center!important;gap:6px!important;min-width:0!important}
+.rec-attention-row b{display:block;min-width:0;white-space:normal!important;overflow-wrap:anywhere;word-break:normal;line-height:1.25;font-size:9px!important}
+.rec-attention-row strong{justify-self:end;white-space:nowrap;font-size:15px!important}
+.rec-attention-row i{justify-self:end;line-height:1}
+.rec-attention-row span{min-width:0}
+.rec-upload-button input[type=file]{display:none}
+@media(max-width:700px){.rec-feature-hero-actions,.rec-list-head-actions{width:100%}.rec-feature-hero-actions>*{flex:1 1 auto}.rec-attention-row{grid-template-columns:20px minmax(0,1fr) auto 7px!important}.rec-attention-row b{font-size:8px!important}}
+/* Final responsive control-row correction for narrow Attention Required cards */
+.rec-overview-attention .rec-attention-row{display:grid!important;grid-template-columns:20px minmax(0,1fr) auto 8px!important;align-items:center!important;gap:6px!important;overflow:hidden!important}
+.rec-overview-attention .rec-attention-row b{white-space:normal!important;overflow-wrap:anywhere!important;word-break:break-word!important;min-width:0!important;line-height:1.28!important}
+.rec-overview-attention .rec-attention-row strong{white-space:nowrap!important;justify-self:end!important;line-height:1!important}
+.rec-overview-attention .rec-attention-row i{justify-self:end!important}
+.rec-detail-page .rec-feature-hero-actions{justify-content:flex-end}
+.rec-detail-page .rec-card-head .rec-feature-hero-actions{max-width:100%}
+@media(max-width:800px){.rec-detail-page .rec-feature-hero-actions{justify-content:flex-start}.rec-detail-page .rec-feature-hero-actions>*{flex:1 1 135px}.rec-detail-page .rec-feature-card .rec-card-head{align-items:flex-start}}
+
+
+/* Dashboard Attention Required: stable icon / label / count / arrow columns. */
+.rec-overview-attention .rec-attention-row{
+  display:grid!important;
+  grid-template-columns:20px minmax(0,1fr) 22px 8px!important;
+  align-items:center!important;
+  column-gap:7px!important;
+  min-width:0!important;
+  min-height:42px;
+  padding:8px 9px;
+  overflow:hidden;
+  line-height:1.25;
+}
+.rec-overview-attention .rec-attention-row>span{
+  display:flex!important;
+  align-items:center;
+  justify-content:center;
+  width:20px;
+  min-width:20px;
+  line-height:1;
+  white-space:nowrap;
+}
+.rec-overview-attention .rec-attention-row>b{
+  display:block!important;
+  min-width:0!important;
+  max-width:100%;
+  margin:0;
+  font-size:9px!important;
+  line-height:1.3!important;
+  white-space:normal!important;
+  overflow-wrap:break-word!important;
+  word-break:normal!important;
+}
+.rec-overview-attention .rec-attention-row>strong{
+  display:block;
+  width:22px;
+  text-align:right;
+  justify-self:end!important;
+  white-space:nowrap!important;
+  line-height:1!important;
+}
+.rec-overview-attention .rec-attention-row>i{
+  display:block;
+  width:8px;
+  justify-self:end!important;
+  text-align:right;
+  line-height:1;
+}
+@media(max-width:700px){
+  .rec-overview-attention .rec-attention-row{
+    grid-template-columns:18px minmax(0,1fr) 20px 7px!important;
+    column-gap:6px!important;
+    padding:8px;
+  }
+  .rec-overview-attention .rec-attention-row>b{font-size:8px!important;}
+}
+
+/* Requirement workflow: optional JD attachment + existing-candidate assignment */
+.rec-jd-upload{align-items:center;background:linear-gradient(135deg,#f7fbff 0%,#f3f8ff 100%);border-color:#cfe0f0}
+.rec-jd-upload>div:first-child{flex:1;min-width:0}
+.rec-jd-upload .rec-upload-button{flex:0 0 auto;white-space:nowrap}
+.rec-jd-link{display:inline-flex;margin-top:5px;font-size:9px}
+.rec-assignment-modal{display:flex;flex-direction:column;gap:13px}
+.rec-assignment-target{display:flex;flex-direction:column;gap:4px;padding:12px 13px;border:1px solid #d9e8f5;border-radius:10px;background:#f3f8fd}
+.rec-assignment-target strong{color:#194d76;font-size:14px}
+.rec-assignment-target small{color:#7790a4;font-size:10px}
+.rec-assignment-select-label{display:flex;flex-direction:column;gap:6px;color:#5d758a;font-size:10px;font-weight:800}
+.rec-assignment-select-label select{width:100%;min-height:39px;padding:8px 10px;border:1px solid #dbe5ed;border-radius:8px;background:#fff;color:#2a4964;font:inherit;font-size:11px;outline:none}
+.rec-assignment-select-label select:focus{border-color:#78afd2;box-shadow:0 0 0 3px rgba(42,120,178,.09)}
+.rec-assignment-notice{padding:12px 13px;border:1px solid #cfe8d9;border-radius:10px;background:#f1fbf5;color:#356b4b}
+.rec-assignment-notice.conflict{border-color:#f0d59a;background:#fff9eb;color:#88631e}
+.rec-assignment-notice.already{border-color:#f0caca;background:#fff4f4;color:#a34c4c}
+.rec-assignment-notice strong{display:block;font-size:11px}
+.rec-assignment-notice p{margin:5px 0 0;font-size:10px;line-height:1.55}
+.rec-assignment-notice p b{font-weight:800}
+.rec-assignment-actions,.rec-assignment-footer{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:11px}
+.rec-assignment-footer{padding-top:4px;border-top:1px solid #edf1f5}
+.rec-assignment-actions button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+@media(max-width:700px){.rec-jd-upload{align-items:stretch;flex-direction:column}.rec-jd-upload .rec-upload-button{width:100%}.rec-assignment-actions{flex-direction:column-reverse}.rec-assignment-actions button{width:100%}}
+
+/* Candidate Tracker — requirement attribution and edit controls */
+.rec-field-hint{display:block;margin-top:5px;color:#7a8fa3;font-size:10px;line-height:1.45;font-weight:500}
+.rec-control-table th:last-child,.rec-control-table td:last-child{min-width:108px;white-space:nowrap}
+.rec-control-table td:last-child .rec-table-actions{display:flex;gap:5px;align-items:center}
+.rec-control-table td:last-child .rec-inline-action{padding:5px 8px;font-size:10px}
+
+.rec-requirement-count{white-space:nowrap;padding:4px 7px;border-radius:6px;background:#f1f7fc;font-size:10px}

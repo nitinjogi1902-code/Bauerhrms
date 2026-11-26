@@ -1,0 +1,568 @@
+
+/* Only applied when the app is running inside Capacitor. The regular web browser keeps its original desktop min-width and layout. */
+@media (max-width: 800px) {
+  html.native-app,
+  html.native-app body,
+  html.native-app #root {
+    width: 100%;
+    min-width: 0 !important;
+    max-width: 100%;
+    min-height: 100%;
+  }
+  html.native-app body {
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html.native-app #root {
+    overflow-x: clip;
+  }
+}
+
+/* ============================================================
+   HRSYNC MOBILE RESPONSIVE LAYER
+   Loaded after all feature/module CSS so that shared mobile rules
+   apply consistently to Login, Dashboard, and HRMS modules.
+   ============================================================ */
+
+html.native-app,
+  html.native-app body,
+  html.native-app #root {
+  width: 100%;
+  min-width: 0 !important;
+  max-width: 100%;
+}
+
+html.native-app body {
+  overflow-x: hidden;
+}
+
+html.native-app #root {
+  overflow-x: clip;
+}
+
+@media (max-width: 800px) {
+  /* Keep the application shell constrained to the actual device width. */
+  html.native-app .hrms-app {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  html.native-app .hrms-main,
+  html.native-app .hrms-main.full {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100%;
+    margin-left: 0 !important;
+  }
+
+  /* Off-canvas navigation. Dashboard starts with it closed on phones. */
+  html.native-app .hrms-sidebar,
+  html.native-app .hrms-sidebar.collapsed {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1200;
+    width: min(84vw, 300px) !important;
+    min-width: 0 !important;
+    max-width: 300px;
+    transform: translateX(-105%);
+    box-shadow: 16px 0 36px rgba(7, 31, 57, 0.24);
+  }
+
+  html.native-app .hrms-sidebar:not(.collapsed) {
+    transform: translateX(0);
+  }
+
+  html.native-app .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    min-height: 58px;
+    height: auto;
+    padding: 7px 10px;
+    gap: 8px;
+  }
+
+  html.native-app .topbar-left,
+  html.native-app .topbar-right {
+    min-width: 0;
+    gap: 6px;
+  }
+
+  html.native-app .topbar-right {
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+
+  html.native-app .sidebar-toggle,
+  html.native-app .top-icon,
+  html.native-app .profile {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  html.native-app .dashboard-content {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0;
+    padding: 14px 12px calc(28px + env(safe-area-inset-bottom));
+    overflow-x: clip;
+  }
+
+  html.native-app .dashboard-content > *,
+  html.native-app .dashboard-content > section,
+  html.native-app .dashboard-content > div,
+  html.native-app .dashboard-content .panel,
+  html.native-app .dashboard-content .card,
+  html.native-app .dashboard-content .section-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Dashboard layout */
+  html.native-app .dashboard-hero {
+    width: 100%;
+    min-width: 0;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  html.native-app .hero-copy,
+  html.native-app .hero-controls {
+    width: 100%;
+    min-width: 0;
+  }
+
+  html.native-app .hero-copy h1 {
+    font-size: clamp(22px, 6vw, 30px);
+    line-height: 1.12;
+    overflow-wrap: anywhere;
+  }
+
+  html.native-app .hero-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 9px;
+  }
+
+  html.native-app .filter-field {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  html.native-app .filter-field select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  html.native-app .top-panels,
+  html.native-app .middle-grid,
+  html.native-app .bottom-grid,
+  html.native-app .analytics-grid {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.native-app .kpi-grid {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 9px;
+  }
+
+  html.native-app .module-grid,
+  html.native-app .quick-actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Shared module sizing: allow each module's own mobile grid rules to work. */
+  html.native-app .employees-page,
+  html.native-app .organization-page,
+  html.native-app .vendor-agreements-page,
+  html.native-app .pms-page,
+  html.native-app .rec-page-view,
+  html.native-app .ess-page,
+  html.native-app .ess-profile-page,
+  html.native-app .ess-attendance-page,
+  html.native-app .trn-page,
+  html.native-app .attendance-reports-page,
+  html.native-app .reports-page,
+  html.native-app .settings-page,
+  html.native-app .dashboard-content [class$="-page"] {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  html.native-app .dashboard-content [class*="toolbar"],
+  html.native-app .dashboard-content [class*="actions"],
+  html.native-app .dashboard-content [class*="page-head"],
+  html.native-app .dashboard-content [class*="section-head"] {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  html.native-app .dashboard-content input,
+  html.native-app .dashboard-content select,
+  html.native-app .dashboard-content textarea,
+  html.native-app .dashboard-content button {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  html.native-app .dashboard-content input,
+  html.native-app .dashboard-content select,
+  html.native-app .dashboard-content textarea {
+    box-sizing: border-box;
+  }
+
+  /* Dense HR tables remain readable via in-table horizontal scrolling,
+     while the page itself stays within the phone viewport. */
+  html.native-app .dashboard-content table {
+    max-width: 100%;
+  }
+
+  html.native-app .dashboard-content :is(
+    .table-wrap,
+    .table-wrapper,
+    .table-responsive,
+    .table-scroll,
+    .table-container,
+    .rec-table-wrap,
+    .attendance-table-wrap,
+    .employee-table-wrap,
+    .payroll-table-wrap,
+    .report-table-wrap
+  ) {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html.native-app .dashboard-content [class*="form-grid"] {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Keep dialogs usable without letting the modal exceed the device. */
+  html.native-app .dashboard-content [class*="modal-backdrop"],
+  html.native-app .dashboard-content [class*="modal-overlay"],
+  html.native-app .dashboard-content [class*="modal-overlay"] {
+    padding: 10px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html.native-app .dashboard-content [role="dialog"],
+  html.native-app .dashboard-content .employee-modal,
+  html.native-app .dashboard-content .employee-profile-modal,
+  html.native-app .dashboard-content .transfer-modal,
+  html.native-app .dashboard-content .pms-modal,
+  html.native-app .dashboard-content .trn-modal,
+  html.native-app .dashboard-content .bulk-salary-modal,
+  html.native-app .dashboard-content .salary-modal,
+  html.native-app .dashboard-content .attendance-import-modal,
+  html.native-app .dashboard-content .attendance-edit-modal,
+  html.native-app .dashboard-content .fl-conflict-modal {
+    width: 100%;
+    max-width: min(100%, 620px);
+    max-height: calc(100dvh - 24px);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Super Admin workspace uses a separate shell from the company dashboard. */
+  html.native-app .sa-app,
+  html.native-app [class*="super-admin"],
+  html.native-app [class^="sa-"] {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  /* Login: show only the sign-in card; decorative desktop hero columns are hidden. */
+  html.native-app .login-page {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 100vh;
+    min-height: 100svh;
+    align-items: center;
+    justify-content: center;
+    padding: max(76px, calc(64px + env(safe-area-inset-top))) 14px
+      max(18px, env(safe-area-inset-bottom));
+    overflow-x: hidden;
+  }
+
+  html.native-app .login-side {
+    display: none !important;
+  }
+
+  html.native-app .login-bg-brand {
+    top: max(14px, env(safe-area-inset-top));
+    left: 15px;
+  }
+
+  html.native-app .login-card {
+    width: 100%;
+    max-width: 440px;
+    min-width: 0;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 560px) {
+  html.native-app .topbar {
+    min-height: 54px;
+    padding: 6px 9px;
+  }
+
+  html.native-app .top-brand,
+  html.native-app .profile-text,
+  html.native-app .profile-arrow,
+  html.native-app .search-box {
+    display: none !important;
+  }
+
+  html.native-app .topbar-right {
+    gap: 5px;
+  }
+
+  html.native-app .dashboard-content {
+    padding: 12px 10px calc(24px + env(safe-area-inset-bottom));
+  }
+
+  html.native-app .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px;
+  }
+
+  html.native-app .quick-actions-grid,
+  html.native-app .module-grid,
+  html.native-app .event-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html.native-app .panel,
+  html.native-app .dashboard-hero {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  html.native-app .login-page {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  html.native-app .login-card {
+    padding: 21px 17px 18px;
+    border-radius: 19px;
+  }
+}
+
+@media (max-width: 360px) {
+  html.native-app .kpi-grid,
+  html.native-app .quick-actions-grid,
+  html.native-app .module-grid,
+  html.native-app .event-list {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html.native-app .login-card {
+    padding: 18px 14px 16px;
+  }
+}
+
+
+/* ============================================================
+   HRSYNC NATIVE MOBILE REFINEMENT
+   These overrides run only inside Capacitor Android/iOS.
+   Desktop browser CSS remains unchanged.
+   ============================================================ */
+@media (max-width: 800px) {
+  /* Fix the oversized gap between the Financial Year and Month filters.
+     In a column flex layout, flex-basis:140px was being interpreted as
+     a height. Reset it to auto so each control takes only its content height. */
+  html.native-app .dashboard-hero {
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  html.native-app .hero-controls {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    width: 100%;
+    min-width: 0;
+    gap: 10px;
+  }
+
+  html.native-app .filter-field {
+    display: flex;
+    flex: 0 0 auto !important;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    gap: 5px;
+  }
+
+  html.native-app .filter-field label {
+    font-size: 11px;
+    letter-spacing: .5px;
+  }
+
+  html.native-app .filter-field select {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+
+  /* Improve dashboard readability at normal phone scale. */
+  html.native-app .hero-copy h1 {
+    font-size: clamp(23px, 6vw, 29px);
+    line-height: 1.12;
+  }
+
+  html.native-app .hero-copy p {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  html.native-app .hero-date,
+  html.native-app .hero-status {
+    font-size: 11px;
+  }
+
+  html.native-app .status-strip {
+    min-height: 0;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+    padding: 10px 12px;
+  }
+
+  html.native-app .status-strip-left strong {
+    font-size: 11px;
+  }
+
+  html.native-app .status-strip-left div span,
+  html.native-app .status-strip-right {
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  html.native-app .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 9px;
+  }
+
+  html.native-app .kpi-card {
+    min-height: 122px;
+    padding: 11px;
+  }
+
+  html.native-app .kpi-title {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  html.native-app .kpi-value {
+    font-size: 26px;
+    line-height: 1.1;
+  }
+
+  html.native-app .kpi-note {
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  html.native-app .kpi-tag {
+    font-size: 9px;
+  }
+
+  html.native-app .panel {
+    padding: 12px;
+  }
+
+  html.native-app .panel-eyebrow {
+    font-size: 9px;
+  }
+
+  html.native-app .panel-head h2 {
+    font-size: 16px;
+    line-height: 1.25;
+  }
+
+  html.native-app .quick-actions-grid strong,
+  html.native-app .module-text strong {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  html.native-app .quick-actions-grid small,
+  html.native-app .module-text small {
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  html.native-app .dashboard-content {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  /* Keep the floating support control from covering the last dashboard cards. */
+  html.native-app .support-button {
+    right: 12px;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    z-index: 90;
+    max-width: calc(100vw - 24px);
+    padding: 10px 14px;
+    font-size: 11px;
+  }
+
+  /* Better text entry and touch sizing throughout native forms. */
+  html.native-app .dashboard-content input,
+  html.native-app .dashboard-content select,
+  html.native-app .dashboard-content textarea {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 380px) {
+  html.native-app .kpi-card {
+    padding: 9px;
+  }
+
+  html.native-app .kpi-title,
+  html.native-app .kpi-note {
+    font-size: 9px;
+  }
+
+  html.native-app .kpi-value {
+    font-size: 23px;
+  }
+}

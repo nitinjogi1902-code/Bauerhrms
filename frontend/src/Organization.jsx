@@ -974,6 +974,7 @@ function normalizeMasters(parsed) {
 
 function Organization() {
   const [masters, setMasters] = useState(DEFAULT_MASTERS);
+  const [savingMasters, setSavingMasters] = useState(false);
   const [activeMaster, setActiveMaster] = useState("locations");
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -1018,31 +1019,44 @@ function Organization() {
 
   useEffect(() => {
     let mounted = true;
+    let loading = false;
 
     const loadFromDatabase = async () => {
+      if (loading) return;
+      loading = true;
       try {
         const parsed = await loadOrganizationMasters(DEFAULT_MASTERS);
-
         if (!mounted) return;
 
         const normalized = normalizeMasters(parsed);
-
         setMasters(normalized);
         setPolicyForm(
           normalizeLeavePolicy(
-            normalized.leavePolicies?.[0] ||
-            DEFAULT_MASTERS.leavePolicies[0]
+            normalized.leavePolicies?.[0] || DEFAULT_MASTERS.leavePolicies[0]
           )
         );
       } catch (error) {
         console.error("Unable to load organization masters:", error);
+      } finally {
+        loading = false;
       }
     };
 
+    const handleOrganizationDataUpdated = (event) => {
+      const moduleKey = event?.detail?.moduleKey;
+      // Refresh when organization masters change; an omitted key is treated as a general update.
+      if (!moduleKey || /organization.?masters/i.test(moduleKey)) loadFromDatabase();
+    };
+    const handleFocus = () => loadFromDatabase();
+
     loadFromDatabase();
+    window.addEventListener("organizationModuleDataUpdated", handleOrganizationDataUpdated);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       mounted = false;
+      window.removeEventListener("organizationModuleDataUpdated", handleOrganizationDataUpdated);
+      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 
@@ -1087,13 +1101,25 @@ function Organization() {
   }, [activeMaster, currentItems, search, showInactive, locationTypeFilter, locationStatusFilter]);
 
   const saveMasters = async (next) => {
+    const previous = masters;
     setMasters(next);
+    setSavingMasters(true);
 
     try {
       await saveOrganizationMasters(next);
+      // Broadcast the canonical Organisation master snapshot to modules such as
+      // Recruitment so their dropdowns refresh immediately after add/edit/delete.
+      window.dispatchEvent(new CustomEvent("bauerHrmsOrganizationMastersUpdated", {
+        detail: { moduleKey: "organizationMasters", masters: next },
+      }));
+      return true;
     } catch (error) {
       console.error("Unable to save organization masters:", error);
-      window.alert("Unable to save changes to the database.");
+      setMasters(previous);
+      window.alert(`Unable to save changes to the database. ${error?.message || "Please try again."}`);
+      return false;
+    } finally {
+      setSavingMasters(false);
     }
   };
 
@@ -1957,6 +1983,9 @@ function Organization() {
           <p>
             Maintain Bauer organization masters used across Employee,
             Attendance, Leave, Payroll and other HR modules.
+          </p>
+          <p role="status" aria-live="polite" className="organization-save-status">
+            {savingMasters ? "Saving changes to the database…" : "Changes are saved to the organization database."}
           </p>
         </div>
 

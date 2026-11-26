@@ -566,7 +566,7 @@ function Dashboard({ onLogout, currentUser = null }) {
     const requestedMenu = menuNameFromHash(window.location.hash);
     return requestedMenu || firstAllowedMenu;
   });
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => !document.documentElement.classList.contains("native-app"));
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   // Dashboard period controls are date-driven.
@@ -826,7 +826,7 @@ function Dashboard({ onLogout, currentUser = null }) {
     if (window.location.hash !== nextHash) {
       window.history.pushState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
     }
-    if (window.innerWidth < 900) setSidebarOpen(false);
+    if (document.documentElement.classList.contains("native-app")) setSidebarOpen(false);
   };
 
   const openSettingsSection = (selector) => {
